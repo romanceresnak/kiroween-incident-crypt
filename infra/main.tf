@@ -99,7 +99,12 @@ module "vpc" {
 }
 
 # TASK-04: ECR
-# module "ecr" { ... }
+module "ecr" {
+  source = "./modules/ecr"
+
+  project     = var.project
+  agent_names = var.agent_names
+}
 
 # TASK-05 + TASK-07: EKS (cluster + access entries)
 # module "eks" { ... }
