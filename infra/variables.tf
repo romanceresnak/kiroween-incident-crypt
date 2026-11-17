@@ -72,7 +72,7 @@ variable "gitops_repo_url" {
 variable "gitops_repo_path" {
   description = "Path within the GitOps repository for the Argo CD app-of-apps Application."
   type        = string
-  default     = "gitops"
+  default     = "gitops/apps"
 }
 
 variable "gitops_target_revision" {

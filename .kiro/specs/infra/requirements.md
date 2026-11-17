@@ -103,7 +103,7 @@ Terraform shall install Argo CD into the EKS cluster using a `helm_release` reso
 The `helm_release` shall pin to an explicit Argo CD chart version; the version shall be a variable with a documented default.
 
 **REQ-ACD-03 (Ubiquitous)**
-After the `helm_release` is applied, Terraform shall create one root Argo CD `Application` resource (app-of-apps pattern) pointing at the `/gitops` directory in the `romanceresnak/kiroween-incident-crypt` GitHub repository, tracking the `main` branch.
+After the `helm_release` is applied, Terraform shall create one root Argo CD `Application` resource (app-of-apps pattern) pointing at the `gitops/apps` directory (inside `/gitops`) in the `romanceresnak/kiroween-incident-crypt` GitHub repository, tracking the `main` branch. That directory holds only Argo CD `Application` manifests.
 
 **REQ-ACD-04 (Ubiquitous)**
 All further Kubernetes resources (agents, monitoring, etc.) shall be deployed exclusively by Argo CD from `/gitops` — not by Terraform.

@@ -205,7 +205,7 @@ ECR uses `<project>/<agent>` (slash-separated) so all agent images share a logic
 | `argocd_chart_version` | `string` | `"10.18.0"` | | argo-cd chart version — latest as of 17 Nov 2026 (helm repo index) (REQ-ACD-02) |
 | `argocd_apps_chart_version` | `string` | `"2.0.8"` | | argocd-apps chart version — latest as of 17 Nov 2026 (helm repo index) (REQ-ACD-03) |
 | `gitops_repo_url` | `string` | `"https://github.com/romanceresnak/kiroween-incident-crypt"` | | App-of-apps source repo (REQ-ACD-03) |
-| `gitops_repo_path` | `string` | `"gitops"` | | App-of-apps source path (REQ-ACD-03) |
+| `gitops_repo_path` | `string` | `"gitops/apps"` | | App-of-apps source path: holds only Argo CD `Application` manifests, the children of the root app (REQ-ACD-03) |
 | `gitops_target_revision` | `string` | `"main"` | | App-of-apps branch (REQ-ACD-03) |
 | `agent_names` | `list(string)` | `["orchestrator","cpu-memory","network","deploy-rollout","storage","incident-memory"]` | | Drives ECR + Pod Identity `for_each` (REQ-ECR-01, REQ-IAM-01) |
 | `bedrock_embedding_model_id` | `string` | `"amazon.titan-embed-text-v2:0"` | | KB embedding model (REQ-KB-03) |
@@ -249,6 +249,8 @@ All per-agent resources (ECR repository, Pod Identity IAM role, Pod Identity ass
 
 ### Argo CD app-of-apps via `argocd-apps` chart (REQ-ACD-01, REQ-ACD-02, REQ-ACD-03)
 The root Argo CD `Application` is deployed as a second `helm_release` using the argo-helm `argocd-apps` chart (`2.0.8`), with `depends_on` pointing at the first `helm_release` (argo-cd `10.18.0`). This avoids the `kubernetes_manifest` approach, which requires the Argo CD CRDs to already be registered at plan time and fails on a fresh cluster with `Error: no matches for kind "Application"`. The `argocd-apps` chart is purpose-built for this pattern and renders `Application` CRs as Helm templates after the CRDs exist.
+
+The root Application syncs `gitops/apps` (`var.gitops_repo_path`), not the whole `gitops/` tree. That directory holds only child `Application` manifests; workloads such as `gitops/charts/agents/` are referenced from those children. Pointing the root app at `gitops/` would make it apply chart sources and raw manifests directly and lose the one-Application-per-workload boundary.
 
 ```hcl
 # modules/argocd/main.tf (sketch)
