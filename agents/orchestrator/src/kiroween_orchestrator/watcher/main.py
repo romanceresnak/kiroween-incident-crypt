@@ -7,7 +7,7 @@ import os
 import threading
 import time
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -20,7 +20,10 @@ from .detect import (
     EVENT_REASONS,
     WAITING_REASONS,
     Signal,
+    container_started,
     event_signal,
+    pod_claims,
+    pod_ready,
     signal_id,
     signal_to_incident,
     termination_signal,
@@ -44,6 +47,9 @@ class WatcherSettings:
     excluded_namespaces: frozenset[str] = field(default_factory=lambda: frozenset(DEFAULT_EXCLUDED))
     cooldown_s: int = 600
     startup_grace_s: int = 300
+    # Unhealthy events are re-checked before they are submitted (hardening REQ-WSU-01).
+    unhealthy_startup_grace_s: int = 60
+    unhealthy_recheck_s: int = 30
     health_port: int = 8080
 
     @classmethod
@@ -60,6 +66,8 @@ class WatcherSettings:
             excluded_namespaces=frozenset(env_list(env, "EXCLUDED_NAMESPACES", DEFAULT_EXCLUDED)),
             cooldown_s=env_int(env, "COOLDOWN_SECONDS", 600),
             startup_grace_s=env_int(env, "STARTUP_GRACE_SECONDS", 300),
+            unhealthy_startup_grace_s=env_int(env, "UNHEALTHY_STARTUP_GRACE_SECONDS", 60),
+            unhealthy_recheck_s=env_int(env, "UNHEALTHY_RECHECK_SECONDS", 30),
             health_port=env_int(env, "API_PORT", 8080),
         )
 
@@ -84,10 +92,14 @@ class Watcher:
         self._oldest = (started_at or now()) - timedelta(seconds=settings.startup_grace_s)
         self._cooldown = Cooldown(settings.cooldown_s, clock)
         self._seen = SeenIds()
+        # signal id -> (signal, when to re-check). Unhealthy signals wait here.
+        self._pending: dict[str, tuple[Signal, datetime]] = {}
 
     def handle(self, pod: dict[str, Any]) -> list[str]:
         """Process one pod (terminations and waiting states); returns submitted ids."""
-        signals = [termination_signal(t) for t in terminations(pod, set(self.settings.reasons))]
+        claims = pod_claims(pod)
+        signals = [replace(termination_signal(t), depends_on=claims)
+                   for t in terminations(pod, set(self.settings.reasons))]
         signals += waiting_signals(pod, self.settings.waiting_reasons, self.settings.reasons)
         return [iid for s in signals if (iid := self._submit(s))]
 
@@ -95,17 +107,80 @@ class Watcher:
         """Process one Event; returns submitted ids."""
         reasons = {"Pod": self.settings.pod_event_reasons,
                    "PersistentVolumeClaim": self.settings.pvc_event_reasons}
-        signal = event_signal(event, reasons, self._lookup_pod)
-        iid = self._submit(signal) if signal else None
+        read: dict[tuple[str, str], tuple[str, dict[str, Any] | None]] = {}
+
+        def lookup(namespace: str, name: str) -> dict[str, Any] | None:
+            if (namespace, name) not in read:
+                read[(namespace, name)] = self._read_pod(namespace, name)
+            return read[(namespace, name)][1]
+
+        signal = event_signal(event, reasons, lookup)
+        if signal is None:
+            return []
+        if signal.reason == "Unhealthy" and signal.pod:
+            self._defer(signal, lookup(signal.namespace, signal.pod))
+            return []
+        iid = self._submit(signal)
         return [iid] if iid else []
 
-    def _lookup_pod(self, namespace: str, name: str) -> dict[str, Any] | None:
+    def _defer(self, s: Signal, pod: dict[str, Any] | None) -> None:
+        """Hold an Unhealthy signal until the pod has had time to start (REQ-WSU-01, 03)."""
+        if s.namespace in self.settings.excluded_namespaces:
+            return
+        if pod is not None and pod_ready(pod):
+            logger.debug("dropping Unhealthy for Ready pod %s/%s", s.namespace, s.pod)
+            return
+        iid = signal_id(s)
+        seen_at = s.at or self._now()
+        started = (container_started(pod, s.container) if pod else None) or seen_at
+        due = max(seen_at + timedelta(seconds=self.settings.unhealthy_recheck_s),
+                  started + timedelta(seconds=self.settings.unhealthy_startup_grace_s))
+        with self._lock:
+            if iid in self._seen or iid in self._pending:
+                return
+            if len(self._pending) >= 1000:
+                logger.warning("too many pending re-checks; dropping %s", iid)
+                return
+            self._pending[iid] = (s, due)
+        logger.info("Unhealthy for %s/%s: re-check at %s", s.namespace, s.pod, due.isoformat())
+
+    def tick(self) -> list[str]:
+        """Re-check due Unhealthy signals; submit those whose pod is still not Ready."""
+        now = self._now()
+        with self._lock:
+            due = [(iid, s) for iid, (s, at) in self._pending.items() if at <= now]
+            for iid, _ in due:
+                del self._pending[iid]
+        submitted = []
+        for _, s in due:
+            state, pod = self._read_pod(s.namespace, s.pod or "")
+            if state == "gone":
+                logger.info("Unhealthy pod %s/%s is gone; no incident", s.namespace, s.pod)
+                continue
+            if pod is not None and pod_ready(pod):
+                logger.info("pod %s/%s became Ready; no incident", s.namespace, s.pod)
+                continue
+            # Still not Ready, or it could not be read: report it rather than lose it.
+            if (iid := self._submit(s)) is not None:
+                submitted.append(iid)
+        return submitted
+
+    def pending(self) -> int:
+        with self._lock:
+            return len(self._pending)
+
+    def _read_pod(self, namespace: str, name: str) -> tuple[str, dict[str, Any] | None]:
+        """("ok", pod), ("gone", None) on 404, or ("unknown", None)."""
         if self._get_pod is None:
-            return None
+            return "unknown", None
         try:
-            return self._get_pod(namespace, name)
-        except Exception:  # the pod may be gone; fall back to the pod as its own workload
-            return None
+            pod = self._get_pod(namespace, name)
+        except Exception as exc:
+            if getattr(exc, "status", None) == 404:
+                return "gone", None
+            logger.warning("could not read pod %s/%s: %s", namespace, name, exc)
+            return "unknown", None
+        return ("ok", pod) if pod is not None else ("gone", None)
 
     def _submit(self, s: Signal) -> str | None:
         if s.namespace in self.settings.excluded_namespaces:
@@ -246,6 +321,15 @@ def main() -> None:
     watcher = Watcher(settings, OrchestratorClient(settings.orchestrator_url),
                       get_pod=kubernetes_get_pod())
     list_events, watch_events = kubernetes_sources("events")
+    def recheck_forever() -> None:
+        while True:
+            try:
+                watcher.tick()
+            except Exception:
+                logger.exception("Unhealthy re-check failed")
+            time.sleep(5)
+
+    threading.Thread(target=recheck_forever, name="recheck", daemon=True).start()
     threading.Thread(target=run, name="events", daemon=True,
                      args=(watcher.handle_event, list_events, watch_events,
                            event_beat.touch)).start()

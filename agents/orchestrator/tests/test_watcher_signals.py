@@ -75,10 +75,24 @@ def client_pod(namespace: str, name: str) -> dict[str, Any] | None:
                          "ownerReferences": owner("ReplicaSet", "netpol-client-7d9")}}
 
 
-def make(settings: WatcherSettings | None = None, **kw: Any) -> tuple[Watcher, FakeClient, Clock]:
+class Wall:
+    """A wall clock the test moves forward."""
+
+    def __init__(self) -> None:
+        self.t = NOW
+
+    def __call__(self) -> datetime:
+        return self.t
+
+    def advance(self, seconds: float) -> None:
+        self.t += timedelta(seconds=seconds)
+
+
+def make(settings: WatcherSettings | None = None, *, wall: Wall | None = None,
+         **kw: Any) -> tuple[Watcher, FakeClient, Clock]:
     client, clock = FakeClient(), Clock()
     w = Watcher(settings or WatcherSettings(), client, started_at=STARTED, clock=clock,
-                now=lambda: NOW, **kw)
+                now=wall or (lambda: NOW), **kw)
     return w, client, clock
 
 
@@ -141,11 +155,15 @@ def test_excluded_namespace_waiting_state_is_ignored() -> None:
 
 
 def test_readiness_event_is_resolved_to_the_deployment_and_container() -> None:
-    w, client, _ = make(get_pod=client_pod)
+    wall = Wall()
+    w, client, _ = make(get_pod=client_pod, wall=wall)
     e = event("Pod", "netpol-client-7d9-abc", "Unhealthy",
               field_path="spec.containers{client}",
               message="Readiness probe failed: wget: download timed out")
-    assert len(w.handle_event(e)) == 1
+    # hardening REQ-WSU-01: held for a re-check, then submitted because still not Ready.
+    assert w.handle_event(e) == [] and w.pending() == 1
+    wall.advance(61)
+    assert len(w.tick()) == 1
     inc = client.incidents[0]
     assert (inc.reason, inc.workload.kind, inc.workload.name, inc.pod, inc.container) == (
         "Unhealthy", "Deployment", "netpol-client", "netpol-client-7d9-abc", "client")
@@ -180,10 +198,17 @@ def test_other_events_are_ignored(kind: str, reason: str) -> None:
 
 
 def test_repeated_event_counts_are_one_incident() -> None:
-    w, client, _ = make(get_pod=client_pod)
+    wall = Wall()
+    w, client, _ = make(get_pod=client_pod, wall=wall)
     for i in range(4):  # the kubelet bumps count and lastTimestamp on every failure
         w.handle_event(event("Pod", "netpol-client-7d9-abc", "Unhealthy",
                              at=NOW + timedelta(seconds=10 * i)))
+    assert w.pending() == 1
+    wall.advance(61)
+    w.tick()
+    w.handle_event(event("Pod", "netpol-client-7d9-abc", "Unhealthy",
+                         at=NOW + timedelta(seconds=70)))
+    assert w.pending() == 0  # already reported
     assert len(client.incidents) == 1
 
 
@@ -204,8 +229,11 @@ def test_pod_lookup_error_falls_back_to_the_pod() -> None:
     def boom(namespace: str, name: str) -> dict[str, Any] | None:
         raise RuntimeError("forbidden")
 
-    w, client, _ = make(get_pod=boom)
+    wall = Wall()
+    w, client, _ = make(get_pod=boom, wall=wall)
     w.handle_event(event("Pod", "p", "Unhealthy"))
+    wall.advance(61)
+    w.tick()  # unreadable is reported, not lost
     assert client.incidents[0].workload.kind == "Pod"
 
 
@@ -231,13 +259,17 @@ def test_oom_incident_is_unchanged() -> None:
 
 
 def test_pod_and_event_threads_share_dedup() -> None:
-    w, client, _ = make(get_pod=client_pod)
+    wall = Wall()
+    w, client, _ = make(get_pod=client_pod, wall=wall)
     pods = [waiting_pod("ImagePullBackOff") for _ in range(200)]
     events = [event("Pod", "netpol-client-7d9-abc", "Unhealthy") for _ in range(200)]
     threads = [threading.Thread(target=lambda: [w.handle(p) for p in pods]),
-               threading.Thread(target=lambda: [w.handle_event(e) for e in events])]
+               threading.Thread(target=lambda: [w.handle_event(e) for e in events]),
+               threading.Thread(target=lambda: [w.tick() for _ in range(200)])]
     for t in threads:
         t.start()
     for t in threads:
         t.join()
+    wall.advance(61)
+    w.tick()
     assert sorted(i.reason for i in client.incidents) == ["ImagePullBackOff", "Unhealthy"]

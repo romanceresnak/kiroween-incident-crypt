@@ -128,6 +128,36 @@ class Signal:
     # When it happened; None for an ongoing state (always current, so never "too old").
     at: datetime | None
     message: str
+    # (kind, name) of objects the pod needs: the PVCs it mounts (hardening REQ-WSU-06).
+    depends_on: tuple[tuple[str, str], ...] = ()
+
+
+def pod_claims(pod: dict[str, Any] | None) -> tuple[tuple[str, str], ...]:
+    claims = []
+    for volume in ((pod or {}).get("spec") or {}).get("volumes") or []:
+        name = (volume.get("persistentVolumeClaim") or {}).get("claimName")
+        if name and ("PersistentVolumeClaim", name) not in claims:
+            claims.append(("PersistentVolumeClaim", name))
+    return tuple(claims)
+
+
+def pod_ready(pod: dict[str, Any]) -> bool:
+    for cond in (pod.get("status") or {}).get("conditions") or []:
+        if cond.get("type") == "Ready":
+            return cond.get("status") == "True"
+    return False
+
+
+def container_started(pod: dict[str, Any], container: str | None) -> datetime | None:
+    """The container's running.startedAt, else the pod's startTime (REQ-WSU-05)."""
+    status = pod.get("status") or {}
+    for c in status.get("containerStatuses") or []:
+        if c.get("name") == container:
+            started = ((c.get("state") or {}).get("running") or {}).get("startedAt")
+            if started:
+                return parse_time(started)
+    start = status.get("startTime")
+    return parse_time(start) if start else None
 
 
 def signal_id(s: Signal) -> str:
@@ -161,7 +191,8 @@ def waiting_signals(
             signals.append(Signal(
                 meta.get("namespace", ""), kind, name, meta.get("name"), status.get("name"),
                 waiting["reason"], f"pod:{meta.get('uid') or meta.get('name')}", None,
-                f"{waiting['reason']}: {str(waiting.get('message') or '')[:500]}"))
+                f"{waiting['reason']}: {str(waiting.get('message') or '')[:500]}",
+                pod_claims(pod)))
     return signals
 
 
@@ -186,7 +217,8 @@ def event_signal(
     workload_kind, workload_name = resolve_workload(pod) if pod else ("Pod", name)
     match = _FIELD_PATH_CONTAINER.search(involved.get("fieldPath") or "")
     return Signal(namespace, workload_kind, workload_name, name,
-                  match.group(1) if match else None, reason, identity, at, message)
+                  match.group(1) if match else None, reason, identity, at, message,
+                  pod_claims(pod))
 
 
 def signal_to_incident(s: Signal, observed_at: datetime) -> Incident:
@@ -200,4 +232,5 @@ def signal_to_incident(s: Signal, observed_at: datetime) -> Incident:
         container=s.container,
         message=s.message[:2000],
         observed_at=observed_at,
+        depends_on=[{"kind": kind, "name": name} for kind, name in s.depends_on],
     )
