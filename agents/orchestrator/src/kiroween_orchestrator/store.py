@@ -30,5 +30,8 @@ class IncidentStore:
         self._items[incident_id] = updated
         return updated
 
+    def records(self) -> list[IncidentRecord]:
+        return list(self._items.values())
+
     def __len__(self) -> int:
         return len(self._items)

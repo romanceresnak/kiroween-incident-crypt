@@ -97,9 +97,10 @@ def make_specialist_tool(
             raise SpecialistError("the specialist call already failed")
         inv = sink.investigation
         return json.dumps({
+            "outcome": inv.outcome,
             "root_cause": inv.diagnosis.root_cause,
             "confidence": inv.diagnosis.confidence,
-            "action": inv.proposal.action,
+            "action": inv.proposal.action if inv.proposal else "none",
         })
 
     description = (f"Ask the {SPECIALIST_AGENTS[category]} specialist to diagnose the incident "

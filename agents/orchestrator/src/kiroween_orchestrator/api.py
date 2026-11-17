@@ -85,6 +85,7 @@ def main() -> None:
         workers=env_int(env, "WORKERS", 2),
         incident_timeout_s=env_int(env, "INCIDENT_TIMEOUT_SECONDS", 300),
         specialists=frozenset(specialists),
+        correlation_window_s=env_int(env, "CORRELATION_WINDOW_SECONDS", 300),
     )
     start_metrics_server(settings.metrics_port)
     serve(create(service), settings.api_port)

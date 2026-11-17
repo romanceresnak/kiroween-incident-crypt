@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 from typing import Literal
 
 from kiroween_shared.context import incident_context
@@ -14,9 +15,12 @@ from kiroween_shared.models import (
     Incident,
     IncidentRecord,
     Investigation,
+    RelatedIncident,
     Usage,
+    utcnow,
 )
 
+from .correlation import correlate
 from .specialists import SPECIALIST_AGENTS
 from .store import IncidentStore
 
@@ -46,9 +50,13 @@ class IncidentService:
         workers: int = 2,
         incident_timeout_s: float = 300.0,
         specialists: frozenset[str] = frozenset({"cpu_memory"}),
+        correlation_window_s: float = 300.0,
+        now: Callable[[], datetime] = utcnow,
     ) -> None:
         # Categories with a configured specialist. Everything else ends as no_specialist.
         self.specialists = specialists
+        self._correlation_window = correlation_window_s
+        self._now = now
         self._classify = classify
         self._delegate = delegate
         self.store = store or IncidentStore()
@@ -80,9 +88,27 @@ class IncidentService:
         existing = self.store.get(incident.incident_id)
         if existing is not None:
             return existing, False
+        now = self._now()
+        found = correlate(incident, self.store.records(), now, self._correlation_window)
+        if found is not None:
+            # Same root cause as an open incident: attach it, no model call (REQ-COR-03).
+            primary, rule = found
+            record = IncidentRecord(incident=incident, status="correlated",
+                                    related_to=primary.incident.incident_id,
+                                    created_at=now, updated_at=now)
+            self.store.put(record)
+            related = RelatedIncident(
+                incident_id=incident.incident_id, reason=incident.reason,
+                workload=incident.workload, pod=incident.pod, match=rule,
+                observed_at=incident.observed_at)
+            self.store.update(primary.incident.incident_id,
+                              related_incidents=[*primary.related_incidents, related])
+            logger.info("incident %s (%s) correlated to %s by %s", incident.incident_id,
+                        incident.reason, primary.incident.incident_id, rule)
+            return record, True
         if self._queue.full():
             raise QueueFull("incident queue is full")
-        record = IncidentRecord(incident=incident)
+        record = IncidentRecord(incident=incident, created_at=now, updated_at=now)
         self.store.put(record)
         self._queue.put_nowait(incident.incident_id)
         return record, True
@@ -118,9 +144,10 @@ class IncidentService:
                         return
 
                     investigation, delegate_usage, mode = await self._delegate(incident, category)
+                    proposal = investigation.proposal
                     status = (
                         "awaiting_approval"
-                        if investigation.proposal.action in CHANGE_ACTIONS
+                        if proposal is not None and proposal.action in CHANGE_ACTIONS
                         else "completed"
                     )
                     self.store.update(

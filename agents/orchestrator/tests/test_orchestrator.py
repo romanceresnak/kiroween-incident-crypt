@@ -152,7 +152,9 @@ async def test_delegation_error_marks_failed() -> None:
 
 async def test_full_queue_is_refused() -> None:
     fakes = Fakes()
-    service = IncidentService(classify=fakes.classify, delegate=fakes.delegate, queue_size=1)
+    # Same workload twice would be correlated (hardening REQ-COR); this test is about the queue.
+    service = IncidentService(classify=fakes.classify, delegate=fakes.delegate, queue_size=1,
+                              correlation_window_s=0)
     service.submit(make_incident("a"))  # workers not started, so the queue stays full
     with pytest.raises(QueueFull):
         service.submit(make_incident("b"))
@@ -260,7 +262,8 @@ def test_api_rejects_invalid_incident_without_model_calls() -> None:
 
 def test_api_returns_503_when_queue_is_full() -> None:
     fakes = Fakes()
-    service = IncidentService(classify=fakes.classify, delegate=fakes.delegate, queue_size=1)
+    service = IncidentService(classify=fakes.classify, delegate=fakes.delegate, queue_size=1,
+                              correlation_window_s=0)
     app = create(service)
     client = TestClient(app)  # no lifespan: workers never start, the queue fills
     assert client.post("/incidents", json=make_incident("q1").model_dump(mode="json")
