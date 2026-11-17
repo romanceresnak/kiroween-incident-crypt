@@ -86,6 +86,13 @@ resource "aws_eks_cluster" "main" {
 
   access_config {
     authentication_mode = "API"
+
+    # Access is granted only through the explicit access entries below
+    # (REQ-EKS-03, REQ-EKS-04). With the default (true) EKS also creates an
+    # admin entry for whoever creates the cluster, which collides with the
+    # admin entry when that principal is var.admin_iam_principal_arn.
+    # Changing this after creation replaces the cluster.
+    bootstrap_cluster_creator_admin_permissions = false
   }
 
   vpc_config {
