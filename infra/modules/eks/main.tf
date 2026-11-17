@@ -227,3 +227,41 @@ resource "aws_eks_access_policy_association" "admin" {
 
   depends_on = [aws_eks_access_entry.admin]
 }
+
+# ---------------------------------------------------------------------------
+# GitHub Actions access entries (TASK-07)
+# Static map keys keep for_each plannable while the role ARNs are still unknown.
+# ---------------------------------------------------------------------------
+
+locals {
+  gha_access = {
+    apply = {
+      principal_arn = var.gha_apply_role_arn
+      policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+    }
+    plan = {
+      principal_arn = var.gha_plan_role_arn
+      policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminViewPolicy"
+    }
+  }
+}
+
+resource "aws_eks_access_entry" "gha" {
+  for_each = local.gha_access
+
+  cluster_name  = aws_eks_cluster.main.name
+  principal_arn = each.value.principal_arn
+  type          = "STANDARD"
+}
+
+resource "aws_eks_access_policy_association" "gha" {
+  for_each = local.gha_access
+
+  cluster_name  = aws_eks_cluster.main.name
+  principal_arn = each.value.principal_arn
+  policy_arn    = each.value.policy_arn
+
+  access_scope { type = "cluster" }
+
+  depends_on = [aws_eks_access_entry.gha]
+}

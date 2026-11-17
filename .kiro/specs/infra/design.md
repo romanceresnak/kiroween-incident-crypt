@@ -87,7 +87,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 6.27.0"        # minimum for aws_s3vectors_bucket / aws_s3vectors_index
+      version = ">= 6.27.0"        # minimum for aws_s3vectors_vector_bucket / aws_s3vectors_index
     }
     helm = {
       source  = "hashicorp/helm"

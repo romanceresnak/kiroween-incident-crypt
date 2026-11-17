@@ -132,7 +132,8 @@ module "eks" {
   cloudwatch_log_retention_days = var.cloudwatch_log_retention_days
 
   admin_iam_principal_arn = var.admin_iam_principal_arn
-  # gha_plan_role_arn and gha_apply_role_arn wired in TASK-07
+  gha_plan_role_arn       = module.github_oidc.plan_role_arn
+  gha_apply_role_arn      = module.github_oidc.apply_role_arn
 }
 
 # TASK-06: GitHub Actions OIDC roles

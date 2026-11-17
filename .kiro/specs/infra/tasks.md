@@ -175,7 +175,7 @@ associations (3 and 3 in total with the admin entry) — no errors.
 Create `infra/modules/bedrock_kb/`:
 - `aws_s3_bucket` for postmortems: versioning enabled, public access blocked,
   SSE
-- `aws_s3vectors_bucket` (requires provider `>= 6.27.0`)
+- `aws_s3vectors_vector_bucket` (requires provider `>= 6.27.0`)
 - `aws_s3vectors_index`: `dimension = 1024`, `distance_metric = "cosine"`,
   `non_filterable_metadata_keys = ["AMAZON_BEDROCK_TEXT", "AMAZON_BEDROCK_METADATA"]`
 - IAM service role for Bedrock KB with inline policy covering exactly the

@@ -55,14 +55,15 @@ variable "admin_iam_principal_arn" {
   type        = string
 }
 
+# Access entries for the GitHub Actions roles (TASK-07). Required, with no
+# default: the ARNs are unknown until the roles exist, and a conditional count
+# on an unknown value fails at plan time.
 variable "gha_plan_role_arn" {
-  description = "GitHub Actions plan role ARN to grant AmazonEKSAdminViewPolicy. Set in TASK-07."
+  description = "GitHub Actions plan role ARN to grant AmazonEKSAdminViewPolicy."
   type        = string
-  default     = ""
 }
 
 variable "gha_apply_role_arn" {
-  description = "GitHub Actions apply role ARN to grant AmazonEKSClusterAdminPolicy. Set in TASK-07."
+  description = "GitHub Actions apply role ARN to grant AmazonEKSClusterAdminPolicy."
   type        = string
-  default     = ""
 }

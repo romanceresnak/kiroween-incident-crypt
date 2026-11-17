@@ -135,7 +135,7 @@ ECR repository names shall be parameterised so the list of agents can be extende
 Terraform shall create an S3 bucket in `eu-west-1` to store postmortem documents, with versioning enabled and public access blocked.
 
 **REQ-KB-02 (Ubiquitous)**
-Terraform shall create an S3 Vectors bucket (`aws_s3vectors_bucket`) and a vector index (`aws_s3vectors_index`) in `eu-west-1` with the following index configuration:
+Terraform shall create an S3 Vectors bucket (`aws_s3vectors_vector_bucket`) and a vector index (`aws_s3vectors_index`) in `eu-west-1` with the following index configuration:
 - `dimension = 1024`
 - `distance_metric = "cosine"`
 - `non_filterable_metadata_keys = ["AMAZON_BEDROCK_TEXT", "AMAZON_BEDROCK_METADATA"]`
@@ -167,7 +167,7 @@ The Knowledge Base service role shall have exactly the following IAM permissions
 > Action names are taken from the [S3 Vectors service authorization reference](https://docs.aws.amazon.com/service-authorization/latest/reference/list_s3vectors.html). `PutVectors`, `QueryVectors`, `GetVectors`, `DeleteVectors`, and `GetIndex` are confirmed as the correct IAM action names.
 
 **REQ-KB-06 (Ubiquitous)**
-The AWS Terraform provider version shall be pinned to `>= 6.27.0` (the minimum version that includes `aws_s3vectors_bucket` and `aws_s3vectors_index`).
+The AWS Terraform provider version shall be pinned to `>= 6.27.0` (the minimum version that includes `aws_s3vectors_vector_bucket` and `aws_s3vectors_index`).
 
 ---
 
