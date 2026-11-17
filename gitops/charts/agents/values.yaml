@@ -10,19 +10,19 @@ image:
 images:
   orchestrator:
     repository: kiroween/orchestrator
-    tag: bc0afabdda64e371ab389c98dff02b75c7d77997 # ci-managed:orchestrator
+    tag: a39547b3687749fb40edc7c2ca030e1b600d80ca # ci-managed:orchestrator
   cpuMemory:
     repository: kiroween/cpu-memory
-    tag: bc0afabdda64e371ab389c98dff02b75c7d77997 # ci-managed:cpu-memory
+    tag: a39547b3687749fb40edc7c2ca030e1b600d80ca # ci-managed:cpu-memory
   network:
     repository: kiroween/network
-    tag: bc0afabdda64e371ab389c98dff02b75c7d77997 # ci-managed:network
+    tag: a39547b3687749fb40edc7c2ca030e1b600d80ca # ci-managed:network
   deployRollout:
     repository: kiroween/deploy-rollout
-    tag: bc0afabdda64e371ab389c98dff02b75c7d77997 # ci-managed:deploy-rollout
+    tag: a39547b3687749fb40edc7c2ca030e1b600d80ca # ci-managed:deploy-rollout
   storage:
     repository: kiroween/storage
-    tag: bc0afabdda64e371ab389c98dff02b75c7d77997 # ci-managed:storage
+    tag: a39547b3687749fb40edc7c2ca030e1b600d80ca # ci-managed:storage
 
 region: eu-west-1
 
