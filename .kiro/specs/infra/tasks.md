@@ -9,9 +9,37 @@ Requirement IDs in brackets map to `requirements.md`.
 > TASK-14 passes. The bootstrap module (`infra/bootstrap/`) is applied in TASK-01
 > as a one-time prerequisite and is not subject to this restriction.
 
+## Status: all tasks complete (17 Nov 2026)
+
+| Task | Commit |
+|---|---|
+| TASK-01 Bootstrap module | `bd2c887` |
+| TASK-02 Root backend + provider skeleton | `c2d15eb` |
+| TASK-03 VPC module | `5bbf0be` |
+| TASK-04 ECR repositories | `d00a671` |
+| TASK-05 EKS cluster, node group, add-ons | `fc21382`, `a6aa9f6`, `8119229` |
+| TASK-06 GitHub Actions OIDC roles | `1337742` |
+| TASK-07 EKS access entries | `1c80868` |
+| TASK-08 Bedrock Knowledge Base | `9f1e541` |
+| TASK-09 Pod Identity IAM roles | `f21466e` |
+| TASK-10 Argo CD install + app-of-apps | `e092c71` |
+| TASK-11 AWS Budget | `451abbb`, `5c0a942` (limit became `budget_limit_usd`, default 120) |
+| TASK-12 Wire root module + outputs | `38de896` |
+| TASK-13 tfvars example + README | `3dc5e79` |
+| TASK-14 validate + plan gate | `d5d97b3` |
+| TASK-15 Two-phase apply | No commit; state is in S3. Phase 1: 37 added. Phase 2: 44 added. |
+
+Post-apply checks run: nodes `Ready` (2 Spot), both add-ons `ACTIVE`, access entries
+for the admin user and both GitHub roles, Knowledge Base `ACTIVE` with `S3_VECTORS`
+storage, 6 ECR repositories with scan on push, `app-of-apps` `Synced` and `Healthy`,
+budget `kiroween-prod-monthly` at 120 USD.
+
+Not yet exercised: Pod Identity trust conditions (no agent pod has run) and
+Knowledge Base ingestion (no postmortems uploaded).
+
 ---
 
-## TASK-01 — Bootstrap module
+## TASK-01 — Bootstrap module ✅
 
 **Implements:** REQ-BS-01, REQ-BS-02, REQ-BS-03, REQ-RS-01, REQ-RS-03, REQ-RS-04
 
@@ -33,7 +61,7 @@ configuration. Note the output `state_bucket_name` for use in TASK-02.
 
 ---
 
-## TASK-02 — Root backend + provider skeleton
+## TASK-02 — Root backend + provider skeleton ✅
 
 **Implements:** REQ-RS-02, REQ-RS-04, REQ-GEN-01, REQ-FIN-01
 
@@ -56,7 +84,7 @@ exits 0.
 
 ---
 
-## TASK-03 — VPC module
+## TASK-03 — VPC module ✅
 
 **Implements:** REQ-VPC-01, REQ-VPC-02, REQ-VPC-03, REQ-VPC-04, REQ-VPC-05, REQ-VPC-06
 
@@ -74,7 +102,7 @@ gateway, 2 route tables, correct tags — no errors.
 
 ---
 
-## TASK-04 — ECR repositories
+## TASK-04 — ECR repositories ✅
 
 **Implements:** REQ-ECR-01, REQ-ECR-02, REQ-ECR-03, REQ-ECR-04
 
@@ -90,7 +118,7 @@ policies — no errors.
 
 ---
 
-## TASK-05 — EKS cluster, node group, and add-ons
+## TASK-05 — EKS cluster, node group, and add-ons ✅
 
 **Implements:** REQ-EKS-01, REQ-EKS-02, REQ-EKS-03, REQ-EKS-05, REQ-EKS-06,
 REQ-EKS-07, REQ-EKS-08, REQ-EKS-09
@@ -127,7 +155,7 @@ role, admin access entry, and log group — no errors.
 
 ---
 
-## TASK-06 — GitHub Actions OIDC roles
+## TASK-06 — GitHub Actions OIDC roles ✅
 
 **Implements:** REQ-GHA-01, REQ-GHA-02, REQ-GHA-03, REQ-GHA-05, REQ-GHA-06,
 REQ-GHA-07
@@ -151,7 +179,7 @@ either trust policy — no errors.
 
 ---
 
-## TASK-07 — EKS access entries
+## TASK-07 — EKS access entries ✅
 
 **Implements:** REQ-EKS-04, REQ-GHA-04
 
@@ -168,7 +196,7 @@ associations (3 and 3 in total with the admin entry) — no errors.
 
 ---
 
-## TASK-08 — S3 postmortem bucket + S3 Vectors + Bedrock Knowledge Base
+## TASK-08 — S3 postmortem bucket + S3 Vectors + Bedrock Knowledge Base ✅
 
 **Implements:** REQ-KB-01, REQ-KB-02, REQ-KB-03, REQ-KB-04, REQ-KB-05, REQ-KB-06
 
@@ -193,7 +221,7 @@ KB, and data source with no unknown values — no errors.
 
 ---
 
-## TASK-09 — Pod Identity IAM roles
+## TASK-09 — Pod Identity IAM roles ✅
 
 **Implements:** REQ-IAM-01, REQ-IAM-02, REQ-IAM-03, REQ-IAM-04, REQ-IAM-05
 
@@ -218,7 +246,7 @@ errors.
 
 ---
 
-## TASK-10 — Argo CD install + app-of-apps
+## TASK-10 — Argo CD install + app-of-apps ✅
 
 **Implements:** REQ-ACD-01, REQ-ACD-02, REQ-ACD-03, REQ-ACD-04, REQ-ACD-05
 
@@ -238,7 +266,7 @@ Create `infra/modules/argocd/`:
 
 ---
 
-## TASK-11 — AWS Budget
+## TASK-11 — AWS Budget ✅
 
 **Implements:** REQ-FIN-02
 
@@ -253,7 +281,7 @@ Create `infra/modules/finops/`:
 
 ---
 
-## TASK-12 — Wire root module + outputs
+## TASK-12 — Wire root module + outputs ✅
 
 **Implements:** REQ-GEN-01, REQ-GEN-02, REQ-GEN-03
 
@@ -277,7 +305,7 @@ Verify no hardcoded account IDs, regions, or bucket names appear outside
 
 ---
 
-## TASK-13 — `terraform.tfvars.example` and README
+## TASK-13 — `terraform.tfvars.example` and README ✅
 
 **Implements:** REQ-GEN-01
 
@@ -307,7 +335,7 @@ without any "Required variable not set" errors.
 
 ---
 
-## TASK-14 — `terraform validate` + plan smoke-test
+## TASK-14 — `terraform validate` + plan smoke-test ✅
 
 **Implements:** REQ-GEN-01, REQ-GEN-02 (validation gate)
 
@@ -326,7 +354,7 @@ without any "Required variable not set" errors.
 
 ---
 
-## TASK-15 — Full `terraform apply`
+## TASK-15 — Full `terraform apply` ✅
 
 **Implements:** All requirements (acceptance)
 
