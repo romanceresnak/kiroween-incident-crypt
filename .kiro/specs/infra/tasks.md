@@ -1,11 +1,13 @@
 # Infra Spec — Tasks
 
 Tasks are ordered so each one builds on the previous. Each task is independently
-testable with `terraform plan` only — no `apply` until TASK-15. Requirement IDs
-in brackets map to `requirements.md`.
+testable with `terraform plan` only — no `apply` until TASK-15, **except TASK-01**
+(bootstrap applies a single S3 bucket before the main stack can be initialised).
+Requirement IDs in brackets map to `requirements.md`.
 
-> **Apply policy:** Run `terraform apply` once, after TASK-15 passes, to avoid
-> incurring AWS costs during iterative development.
+> **Apply policy:** The main stack (`infra/`) is applied once, in TASK-15, after
+> TASK-14 passes. The bootstrap module (`infra/bootstrap/`) is applied in TASK-01
+> as a one-time prerequisite and is not subject to this restriction.
 
 ---
 
@@ -24,7 +26,10 @@ The `.gitignore` at the repo root (already committed) covers bootstrap state;
 no additional step needed.
 
 **Test:** `terraform init && terraform validate` inside `infra/bootstrap/`
-exits 0 with no errors.
+exits 0. Run `terraform apply` to create the bucket (bootstrap is exempt from
+the apply-once policy). Confirm the bucket exists: `aws s3api head-bucket`
+returns 200; `get-bucket-versioning` and `get-bucket-encryption` confirm the
+configuration. Note the output `state_bucket_name` for use in TASK-02.
 
 ---
 
@@ -34,14 +39,15 @@ exits 0 with no errors.
 
 Create `infra/main.tf`, `infra/variables.tf`, `infra/outputs.tf`:
 - `terraform {}` block: `required_version = ">= 1.9.0"`, providers
-  (`aws >= 6.27.0`, `helm >= 2.13.0`, `kubernetes >= 2.30.0`), and a partial
+  (`aws >= 6.27.0`, `helm ~> 3.0`, `kubernetes >= 2.30.0`), and a partial
   `backend "s3"` block with `key`, `region = "eu-west-1"`, `use_lockfile = true`
   — **no `bucket` attribute** (supplied at `terraform init` time)
 - AWS provider with `region = var.aws_region` and `default_tags`
   (`Project = "kiroween"`, `ManagedBy = "terraform"`)
-- Helm and Kubernetes provider stubs referencing `module.eks` outputs (the
-  `argocd` module call in `main.tf` will carry `depends_on = [module.eks]`;
-  provider blocks do not support `depends_on`)
+- Helm provider using v3 attribute syntax (`kubernetes = { ... }`,
+  `exec = { ... }`); Kubernetes provider using the same `exec` block; both
+  referencing `module.eks` outputs (the `argocd` module call in `main.tf` will
+  carry `depends_on = [module.eks]`; provider blocks do not support `depends_on`)
 - All variables from the design's variable table with their documented defaults
 
 **Test:** `terraform init -backend-config=bucket=<bootstrap-output> && terraform validate`
@@ -308,14 +314,29 @@ without any "Required variable not set" errors.
 
 **Implements:** All requirements (acceptance)
 
-With TASK-14 green, run a single `terraform apply tfplan`. Verify:
-- EKS cluster reaches `ACTIVE`, node group shows 2 Spot nodes.
-- Both Argo CD Helm releases are `deployed`; the `app-of-apps` Application
-  appears in `kubectl -n argocd get applications`.
+With TASK-14 green, apply in two phases to handle the Helm and Kubernetes
+providers requiring a live cluster endpoint:
+
+**Phase 1 — cluster only:**
+```
+terraform apply -target=module.vpc -target=module.eks -target=module.github_oidc
+```
+Wait until EKS cluster status is `ACTIVE` and node group is `ACTIVE`. The Helm
+and Kubernetes providers can now resolve their `exec`-based credentials.
+
+**Phase 2 — full apply:**
+```
+terraform apply
+```
+
+Verify post-apply:
+- EKS cluster `ACTIVE`, node group shows 2 Spot nodes.
+- Both Argo CD Helm releases `deployed`; `kubectl -n argocd get applications`
+  shows the `app-of-apps` Application in `Synced` / `Healthy` state.
 - `aws bedrock-agent get-knowledge-base` shows status `ACTIVE` and storage
   type `S3_VECTORS`.
 - `aws eks list-access-entries` shows all three principals.
 - All 6 ECR repositories exist with scan-on-push enabled.
 - Budget appears in `aws budgets describe-budgets`.
 
-**Test:** All post-apply checks above pass.
+**Test:** Both apply phases complete without errors; all post-apply checks pass.

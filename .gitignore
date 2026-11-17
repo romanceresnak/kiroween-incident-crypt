@@ -4,7 +4,7 @@
 
 # Terraform working directories
 .terraform/
-.terraform.lock.hcl
+# .terraform.lock.hcl is committed — do not ignore it
 
 # Local variable overrides — use TF_VAR_* in CI instead
 terraform.tfvars
