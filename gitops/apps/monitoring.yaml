@@ -1,0 +1,126 @@
+# Child of app-of-apps: Prometheus + Grafana for agent cost and incident metrics
+# (memory-and-ui REQ-MON-01, MON-02). Sized to sit next to the agents on 2x t3.large.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    # Exact pin: newest in the chart index on 17 Nov 2026 (operator v0.94.2).
+    targetRevision: 92.21.2
+    helm:
+      valuesObject:
+        # Alert routing is out of scope; Grafana is the only consumer.
+        alertmanager:
+          enabled: false
+        # EKS runs these components; their metrics endpoints are not reachable from pods.
+        kubeEtcd:
+          enabled: false
+        kubeControllerManager:
+          enabled: false
+        kubeScheduler:
+          enabled: false
+        kubeProxy:
+          enabled: false
+        defaultRules:
+          rules:
+            etcd: false
+            kubeControllerManager: false
+            kubeSchedulerAlerting: false
+            kubeSchedulerRecording: false
+            kubeProxy: false
+            alertmanager: false
+
+        prometheusOperator:
+          resources:
+            requests: {cpu: 25m, memory: 64Mi}
+            limits: {cpu: 200m, memory: 192Mi}
+          admissionWebhooks:
+            patch:
+              resources:
+                requests: {cpu: 10m, memory: 32Mi}
+                limits: {cpu: 100m, memory: 64Mi}
+
+        prometheus:
+          prometheusSpec:
+            retention: 2d
+            retentionSize: 3GB
+            # No PVC: the cluster has no CSI StorageClass yet. Two days of data are lost on
+            # a restart, which is acceptable for a demo.
+            storageSpec:
+              emptyDir:
+                sizeLimit: 4Gi
+            resources:
+              requests: {cpu: 200m, memory: 1Gi}
+              limits: {cpu: "1", memory: 2Gi}
+            scrapeInterval: 30s
+            # Select ServiceMonitors and rules from every namespace, not just this release.
+            serviceMonitorSelectorNilUsesHelmValues: false
+            podMonitorSelectorNilUsesHelmValues: false
+            ruleSelectorNilUsesHelmValues: false
+            probeSelectorNilUsesHelmValues: false
+            scrapeConfigSelectorNilUsesHelmValues: false
+
+        grafana:
+          # No default password: the operator creates Secret grafana-admin first
+          # (keys admin-user, admin-password).
+          admin:
+            existingSecret: grafana-admin
+            userKey: admin-user
+            passwordKey: admin-password
+          grafana.ini:
+            auth.anonymous:
+              enabled: false
+            analytics:
+              reporting_enabled: false
+              check_for_updates: false
+          ingress:
+            enabled: false
+          persistence:
+            enabled: false
+          # A helm-test hook Pod; Argo CD has no use for it.
+          testFramework:
+            enabled: false
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: 300m, memory: 256Mi}
+          sidecar:
+            resources:
+              requests: {cpu: 10m, memory: 48Mi}
+              limits: {cpu: 100m, memory: 96Mi}
+            dashboards:
+              enabled: true
+              label: grafana_dashboard
+              labelValue: "1"
+              # The agents chart ships its dashboard ConfigMap in namespace agents.
+              searchNamespace: ALL
+              folderAnnotation: grafana_folder
+              provider:
+                foldersFromFilesStructure: true
+
+        kube-state-metrics:
+          resources:
+            requests: {cpu: 25m, memory: 64Mi}
+            limits: {cpu: 200m, memory: 192Mi}
+
+        prometheus-node-exporter:
+          resources:
+            requests: {cpu: 20m, memory: 32Mi}
+            limits: {cpu: 200m, memory: 64Mi}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # The Prometheus Operator CRDs exceed the client-side apply annotation limit.
+      - ServerSideApply=true
