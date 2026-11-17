@@ -1,0 +1,140 @@
+{
+    "incident": {
+        "incident_id": "16a71a3f90967b1f",
+        "source": "manual",
+        "reason": "OOMKilled",
+        "namespace": "monitoring",
+        "workload": {
+            "kind": "Deployment",
+            "name": "monitoring-grafana"
+        },
+        "pod": "monitoring-grafana-846477d674-nrd67",
+        "container": "grafana",
+        "message": "Container grafana terminated: OOMKilled (exit code 137)",
+        "observed_at": "2026-11-17T17:57:31Z",
+        "depends_on": [],
+        "similar_incidents": []
+    },
+    "status": "awaiting_approval",
+    "classification": {
+        "category": "cpu_memory",
+        "rationale": "Container was OOMKilled (exit code 137), indicating it exceeded its memory limit and the system terminated it.",
+        "confidence": "high"
+    },
+    "investigation": {
+        "outcome": "action_required",
+        "diagnosis": {
+            "root_cause": "The grafana container has a memory limit of 256Mi that is insufficient for Grafana 13.3.0 with its plugin set and unified storage indexer. Live metrics show the container already consuming ~230 MiB immediately after a cold-start restart, leaving only ~26 MiB headroom before the kernel OOM-kills it \u2014 explaining the 5 recorded OOMKilled terminations (exit code 137). Both sidecar containers (grafana-sc-dashboard and grafana-sc-datasources) are also OOMKilled repeatedly under their 96Mi limits, contributing to the overall pod instability. There are no namespace quotas or LimitRanges that would block raising the limits.",
+            "confidence": "high",
+            "evidence": [
+                {
+                    "tool": "get_pod",
+                    "field": "containerStatuses[grafana].lastState.reason",
+                    "value": "OOMKilled"
+                },
+                {
+                    "tool": "get_pod",
+                    "field": "containerStatuses[grafana].lastState.exitCode",
+                    "value": "137"
+                },
+                {
+                    "tool": "get_pod",
+                    "field": "containerStatuses[grafana].restartCount",
+                    "value": "5"
+                },
+                {
+                    "tool": "get_pod",
+                    "field": "containers[grafana].resources.limits.memory",
+                    "value": "256Mi"
+                },
+                {
+                    "tool": "get_pod_metrics",
+                    "field": "containers[grafana].usage.memory",
+                    "value": "234900Ki (~229 MiB, measured immediately after restart)"
+                },
+                {
+                    "tool": "get_pod",
+                    "field": "containerStatuses[grafana-sc-dashboard].lastState.reason",
+                    "value": "OOMKilled"
+                },
+                {
+                    "tool": "get_pod",
+                    "field": "containerStatuses[grafana-sc-dashboard].restartCount",
+                    "value": "6"
+                },
+                {
+                    "tool": "get_pod",
+                    "field": "containers[grafana-sc-dashboard].resources.limits.memory",
+                    "value": "96Mi"
+                },
+                {
+                    "tool": "get_pod",
+                    "field": "containerStatuses[grafana-sc-datasources].lastState.reason",
+                    "value": "OOMKilled"
+                },
+                {
+                    "tool": "get_pod",
+                    "field": "containerStatuses[grafana-sc-datasources].state.reason",
+                    "value": "CrashLoopBackOff"
+                },
+                {
+                    "tool": "get_pod",
+                    "field": "containers[grafana-sc-datasources].resources.limits.memory",
+                    "value": "96Mi"
+                },
+                {
+                    "tool": "get_quota_and_limits",
+                    "field": "resourceQuotas / limitRanges",
+                    "value": "none \u2014 no namespace constraints on increases"
+                },
+                {
+                    "tool": "get_owner_workload",
+                    "field": "kind/name",
+                    "value": "Deployment/monitoring-grafana"
+                }
+            ]
+        },
+        "proposal": {
+            "action": "adjust_resources",
+            "target": {
+                "namespace": "monitoring",
+                "kind": "Deployment",
+                "name": "monitoring-grafana",
+                "container": "grafana"
+            },
+            "field": "resources.limits.memory",
+            "current": "256Mi",
+            "proposed": "512Mi",
+            "rationale": "The grafana container is already consuming ~229 MiB (234900Ki) at cold-start, against a 256Mi limit. Under normal load (dashboard rendering, plugin activity, bleve search indexing) it will breach this immediately. Doubling the limit to 512Mi provides sufficient headroom for Grafana 13.3.0's unified storage and plugin workloads while staying well within a 2\u00d7 increase. The requests.memory should also be raised proportionally (e.g. to 256Mi) so the container is scheduled on a node that can actually sustain it. The two sidecar containers (grafana-sc-dashboard, grafana-sc-datasources) also require their limits raised from 96Mi to at least 128Mi each \u2014 those are separate fields on the same Deployment but not the primary proposal here.",
+            "risk": "Increasing to 512Mi doubles node memory reservation for this container. With a single replica and no HPA, this is a straightforward trade-off between availability (current OOM crash loop) and node memory pressure. No namespace quota constraints were found.",
+            "requires_approval": true,
+            "delivery": "Apply as a pull request against /gitops after a human approves it. The agent does not change the cluster."
+        },
+        "usage": {
+            "input_tokens": 22235,
+            "output_tokens": 1966,
+            "cost_usd": 0.1058145
+        },
+        "validation_notes": []
+    },
+    "delegation": "tool",
+    "usage_by_agent": {
+        "orchestrator": {
+            "input_tokens": 2988,
+            "output_tokens": 236,
+            "cost_usd": 0.0045848
+        },
+        "cpu-memory": {
+            "input_tokens": 22235,
+            "output_tokens": 1966,
+            "cost_usd": 0.1058145
+        }
+    },
+    "error": null,
+    "related_incidents": [],
+    "related_to": null,
+    "similar_incidents": [],
+    "approval": null,
+    "created_at": "2026-11-17T17:57:31.216972Z",
+    "updated_at": "2026-11-17T17:57:52.179098Z"
+}
