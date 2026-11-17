@@ -6,6 +6,8 @@ Works on plain dicts (the serialized pod), so it is tested without a cluster.
 from __future__ import annotations
 
 import hashlib
+import re
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -98,5 +100,104 @@ def to_incident(t: Termination, observed_at: datetime) -> Incident:
         pod=t.pod,
         container=t.container,
         message=f"Container {t.container} terminated: {t.reason} (exit code {t.exit_code})",
+        observed_at=observed_at,
+    )
+
+
+# --- generic signals: terminations, waiting states and events (specialists REQ-WTX) ----
+
+WAITING_REASONS = frozenset({"ImagePullBackOff", "ErrImagePull", "CrashLoopBackOff",
+                             "CreateContainerConfigError"})
+EVENT_REASONS: dict[str, frozenset[str]] = {
+    "Pod": frozenset({"FailedScheduling", "FailedMount", "FailedAttachVolume", "Unhealthy"}),
+    "PersistentVolumeClaim": frozenset({"ProvisioningFailed"}),
+}
+_FIELD_PATH_CONTAINER = re.compile(r"spec\.(?:initContainers|containers)\{([^}]+)\}")
+
+
+@dataclass(frozen=True)
+class Signal:
+    namespace: str
+    workload_kind: str
+    workload_name: str
+    pod: str | None
+    container: str | None
+    reason: str
+    # What makes this occurrence unique: the termination time, the pod, or the object.
+    identity: str
+    # When it happened; None for an ongoing state (always current, so never "too old").
+    at: datetime | None
+    message: str
+
+
+def signal_id(s: Signal) -> str:
+    key = "|".join([s.namespace, s.workload_kind, s.workload_name, s.container or "",
+                    s.reason, s.identity])
+    return hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
+def termination_signal(t: Termination) -> Signal:
+    # Same fields as incident_id(t), so OOMKilled ids are unchanged.
+    return Signal(t.namespace, t.workload_kind, t.workload_name, t.pod, t.container, t.reason,
+                  t.finished_at.isoformat(), t.finished_at,
+                  f"Container {t.container} terminated: {t.reason} (exit code {t.exit_code})")
+
+
+def waiting_signals(
+    pod: dict[str, Any], reasons: frozenset[str], reported: frozenset[str] = frozenset()
+) -> list[Signal]:
+    """Containers waiting for one of ``reasons``. A crash loop whose last termination is
+    already reported on its own (``reported``, e.g. OOMKilled) is skipped, so one OOM does
+    not become two incidents."""
+    meta = pod.get("metadata") or {}
+    kind, name = resolve_workload(pod)
+    signals = []
+    for status in (pod.get("status") or {}).get("containerStatuses") or []:
+        waiting = (status.get("state") or {}).get("waiting") or {}
+        last = ((status.get("lastState") or {}).get("terminated") or {}).get("reason")
+        if waiting.get("reason") == "CrashLoopBackOff" and last in reported:
+            continue
+        if waiting.get("reason") in reasons:
+            signals.append(Signal(
+                meta.get("namespace", ""), kind, name, meta.get("name"), status.get("name"),
+                waiting["reason"], f"pod:{meta.get('uid') or meta.get('name')}", None,
+                f"{waiting['reason']}: {str(waiting.get('message') or '')[:500]}"))
+    return signals
+
+
+def event_signal(
+    event: dict[str, Any],
+    reasons: Mapping[str, frozenset[str]],
+    get_pod: Callable[[str, str], dict[str, Any] | None] | None = None,
+) -> Signal | None:
+    involved = event.get("involvedObject") or {}
+    kind, name, reason = involved.get("kind"), involved.get("name"), event.get("reason")
+    if not kind or not name or reason not in reasons.get(kind, frozenset()):
+        return None
+    namespace = involved.get("namespace") or (event.get("metadata") or {}).get("namespace", "")
+    at = parse_time(event.get("lastTimestamp") or event.get("eventTime")
+                    or event.get("firstTimestamp")
+                    or (event.get("metadata") or {}).get("creationTimestamp"))
+    identity = f"{kind}:{involved.get('uid') or name}"
+    message = f"{reason}: {str(event.get('message') or '')[:500]}"
+    if kind == "PersistentVolumeClaim":
+        return Signal(namespace, kind, name, None, None, reason, identity, at, message)
+    pod = get_pod(namespace, name) if get_pod else None
+    workload_kind, workload_name = resolve_workload(pod) if pod else ("Pod", name)
+    match = _FIELD_PATH_CONTAINER.search(involved.get("fieldPath") or "")
+    return Signal(namespace, workload_kind, workload_name, name,
+                  match.group(1) if match else None, reason, identity, at, message)
+
+
+def signal_to_incident(s: Signal, observed_at: datetime) -> Incident:
+    return Incident(
+        incident_id=signal_id(s),
+        source="watcher",
+        reason=s.reason,
+        namespace=s.namespace,
+        workload={"kind": s.workload_kind, "name": s.workload_name},
+        pod=s.pod,
+        container=s.container,
+        message=s.message[:2000],
         observed_at=observed_at,
     )

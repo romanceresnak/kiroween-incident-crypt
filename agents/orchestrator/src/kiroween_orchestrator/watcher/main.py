@@ -16,17 +16,31 @@ from kiroween_shared.models import utcnow
 
 from .client import OrchestratorClient
 from .dedupe import Cooldown, SeenIds
-from .detect import incident_id, terminations, to_incident
+from .detect import (
+    EVENT_REASONS,
+    WAITING_REASONS,
+    Signal,
+    event_signal,
+    signal_id,
+    signal_to_incident,
+    termination_signal,
+    terminations,
+    waiting_signals,
+)
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_EXCLUDED = ["kube-system", "kube-node-lease", "argocd"]
+# agents is excluded so the agents never investigate their own pods.
+DEFAULT_EXCLUDED = ["kube-system", "kube-node-lease", "argocd", "agents"]
 
 
 @dataclass(frozen=True)
 class WatcherSettings:
     orchestrator_url: str = "http://orchestrator:8080"
     reasons: frozenset[str] = frozenset({"OOMKilled"})
+    waiting_reasons: frozenset[str] = WAITING_REASONS
+    pod_event_reasons: frozenset[str] = EVENT_REASONS["Pod"]
+    pvc_event_reasons: frozenset[str] = EVENT_REASONS["PersistentVolumeClaim"]
     excluded_namespaces: frozenset[str] = field(default_factory=lambda: frozenset(DEFAULT_EXCLUDED))
     cooldown_s: int = 600
     startup_grace_s: int = 300
@@ -38,6 +52,11 @@ class WatcherSettings:
         return cls(
             orchestrator_url=env.get("ORCHESTRATOR_URL", "http://orchestrator:8080"),
             reasons=frozenset(env_list(env, "WATCH_REASONS", ["OOMKilled"])),
+            waiting_reasons=frozenset(env_list(env, "WAITING_REASONS", sorted(WAITING_REASONS))),
+            pod_event_reasons=frozenset(
+                env_list(env, "POD_EVENT_REASONS", sorted(EVENT_REASONS["Pod"]))),
+            pvc_event_reasons=frozenset(env_list(
+                env, "PVC_EVENT_REASONS", sorted(EVENT_REASONS["PersistentVolumeClaim"]))),
             excluded_namespaces=frozenset(env_list(env, "EXCLUDED_NAMESPACES", DEFAULT_EXCLUDED)),
             cooldown_s=env_int(env, "COOLDOWN_SECONDS", 600),
             startup_grace_s=env_int(env, "STARTUP_GRACE_SECONDS", 300),
@@ -54,38 +73,61 @@ class Watcher:
         started_at: datetime | None = None,
         clock: Callable[[], float] = time.monotonic,
         now: Callable[[], datetime] = utcnow,
+        get_pod: Callable[[str, str], dict[str, Any] | None] | None = None,
     ) -> None:
         self.settings = settings
         self.client = client
+        self._get_pod = get_pod
+        # The pod and event streams run in two threads and share the dedup state.
+        self._lock = threading.Lock()
         self._now = now
         self._oldest = (started_at or now()) - timedelta(seconds=settings.startup_grace_s)
         self._cooldown = Cooldown(settings.cooldown_s, clock)
         self._seen = SeenIds()
 
     def handle(self, pod: dict[str, Any]) -> list[str]:
-        """Process one pod; returns the ids of incidents submitted."""
-        namespace = (pod.get("metadata") or {}).get("namespace", "")
-        if namespace in self.settings.excluded_namespaces:
-            return []
-        submitted = []
-        for t in terminations(pod, set(self.settings.reasons)):
-            iid = incident_id(t)
+        """Process one pod (terminations and waiting states); returns submitted ids."""
+        signals = [termination_signal(t) for t in terminations(pod, set(self.settings.reasons))]
+        signals += waiting_signals(pod, self.settings.waiting_reasons, self.settings.reasons)
+        return [iid for s in signals if (iid := self._submit(s))]
+
+    def handle_event(self, event: dict[str, Any]) -> list[str]:
+        """Process one Event; returns submitted ids."""
+        reasons = {"Pod": self.settings.pod_event_reasons,
+                   "PersistentVolumeClaim": self.settings.pvc_event_reasons}
+        signal = event_signal(event, reasons, self._lookup_pod)
+        iid = self._submit(signal) if signal else None
+        return [iid] if iid else []
+
+    def _lookup_pod(self, namespace: str, name: str) -> dict[str, Any] | None:
+        if self._get_pod is None:
+            return None
+        try:
+            return self._get_pod(namespace, name)
+        except Exception:  # the pod may be gone; fall back to the pod as its own workload
+            return None
+
+    def _submit(self, s: Signal) -> str | None:
+        if s.namespace in self.settings.excluded_namespaces:
+            return None
+        iid = signal_id(s)
+        with self._lock:
             if iid in self._seen:
-                continue
+                return None
             self._seen.add(iid)
-            if t.finished_at < self._oldest:
-                logger.debug("ignoring termination from before startup: %s", iid)
-                continue
-            key = (t.namespace, t.workload_kind, t.workload_name, t.container, t.reason)
+            if s.at is not None and s.at < self._oldest:
+                logger.debug("ignoring %s from before startup: %s", s.reason, iid)
+                return None
+            key = (s.namespace, s.workload_kind, s.workload_name, s.container, s.reason)
             if not self._cooldown.allow(key):
-                logger.info("suppressed repeat %s for %s/%s", t.reason, t.namespace,
-                            t.workload_name)
-                continue
-            if self.client.submit(to_incident(t, self._now())):
-                submitted.append(iid)
-                logger.info("submitted incident %s for %s/%s", iid, t.namespace,
-                            t.workload_name)
-        return submitted
+                logger.info("suppressed repeat %s for %s/%s", s.reason, s.namespace,
+                            s.workload_name)
+                return None
+        if self.client.submit(signal_to_incident(s, self._now())):
+            logger.info("submitted incident %s (%s) for %s/%s", iid, s.reason, s.namespace,
+                        s.workload_name)
+            return iid
+        return None
 
 
 class Heartbeat:
@@ -105,7 +147,7 @@ class ApiGone(Exception):
 
 
 def run(
-    watcher: Watcher,
+    handle: Callable[[dict[str, Any]], Any],
     list_pods: Callable[[], tuple[Iterable[dict[str, Any]], str]],
     watch_pods: Callable[[str], Iterable[tuple[str, dict[str, Any]]]],
     heartbeat: Callable[[], None],
@@ -124,7 +166,7 @@ def run(
             if resource_version is None:
                 pods, resource_version = list_pods()
                 for pod in pods:
-                    watcher.handle(pod)
+                    handle(pod)
                 heartbeat()
             for event_type, pod in watch_pods(resource_version):
                 heartbeat()
@@ -132,7 +174,7 @@ def run(
                 if version:
                     resource_version = version
                 if event_type in ("ADDED", "MODIFIED"):
-                    watcher.handle(pod)
+                    handle(pod)
             heartbeat()
         except ApiGone:
             logger.info("watch version expired; re-listing pods")
@@ -142,7 +184,10 @@ def run(
             sleep(5)
 
 
-def kubernetes_sources() -> tuple[Callable[..., Any], Callable[..., Any]]:
+def kubernetes_sources(
+    resource: str = "pods",
+) -> tuple[Callable[..., Any], Callable[..., Any]]:
+    """list/watch callables for ``pods`` or ``events`` across all namespaces."""
     from kubernetes import client, watch
     from kubernetes.client.rest import ApiException
 
@@ -150,18 +195,18 @@ def kubernetes_sources() -> tuple[Callable[..., Any], Callable[..., Any]]:
 
     api = load_api_client()
     core = client.CoreV1Api(api)
+    list_all = {"pods": core.list_pod_for_all_namespaces,
+                "events": core.list_event_for_all_namespaces}[resource]
 
-    def list_pods() -> tuple[list[dict[str, Any]], str]:
-        result = core.list_pod_for_all_namespaces()
-        pods = [api.sanitize_for_serialization(p) for p in result.items]
-        return pods, result.metadata.resource_version
+    def list_objects() -> tuple[list[dict[str, Any]], str]:
+        result = list_all()
+        items = [api.sanitize_for_serialization(o) for o in result.items]
+        return items, result.metadata.resource_version
 
-    def watch_pods(resource_version: str) -> Iterable[tuple[str, dict[str, Any]]]:
+    def watch_objects(resource_version: str) -> Iterable[tuple[str, dict[str, Any]]]:
         try:
             for event in watch.Watch().stream(
-                core.list_pod_for_all_namespaces,
-                resource_version=resource_version,
-                timeout_seconds=300,
+                list_all, resource_version=resource_version, timeout_seconds=300
             ):
                 if event.get("type") == "ERROR":
                     raise ApiGone()
@@ -171,7 +216,21 @@ def kubernetes_sources() -> tuple[Callable[..., Any], Callable[..., Any]]:
                 raise ApiGone() from exc
             raise
 
-    return list_pods, watch_pods
+    return list_objects, watch_objects
+
+
+def kubernetes_get_pod() -> Callable[[str, str], dict[str, Any] | None]:
+    from kubernetes import client
+
+    from kiroween_shared.k8s.client import load_api_client
+
+    api = load_api_client()
+    core = client.CoreV1Api(api)
+
+    def get_pod(namespace: str, name: str) -> dict[str, Any] | None:
+        return api.sanitize_for_serialization(core.read_namespaced_pod(name, namespace))
+
+    return get_pod
 
 
 def main() -> None:
@@ -179,11 +238,19 @@ def main() -> None:
 
     configure_logging(os.environ.get("LOG_LEVEL", "INFO"))
     settings = WatcherSettings.from_env()
-    beat = Heartbeat()
-    app = create_app("orchestrator-watcher", ready=beat.recent)
+    pod_beat, event_beat = Heartbeat(), Heartbeat()
+    app = create_app("orchestrator-watcher",
+                     ready=lambda: pod_beat.recent() and event_beat.recent())
     threading.Thread(target=serve, args=(app, settings.health_port), daemon=True).start()
 
-    list_pods, watch_pods = kubernetes_sources()
-    watcher = Watcher(settings, OrchestratorClient(settings.orchestrator_url))
-    logger.info("watching pods for %s", sorted(settings.reasons))
-    run(watcher, list_pods, watch_pods, beat.touch)
+    watcher = Watcher(settings, OrchestratorClient(settings.orchestrator_url),
+                      get_pod=kubernetes_get_pod())
+    list_events, watch_events = kubernetes_sources("events")
+    threading.Thread(target=run, name="events", daemon=True,
+                     args=(watcher.handle_event, list_events, watch_events,
+                           event_beat.touch)).start()
+    list_pods, watch_pods = kubernetes_sources("pods")
+    logger.info("watching pods for %s and %s, events for %s and %s",
+                sorted(settings.reasons), sorted(settings.waiting_reasons),
+                sorted(settings.pod_event_reasons), sorted(settings.pvc_event_reasons))
+    run(watcher.handle, list_pods, watch_pods, pod_beat.touch)

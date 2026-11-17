@@ -211,7 +211,7 @@ def test_watch_loop_lists_watches_relists_and_reconnects() -> None:
         if step == 2:
             raise ConnectionError("dropped")
 
-    run(watcher, list_pods, watch_pods, heartbeat=lambda: None,
+    run(watcher.handle, list_pods, watch_pods, heartbeat=lambda: None,
         should_continue=lambda: next(rounds, None) is not None, sleep=lambda s: None)
 
     assert calls[:4] == ["list", "watch@100", "list", "watch@100"]
