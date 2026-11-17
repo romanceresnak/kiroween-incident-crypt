@@ -87,7 +87,8 @@ data "aws_caller_identity" "current" {}
 # ---------------------------------------------------------------------------
 
 locals {
-  cluster_name = "${var.project}-${var.env}"
+  cluster_name      = "${var.project}-${var.env}"
+  state_bucket_name = "${var.project}-${var.env}-tf-state-${data.aws_caller_identity.current.account_id}"
 }
 
 # ---------------------------------------------------------------------------
@@ -135,7 +136,17 @@ module "eks" {
 }
 
 # TASK-06: GitHub Actions OIDC roles
-# module "github_oidc" { ... }
+module "github_oidc" {
+  source = "./modules/github_oidc"
+
+  project    = var.project
+  env        = var.env
+  aws_region = var.aws_region
+
+  gha_repo             = var.gha_repo
+  state_bucket_name    = local.state_bucket_name
+  create_oidc_provider = var.create_github_oidc_provider
+}
 
 # TASK-08: Bedrock Knowledge Base
 # module "bedrock_kb" { ... }

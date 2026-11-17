@@ -105,6 +105,12 @@ variable "gha_repo" {
   default     = "romanceresnak/kiroween-incident-crypt"
 }
 
+variable "create_github_oidc_provider" {
+  description = "Create the GitHub OIDC provider. Leave false when the account already has one (only one per URL is allowed); set true in a fresh account."
+  type        = bool
+  default     = false
+}
+
 variable "budget_alert_email" {
   description = "Email address for the AWS Budget $50/month alert notification."
   type        = string
