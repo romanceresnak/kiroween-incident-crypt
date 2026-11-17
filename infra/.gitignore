@@ -1,0 +1,13 @@
+# Terraform state — never commit
+*.tfstate
+*.tfstate.*
+
+# Terraform working directories
+.terraform/
+.terraform.lock.hcl
+
+# Local variable overrides — use TF_VAR_* in CI instead
+terraform.tfvars
+
+# Crash log
+crash.log
