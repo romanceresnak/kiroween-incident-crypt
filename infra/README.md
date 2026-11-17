@@ -9,12 +9,14 @@ Spec: `.kiro/specs/infra/`.
 |---|---|
 | `bootstrap/` | Local-state module that creates the S3 state bucket. Applied once. |
 | `main.tf`, `variables.tf`, `outputs.tf` | Root stack: providers, S3 backend, module calls. |
-| `modules/` | `vpc`, `ecr`, `eks`, `github_oidc`, and the modules added by later tasks. |
+| `modules/` | `vpc`, `ecr`, `eks`, `github_oidc`, `bedrock_kb`, `pod_identity`, `argocd`, `finops`. |
+| `terraform.tfvars.example` | Every variable with its default; the two required ones are uncommented. |
 
 ## Usage
 
 1. Apply `bootstrap/` once. Its state is local and must not be committed
-   (`*.tfstate*` is in the repo `.gitignore`).
+   (`*.tfstate*` is in the repo `.gitignore`). The `state_bucket_name` output is
+   the bucket name for the next step.
 2. Initialise the main stack with the bucket name (the `bucket` attribute is
    deliberately absent from the backend block):
 
@@ -23,7 +25,7 @@ Spec: `.kiro/specs/infra/`.
    ```
 
 3. Supply the required variables through the environment, never a committed
-   `terraform.tfvars`:
+   `terraform.tfvars`. These two are the only variables without a default:
 
    ```
    export TF_VAR_admin_iam_principal_arn=arn:aws:iam::<account_id>:role/<admin-role>
@@ -33,7 +35,29 @@ Spec: `.kiro/specs/infra/`.
    `admin_iam_principal_arn` must be a well-formed ARN. A placeholder such as
    `dummy` fails the provider's ARN validation, even for `plan`.
 
+4. Check the configuration:
+
+   ```
+   terraform validate
+   terraform plan
+   ```
+
 `.terraform.lock.hcl` is committed.
+
+## Apply
+
+The main stack is applied once, after `validate` and `plan` are clean. The helm
+and kubernetes providers need a live cluster, so apply in two steps:
+
+```
+terraform apply -target=module.vpc -target=module.eks -target=module.github_oidc
+terraform apply
+```
+
+## GitOps path
+
+The root Argo CD Application syncs `gitops/apps` (`gitops_repo_path`), which holds
+only child Application manifests. See `gitops/apps/README.md`.
 
 ## GitHub OIDC provider
 

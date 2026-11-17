@@ -1,12 +1,46 @@
-# Required — no defaults; supply via TF_VAR_* environment variables in CI.
+# Copy to terraform.tfvars for local use (terraform.tfvars is git-ignored).
+# In CI, supply the two required values as TF_VAR_* environment variables instead.
+
+# ---------------------------------------------------------------------------
+# Required: no defaults
+# ---------------------------------------------------------------------------
+
+# Must be a well-formed ARN; a placeholder such as "dummy" fails validation.
 admin_iam_principal_arn = "arn:aws:iam::123456789012:role/my-admin-role"
 budget_alert_email      = "ops@example.com"
 
+# ---------------------------------------------------------------------------
 # Optional overrides (defaults shown)
-# aws_region                    = "eu-west-1"
-# project                       = "kiroween"
-# env                           = "prod"
-# eks_kubernetes_version         = "1.37"
-# argocd_chart_version           = "10.18.0"
-# argocd_apps_chart_version      = "2.0.8"
-# cloudwatch_log_retention_days  = 7
+# ---------------------------------------------------------------------------
+
+# aws_region = "eu-west-1"
+# project    = "kiroween"
+# env        = "prod"
+
+# EKS
+# eks_kubernetes_version  = "1.37"
+# eks_node_instance_types = ["t3.large", "t3a.large", "m5.large"]
+# eks_node_min_size       = 2
+# eks_node_desired_size   = 2
+# eks_node_max_size       = 3
+
+# Argo CD
+# argocd_chart_version      = "10.18.0"
+# argocd_apps_chart_version = "2.0.8"
+# gitops_repo_url           = "https://github.com/romanceresnak/kiroween-incident-crypt"
+# gitops_repo_path          = "gitops/apps"
+# gitops_target_revision    = "main"
+
+# Agents (drives ECR repositories and Pod Identity roles)
+# agent_names = ["orchestrator", "cpu-memory", "network", "deploy-rollout", "storage", "incident-memory"]
+
+# Bedrock Knowledge Base
+# bedrock_embedding_model_id = "amazon.titan-embed-text-v2:0"
+# bedrock_vector_dimension   = 1024
+
+# GitHub Actions OIDC
+# gha_repo                   = "romanceresnak/kiroween-incident-crypt"
+# create_github_oidc_provider = false   # true only in an account with no GitHub OIDC provider
+
+# Logging
+# cloudwatch_log_retention_days = 7
