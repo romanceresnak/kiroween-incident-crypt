@@ -276,3 +276,159 @@ def oom_kube(**overrides: Any) -> FakeKube:
     }
     kwargs.update(overrides)
     return FakeKube(**kwargs)
+
+
+# --- generic in-memory cluster for the specialists --------------------------
+
+
+class FakeCluster:
+    """In-memory cluster with every ``ReadOnlyKube`` read method.
+
+    Objects are keyed by (kind, namespace, name); cluster-scoped objects use namespace "".
+    """
+
+    CLUSTER_SCOPED = frozenset({"Node", "PersistentVolume", "StorageClass", "VolumeAttachment"})
+
+    def __init__(
+        self,
+        objects: list[dict[str, Any]] | None = None,
+        *,
+        logs: dict[tuple[str, str, str], str] | None = None,
+        errors: dict[str, Exception] | None = None,
+    ) -> None:
+        self.objects: dict[tuple[str, str, str], dict[str, Any]] = {}
+        for obj in objects or []:
+            self.add(obj)
+        self.logs = logs or {}
+        self.errors = errors or {}
+        self.calls: list[tuple[str, Any]] = []
+
+    def add(self, obj: dict[str, Any]) -> None:
+        meta = obj["metadata"]
+        ns = "" if obj["kind"] in self.CLUSTER_SCOPED else meta.get("namespace", "")
+        self.objects[(obj["kind"], ns, meta["name"])] = obj
+
+    def _record(self, method: str, *args: Any) -> None:
+        self.calls.append((method, args))
+        if method in self.errors:
+            raise self.errors[method]
+
+    def _get(self, kind: str, ns: str, name: str) -> dict[str, Any]:
+        from .k8s.client import KubeError
+
+        if (kind, ns, name) not in self.objects:
+            raise KubeError(404, "not_found", f"{kind} {ns}/{name}")
+        return self.objects[(kind, ns, name)]
+
+    def _list(self, kind: str, ns: str | None = None, selector: str = "") -> dict[str, Any]:
+        wanted = dict(part.split("=", 1) for part in selector.split(",") if part)
+        items = []
+        for (k, n, _), obj in self.objects.items():
+            if k != kind or (ns is not None and n != ns):
+                continue
+            labels = obj["metadata"].get("labels") or {}
+            if all(labels.get(key) == value for key, value in wanted.items()):
+                items.append(obj)
+        return {"items": items}
+
+    # core
+    def get_pod(self, namespace: str, name: str) -> dict[str, Any]:
+        self._record("get_pod", namespace, name)
+        return self._get("Pod", namespace, name)
+
+    def list_pods(self, namespace: str, label_selector: str = "") -> dict[str, Any]:
+        self._record("list_pods", namespace, label_selector)
+        return self._list("Pod", namespace, label_selector)
+
+    def read_logs(self, namespace: str, name: str, container: str, *, previous: bool,
+                  tail_lines: int, limit_bytes: int) -> str:
+        from .k8s.client import KubeError
+
+        self._record("read_logs", namespace, name, container, previous, tail_lines)
+        if (namespace, name, container) not in self.logs:
+            raise KubeError(404, "not_found", "log")
+        return "\n".join(self.logs[(namespace, name, container)].splitlines()[-tail_lines:])
+
+    def list_events(self, namespace: str, field_selector: str) -> dict[str, Any]:
+        self._record("list_events", namespace, field_selector)
+        wanted = dict(p.split("=", 1) for p in field_selector.split(",") if p)
+        items = [e for e in self._list("Event", namespace)["items"]
+                 if all((e.get("involvedObject") or {}).get(k.split(".", 1)[1]) == v
+                        for k, v in wanted.items())]
+        return {"items": items}
+
+    def get_workload(self, kind: str, namespace: str, name: str) -> dict[str, Any]:
+        self._record("get_workload", kind, namespace, name)
+        return self._get(kind, namespace, name)
+
+    def list_resource_quotas(self, namespace: str) -> dict[str, Any]:
+        return self._list("ResourceQuota", namespace)
+
+    def list_limit_ranges(self, namespace: str) -> dict[str, Any]:
+        return self._list("LimitRange", namespace)
+
+    def list_hpas(self, namespace: str) -> dict[str, Any]:
+        return self._list("HorizontalPodAutoscaler", namespace)
+
+    def get_node(self, name: str) -> dict[str, Any]:
+        self._record("get_node", name)
+        return self._get("Node", "", name)
+
+    def get_pod_metrics(self, namespace: str, name: str) -> dict[str, Any]:
+        return self._get("PodMetrics", namespace, name)
+
+    # network
+    def get_service(self, namespace: str, name: str) -> dict[str, Any]:
+        self._record("get_service", namespace, name)
+        return self._get("Service", namespace, name)
+
+    def list_services(self, namespace: str) -> dict[str, Any]:
+        return self._list("Service", namespace)
+
+    def list_endpoint_slices(self, namespace: str, service: str) -> dict[str, Any]:
+        return self._list("EndpointSlice", namespace, f"kubernetes.io/service-name={service}")
+
+    def get_network_policy(self, namespace: str, name: str) -> dict[str, Any]:
+        self._record("get_network_policy", namespace, name)
+        return self._get("NetworkPolicy", namespace, name)
+
+    def list_network_policies(self, namespace: str) -> dict[str, Any]:
+        return self._list("NetworkPolicy", namespace)
+
+    def list_ingresses(self, namespace: str) -> dict[str, Any]:
+        return self._list("Ingress", namespace)
+
+    # deploy-rollout
+    def get_configmap(self, namespace: str, name: str) -> dict[str, Any]:
+        self._record("get_configmap", namespace, name)
+        return self._get("ConfigMap", namespace, name)
+
+    def list_replica_sets(self, namespace: str, label_selector: str) -> dict[str, Any]:
+        return self._list("ReplicaSet", namespace, label_selector)
+
+    def get_application(self, namespace: str, name: str) -> dict[str, Any]:
+        return self._get("Application", namespace, name)
+
+    # storage
+    def get_pvc(self, namespace: str, name: str) -> dict[str, Any]:
+        self._record("get_pvc", namespace, name)
+        return self._get("PersistentVolumeClaim", namespace, name)
+
+    def list_pvcs(self, namespace: str) -> dict[str, Any]:
+        return self._list("PersistentVolumeClaim", namespace)
+
+    def get_pv(self, name: str) -> dict[str, Any]:
+        return self._get("PersistentVolume", "", name)
+
+    def list_storage_classes(self) -> dict[str, Any]:
+        return self._list("StorageClass")
+
+    def list_volume_attachments(self) -> dict[str, Any]:
+        return self._list("VolumeAttachment")
+
+
+def obj(kind: str, name: str, namespace: str = "", **fields: Any) -> dict[str, Any]:
+    """Build a minimal API object for FakeCluster."""
+    metadata = {"name": name, **({"namespace": namespace} if namespace else {})}
+    metadata.update(fields.pop("metadata", {}))
+    return {"kind": kind, "metadata": metadata, **fields}

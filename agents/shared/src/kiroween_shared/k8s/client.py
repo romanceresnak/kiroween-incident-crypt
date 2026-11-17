@@ -43,6 +43,9 @@ class ReadOnlyKube:
         self._apps = client.AppsV1Api(self._api)
         self._autoscaling = client.AutoscalingV2Api(self._api)
         self._custom = client.CustomObjectsApi(self._api)
+        self._discovery = client.DiscoveryV1Api(self._api)
+        self._networking = client.NetworkingV1Api(self._api)
+        self._storage = client.StorageV1Api(self._api)
 
     def _call(self, fn: Any, *args: Any, **kwargs: Any) -> Any:
         try:
@@ -112,3 +115,60 @@ class ReadOnlyKube:
             self._custom.get_namespaced_custom_object,
             "metrics.k8s.io", "v1beta1", namespace, "pods", name,
         )
+
+    # --- network -------------------------------------------------------------
+
+    def get_service(self, namespace: str, name: str) -> dict[str, Any]:
+        return self._call(self._core.read_namespaced_service, name, namespace)
+
+    def list_services(self, namespace: str) -> dict[str, Any]:
+        return self._call(self._core.list_namespaced_service, namespace, limit=100)
+
+    def list_endpoint_slices(self, namespace: str, service: str) -> dict[str, Any]:
+        return self._call(
+            self._discovery.list_namespaced_endpoint_slice,
+            namespace,
+            label_selector=f"kubernetes.io/service-name={service}",
+        )
+
+    def get_network_policy(self, namespace: str, name: str) -> dict[str, Any]:
+        return self._call(self._networking.read_namespaced_network_policy, name, namespace)
+
+    def list_network_policies(self, namespace: str) -> dict[str, Any]:
+        return self._call(self._networking.list_namespaced_network_policy, namespace)
+
+    def list_ingresses(self, namespace: str) -> dict[str, Any]:
+        return self._call(self._networking.list_namespaced_ingress, namespace)
+
+    # --- deploy-rollout --------------------------------------------------------
+
+    def get_configmap(self, namespace: str, name: str) -> dict[str, Any]:
+        return self._call(self._core.read_namespaced_config_map, name, namespace)
+
+    def list_replica_sets(self, namespace: str, label_selector: str) -> dict[str, Any]:
+        return self._call(
+            self._apps.list_namespaced_replica_set, namespace, label_selector=label_selector
+        )
+
+    def get_application(self, namespace: str, name: str) -> dict[str, Any]:
+        return self._call(
+            self._custom.get_namespaced_custom_object,
+            "argoproj.io", "v1alpha1", namespace, "applications", name,
+        )
+
+    # --- storage ----------------------------------------------------------------
+
+    def get_pvc(self, namespace: str, name: str) -> dict[str, Any]:
+        return self._call(self._core.read_namespaced_persistent_volume_claim, name, namespace)
+
+    def list_pvcs(self, namespace: str) -> dict[str, Any]:
+        return self._call(self._core.list_namespaced_persistent_volume_claim, namespace)
+
+    def get_pv(self, name: str) -> dict[str, Any]:
+        return self._call(self._core.read_persistent_volume, name)
+
+    def list_storage_classes(self) -> dict[str, Any]:
+        return self._call(self._storage.list_storage_class)
+
+    def list_volume_attachments(self) -> dict[str, Any]:
+        return self._call(self._storage.list_volume_attachment)

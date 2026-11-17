@@ -33,7 +33,9 @@ def write_calls(source: str) -> list[str]:
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Attribute):
             name = node.attr.lower()
-            if name.startswith(WRITE_PREFIXES) or "exec" in name or "attach" in name:
+            # exec/attach are connect_* calls; matching the ending (not "attach" anywhere)
+            # keeps read calls such as list_volume_attachment out.
+            if name.startswith(WRITE_PREFIXES) or name.endswith(("_exec", "_attach")):
                 found.append(node.attr)
     return found
 
@@ -75,6 +77,11 @@ def test_guard_detects_a_write_call(line: str) -> None:
 
 def test_guard_ignores_string_methods() -> None:
     assert write_calls('text.replace("a", "b")') == []
+
+
+def test_guard_ignores_read_calls_that_mention_attach() -> None:
+    assert write_calls("storage.list_volume_attachment()") == []
+    assert write_calls("core.connect_post_namespaced_pod_attach(name, ns)") != []
 
 
 # --- redaction (REQ-K8S-03) -----------------------------------------------
