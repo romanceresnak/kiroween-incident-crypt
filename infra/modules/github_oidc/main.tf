@@ -338,6 +338,9 @@ data "aws_iam_policy_document" "ecr_push" {
       "ecr:UploadLayerPart",
       "ecr:CompleteLayerUpload",
       "ecr:PutImage",
+      # Lets the workflow see that a tag already exists; the repositories are
+      # immutable, so a second push of the same tag would fail.
+      "ecr:DescribeImages",
     ]
     resources = ["arn:aws:ecr:${var.aws_region}:${local.account_id}:repository/${var.project}/*"]
   }
