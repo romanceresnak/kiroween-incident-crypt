@@ -43,7 +43,14 @@ spec:
             - {name: metrics, containerPort: {{ $.Values.ports.metrics }}}
           env:
             {{- include "agents.commonEnv" $ | nindent 12 }}
+            {{- if eq $name "incident-memory" }}
+            {{- /* Search only: Bedrock KB Retrieve, no model (memory-and-ui REQ-MEM-03). */}}
+            - {name: KNOWLEDGE_BASE_ID, value: {{ required "incidentMemory.knowledgeBaseId" $.Values.incidentMemory.knowledgeBaseId | quote }}}
+            - {name: TOP_K, value: {{ $.Values.incidentMemory.topK | quote }}}
+            - {name: MIN_SCORE, value: {{ $.Values.incidentMemory.minScore | quote }}}
+            {{- else }}
             - {name: MODEL_ID, value: {{ index $.Values.models $key | quote }}}
+            {{- end }}
           securityContext:
             {{- include "agents.containerSecurityContext" $ | nindent 12 }}
           resources:

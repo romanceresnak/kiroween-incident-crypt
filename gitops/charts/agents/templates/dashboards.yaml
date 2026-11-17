@@ -1,0 +1,20 @@
+{{- /*
+Grafana dashboards as code (memory-and-ui REQ-MON-04). The kube-prometheus-stack Grafana
+sidecar loads every ConfigMap labelled grafana_dashboard=1 (searchNamespace ALL).
+*/ -}}
+{{- if .Values.metrics.dashboards.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kiroween-dashboards
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: Kiroween
+data:
+  {{- range $path, $_ := .Files.Glob "dashboards/*.json" }}
+  {{ base $path }}: |-
+    {{- $.Files.Get $path | nindent 4 }}
+  {{- end }}
+{{- end }}

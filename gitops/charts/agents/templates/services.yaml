@@ -1,4 +1,4 @@
-{{- range $name := list "orchestrator" "cpu-memory" "network" "deploy-rollout" "storage" }}
+{{- range $name := list "orchestrator" "cpu-memory" "network" "deploy-rollout" "storage" "incident-memory" }}
 ---
 apiVersion: v1
 kind: Service

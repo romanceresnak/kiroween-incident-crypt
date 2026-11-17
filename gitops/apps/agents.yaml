@@ -22,3 +22,11 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+    # The chart's ServiceMonitors need the CRD from the monitoring Application; on a fresh
+    # cluster the first attempts can fail until it exists (memory-and-ui REQ-MON-03).
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

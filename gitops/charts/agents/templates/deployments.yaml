@@ -53,6 +53,15 @@ spec:
               value: {{ .Values.orchestrator.delegationTimeoutSeconds | quote }}
             - name: CORRELATION_WINDOW_SECONDS
               value: {{ .Values.orchestrator.correlationWindowSeconds | quote }}
+            - {name: GITHUB_REPOSITORY, value: {{ .Values.orchestrator.github.repository | quote }}}
+            - {name: GITHUB_BASE_BRANCH, value: {{ .Values.orchestrator.github.baseBranch | quote }}}
+            # Optional: no Secret means approvals are dry runs (REQ-APR-05).
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.orchestrator.github.tokenSecret }}
+                  key: token
+                  optional: true
           securityContext:
             {{- include "agents.containerSecurityContext" . | nindent 12 }}
           resources:

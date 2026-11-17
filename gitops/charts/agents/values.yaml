@@ -23,6 +23,9 @@ images:
   storage:
     repository: kiroween/storage
     tag: a39547b3687749fb40edc7c2ca030e1b600d80ca # ci-managed:storage
+  incidentMemory:
+    repository: kiroween/incident-memory
+    tag: unset # ci-managed:incident-memory
 
 region: eu-west-1
 
@@ -63,6 +66,13 @@ orchestrator:
   # Incidents in one namespace within this window that share a workload or a dependency
   # are attached to the first one instead of investigated again. 0 disables it.
   correlationWindowSeconds: 300
+  # Approved proposals become a PR against /gitops (memory-and-ui REQ-APR). The token is read
+  # from this Secret if it exists (key "token"); without it every approval is a dry run.
+  # The chart never creates the Secret.
+  github:
+    repository: romanceresnak/kiroween-incident-crypt
+    baseBranch: main
+    tokenSecret: orchestrator-github
   resources:
     requests: {cpu: 50m, memory: 192Mi}
     limits: {cpu: 500m, memory: 384Mi}
@@ -76,7 +86,7 @@ watcher:
   podEventReasons: [FailedScheduling, FailedMount, FailedAttachVolume, Unhealthy]
   pvcEventReasons: [ProvisioningFailed]
   # agents is excluded so the agents never investigate themselves.
-  excludedNamespaces: [kube-system, kube-node-lease, argocd, agents]
+  excludedNamespaces: [kube-system, kube-node-lease, argocd, agents, monitoring]
   cooldownSeconds: 600
   startupGraceSeconds: 300
   # An Unhealthy event is re-checked before it becomes an incident: no earlier than
@@ -110,10 +120,23 @@ storage:
     requests: {cpu: 50m, memory: 192Mi}
     limits: {cpu: 500m, memory: 384Mi}
 
+# Bedrock Knowledge Base search over docs/postmortems (memory-and-ui REQ-MEM-03).
+# knowledgeBaseId is the infra output knowledge_base_id.
+incidentMemory:
+  knowledgeBaseId: VIBAT27SDH
+  topK: 3
+  minScore: "0.3"
+  resources:
+    requests: {cpu: 20m, memory: 128Mi}
+    limits: {cpu: 200m, memory: 256Mi}
+
 metrics:
   serviceMonitor:
-    # The cluster has no Prometheus Operator CRDs yet (REQ-MET-06).
-    enabled: false
+    # kube-prometheus-stack (gitops/apps/monitoring.yaml) provides the CRD (REQ-MON-03).
+    enabled: true
+  # Grafana dashboards as a ConfigMap picked up by the Grafana sidecar (REQ-MON-04).
+  dashboards:
+    enabled: true
 
 networkPolicy:
   enabled: true

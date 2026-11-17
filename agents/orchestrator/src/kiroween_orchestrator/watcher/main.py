@@ -33,8 +33,9 @@ from .detect import (
 
 logger = logging.getLogger(__name__)
 
-# agents is excluded so the agents never investigate their own pods.
-DEFAULT_EXCLUDED = ["kube-system", "kube-node-lease", "argocd", "agents"]
+# agents is excluded so the agents never investigate their own pods; monitoring so the
+# Prometheus stack's own restarts are not incidents (memory-and-ui REQ-MON-06).
+DEFAULT_EXCLUDED = ["kube-system", "kube-node-lease", "argocd", "agents", "monitoring"]
 
 
 @dataclass(frozen=True)

@@ -70,17 +70,19 @@ readinessProbe:
 {{- end -}}
 
 {{/*
-The specialists the orchestrator delegates to, as "<name>:<values key>:<module>:<url env>".
-The name is the Service, the Deployment and the ServiceAccount prefix (<name>-sa).
+The backends the orchestrator calls, as "<name>:<values key>:<module>:<url env>": the four
+specialists and incident-memory. The name is the Service, the Deployment and the
+ServiceAccount prefix (<name>-sa).
 */}}
 {{- define "agents.specialists" -}}
 cpu-memory:cpuMemory:kiroween_cpu_memory:CPU_MEMORY_URL
 network:network:kiroween_network:NETWORK_URL
 deploy-rollout:deployRollout:kiroween_deploy_rollout:DEPLOY_ROLLOUT_URL
 storage:storage:kiroween_storage:STORAGE_URL
+incident-memory:incidentMemory:kiroween_incident_memory:INCIDENT_MEMORY_URL
 {{- end -}}
 
 {{/* Names of every agent pod that serves an API and metrics. */}}
 {{- define "agents.apiPods" -}}
-[orchestrator, cpu-memory, network, deploy-rollout, storage]
+[orchestrator, cpu-memory, network, deploy-rollout, storage, incident-memory]
 {{- end -}}

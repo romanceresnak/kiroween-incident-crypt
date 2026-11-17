@@ -1,5 +1,10 @@
+{{- /*
+One ServiceMonitor per agent Service (REQ-MET-06, memory-and-ui REQ-MON-03). The CRD comes
+from kube-prometheus-stack; SkipDryRunOnMissingResource lets the first Argo CD sync go
+through before it exists, and the agents Application retries until it does.
+*/ -}}
 {{- if .Values.metrics.serviceMonitor.enabled }}
-{{- range $name := list "orchestrator" "cpu-memory" }}
+{{- range $name := list "orchestrator" "cpu-memory" "network" "deploy-rollout" "storage" "incident-memory" }}
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
@@ -7,6 +12,8 @@ metadata:
   name: {{ $name }}
   labels:
     {{- include "agents.labels" $ | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   selector:
     matchLabels: {app.kubernetes.io/name: {{ $name }}}

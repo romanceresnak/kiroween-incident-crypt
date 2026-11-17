@@ -1,0 +1,94 @@
+{
+  "title": "Kiroween Incident Crypt",
+  "uid": "kiroween-agents",
+  "tags": ["kiroween", "agents"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {"from": "now-6h", "to": "now"},
+  "templating": {
+    "list": [
+      {"name": "datasource", "label": "Data source", "type": "datasource", "query": "prometheus",
+       "current": {}, "hide": 0}
+    ]
+  },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Bedrock cost (selected range)",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "fieldConfig": {"defaults": {"unit": "currencyUSD", "decimals": 4}},
+      "targets": [{"refId": "A", "expr": "sum(increase(agent_llm_cost_usd_total[$__range]))"}]
+    },
+    {
+      "id": 2, "type": "stat", "title": "Incidents (selected range)",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [{"refId": "A", "expr": "sum(increase(orchestrator_incidents_total[$__range]))"}]
+    },
+    {
+      "id": 3, "type": "stat", "title": "False-alarm (transient) rate",
+      "description": "Investigated incidents whose subject was healthy again: outcome transient or no_action.",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "fieldConfig": {"defaults": {"unit": "percentunit", "decimals": 1}},
+      "targets": [{"refId": "A", "expr": "sum(increase(orchestrator_incidents_total{outcome=~\"transient|no_action\"}[$__range])) / clamp_min(sum(increase(orchestrator_incidents_total{outcome!=\"none\"}[$__range])), 1)"}]
+    },
+    {
+      "id": 4, "type": "stat", "title": "Correlated (not re-investigated)",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [{"refId": "A", "expr": "sum(increase(orchestrator_incidents_total{status=\"correlated\"}[$__range]))"}]
+    },
+    {
+      "id": 5, "type": "timeseries", "title": "Cost per agent (USD per hour)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "fieldConfig": {"defaults": {"unit": "currencyUSD"}},
+      "targets": [{"refId": "A", "legendFormat": "{{agent}}", "expr": "sum by (agent) (increase(agent_llm_cost_usd_total[1h]))"}]
+    },
+    {
+      "id": 6, "type": "table", "title": "Cost per incident (top 20, selected range)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "fieldConfig": {"defaults": {"unit": "currencyUSD", "decimals": 4}},
+      "targets": [{"refId": "A", "format": "table", "instant": true, "expr": "topk(20, sum by (incident_id) (increase(agent_llm_cost_usd_total[$__range])))"}]
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "Tokens in / out per agent (per 5 min)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [
+        {"refId": "A", "legendFormat": "{{agent}} in", "expr": "sum by (agent) (increase(agent_llm_input_tokens_total[5m]))"},
+        {"refId": "B", "legendFormat": "{{agent}} out", "expr": "sum by (agent) (increase(agent_llm_output_tokens_total[5m]))"}
+      ]
+    },
+    {
+      "id": 8, "type": "barchart", "title": "Incidents by category (selected range)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [{"refId": "A", "format": "table", "instant": true, "legendFormat": "{{category}}", "expr": "sum by (category) (increase(orchestrator_incidents_total[$__range]))"}]
+    },
+    {
+      "id": 9, "type": "timeseries", "title": "Investigation latency (p50 / p95)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "targets": [
+        {"refId": "A", "legendFormat": "p50 {{category}}", "expr": "histogram_quantile(0.5, sum by (le, category) (rate(orchestrator_investigation_seconds_bucket[15m])))"},
+        {"refId": "B", "legendFormat": "p95 {{category}}", "expr": "histogram_quantile(0.95, sum by (le, category) (rate(orchestrator_investigation_seconds_bucket[15m])))"}
+      ]
+    },
+    {
+      "id": 10, "type": "timeseries", "title": "Outcomes and approvals (per hour)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [
+        {"refId": "A", "legendFormat": "outcome {{outcome}}", "expr": "sum by (outcome) (increase(orchestrator_incidents_total{outcome!=\"none\"}[1h]))"},
+        {"refId": "B", "legendFormat": "{{decision}} ({{delivery}})", "expr": "sum by (decision, delivery) (increase(orchestrator_approvals_total[1h]))"},
+        {"refId": "C", "legendFormat": "memory {{result}}", "expr": "sum by (result) (increase(incident_memory_requests_total[1h]))"}
+      ]
+    }
+  ]
+}
