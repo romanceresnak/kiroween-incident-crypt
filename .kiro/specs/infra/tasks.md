@@ -92,23 +92,38 @@ policies — no errors.
 
 ## TASK-05 — EKS cluster, node group, and add-ons
 
-**Implements:** REQ-EKS-01, REQ-EKS-02, REQ-EKS-05, REQ-EKS-06, REQ-EKS-07,
-REQ-EKS-08, REQ-EKS-09
+**Implements:** REQ-EKS-01, REQ-EKS-02, REQ-EKS-03, REQ-EKS-05, REQ-EKS-06,
+REQ-EKS-07, REQ-EKS-08, REQ-EKS-09
 
 Create `infra/modules/eks/`:
 - `aws_eks_cluster` with `version = var.eks_kubernetes_version` (`"1.37"`),
-  `access_config { authentication_mode = "API" }` (REQ-EKS-02), CloudWatch
-  logging for `api`, `audit`, `authenticator`
+  `access_config { authentication_mode = "API" }` (REQ-EKS-02),
+  `vpc_config { endpoint_private_access = true, endpoint_public_access = true }`,
+  CloudWatch logging for `api`, `audit`, `authenticator`
 - `aws_cloudwatch_log_group` with `retention_in_days = var.cloudwatch_log_retention_days`
 - `aws_eks_node_group`: `instance_types`, `capacity_type = "SPOT"`,
   `scaling_config { min_size = 2, desired_size = 2, max_size = 3 }`,
   `update_config { max_unavailable = 1 }`
-- `aws_eks_addon`: `eks-pod-identity-agent`, `aws-ebs-csi-driver`
+- `data "aws_eks_addon_version"` (`most_recent = true`,
+  `kubernetes_version = var.kubernetes_version`) for each add-on; no pinned
+  add-on version strings
+- `aws_eks_addon`: `eks-pod-identity-agent` and `aws-ebs-csi-driver`; both
+  `depends_on` the node group; `aws-ebs-csi-driver` also `depends_on` the
+  Pod Identity add-on
+- EBS CSI Pod Identity: IAM role (trust `pods.eks.amazonaws.com`,
+  `sts:AssumeRole` + `sts:TagSession`) with `AmazonEBSCSIDriverPolicy`, attached
+  through the add-on's `pod_identity_association` block for
+  `kube-system/ebs-csi-controller-sa`
+- Admin access entry (REQ-EKS-03): `aws_eks_access_entry` +
+  `aws_eks_access_policy_association` for `var.admin_iam_principal_arn` →
+  `AmazonEKSClusterAdminPolicy` (cluster scope)
 - Outputs: `cluster_name`, `cluster_endpoint`, `cluster_ca_cert`, `cluster_arn`,
   `oidc_issuer_url`
 
-**Test:** `terraform plan` shows the cluster, node group, 2 add-ons, and log
-group — no errors.
+**Test:** `terraform plan` (with
+`TF_VAR_admin_iam_principal_arn=arn:aws:iam::255834079310:user/dummy`; a bare
+`dummy` fails ARN validation) shows the cluster, node group, 2 add-ons, EBS CSI
+role, admin access entry, and log group — no errors.
 
 ---
 
@@ -138,19 +153,18 @@ either trust policy — no errors.
 
 ## TASK-07 — EKS access entries
 
-**Implements:** REQ-EKS-03, REQ-EKS-04, REQ-GHA-04
+**Implements:** REQ-EKS-04, REQ-GHA-04
 
 Add to `infra/modules/eks/` (access entry resources depend on `github_oidc`
-outputs, so pass them in as variables):
-- `aws_eks_access_entry` + `aws_eks_access_policy_association` for
-  `var.admin_iam_principal_arn` → `AmazonEKSClusterAdminPolicy` (cluster scope)
+outputs, so pass them in as variables). The admin access entry (REQ-EKS-03)
+already exists from TASK-05; this task adds only the two GitHub entries:
 - `aws_eks_access_entry` + `aws_eks_access_policy_association` for
   `var.gha_apply_role_arn` → `AmazonEKSClusterAdminPolicy` (cluster scope)
 - `aws_eks_access_entry` + `aws_eks_access_policy_association` for
   `var.gha_plan_role_arn` → `AmazonEKSAdminViewPolicy` (cluster scope)
 
-**Test:** `terraform plan` shows 3 access entries and 3 policy associations —
-no errors.
+**Test:** `terraform plan` shows 2 new access entries and 2 new policy
+associations (3 and 3 in total with the admin entry) — no errors.
 
 ---
 

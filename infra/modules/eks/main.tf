@@ -89,7 +89,9 @@ resource "aws_eks_cluster" "main" {
   }
 
   vpc_config {
-    subnet_ids = var.private_subnet_ids
+    subnet_ids              = var.private_subnet_ids
+    endpoint_private_access = true
+    endpoint_public_access  = true
   }
 
   enabled_cluster_log_types = ["api", "audit", "authenticator"]
@@ -138,20 +140,71 @@ resource "aws_eks_node_group" "spot" {
 # Add-ons
 # ---------------------------------------------------------------------------
 
+data "aws_eks_addon_version" "pod_identity" {
+  addon_name         = "eks-pod-identity-agent"
+  kubernetes_version = var.kubernetes_version
+  most_recent        = true
+}
+
+data "aws_eks_addon_version" "ebs_csi" {
+  addon_name         = "aws-ebs-csi-driver"
+  kubernetes_version = var.kubernetes_version
+  most_recent        = true
+}
+
+# IAM role for the EBS CSI controller, assumed through EKS Pod Identity.
+data "aws_iam_policy_document" "ebs_csi_assume" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole", "sts:TagSession"]
+    principals {
+      type        = "Service"
+      identifiers = ["pods.eks.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "ebs_csi" {
+  name               = "${var.cluster_name}-ebs-csi"
+  assume_role_policy = data.aws_iam_policy_document.ebs_csi_assume.json
+
+  tags = { Name = "${var.cluster_name}-ebs-csi" }
+}
+
+resource "aws_iam_role_policy_attachment" "ebs_csi" {
+  role       = aws_iam_role.ebs_csi.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+}
+
 resource "aws_eks_addon" "pod_identity" {
   cluster_name  = aws_eks_cluster.main.name
   addon_name    = "eks-pod-identity-agent"
-  addon_version = "v1.4.1-eksbuild.3"
+  addon_version = data.aws_eks_addon_version.pod_identity.version
 
   tags = { Name = "eks-pod-identity-agent" }
+
+  depends_on = [aws_eks_node_group.spot]
 }
 
 resource "aws_eks_addon" "ebs_csi" {
   cluster_name  = aws_eks_cluster.main.name
   addon_name    = "aws-ebs-csi-driver"
-  addon_version = "v1.68.0-eksbuild.1"
+  addon_version = data.aws_eks_addon_version.ebs_csi.version
+
+  pod_identity_association {
+    role_arn        = aws_iam_role.ebs_csi.arn
+    service_account = "ebs-csi-controller-sa"
+  }
 
   tags = { Name = "aws-ebs-csi-driver" }
+
+  # The Pod Identity agent must be running before the controller's association
+  # can take effect, and add-ons need nodes to schedule onto.
+  depends_on = [
+    aws_eks_node_group.spot,
+    aws_eks_addon.pod_identity,
+    aws_iam_role_policy_attachment.ebs_csi,
+  ]
 }
 
 # ---------------------------------------------------------------------------
