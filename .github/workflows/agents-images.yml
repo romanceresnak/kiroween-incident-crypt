@@ -1,0 +1,200 @@
+# Build, push and deploy the agent images (agents-core REQ-CI).
+#
+# Pull request: lint, test and build both images. No AWS role, no push.
+# main:         the same, then push to ECR with the ECR push role, then commit the new
+#               image tag to the chart values. Argo CD deploys that commit.
+#
+# Requires the repository variable ECR_PUSH_ROLE_ARN (infra output gha_ecr_push_role_arn).
+
+name: agents-images
+
+on:
+  push:
+    branches: [main]
+    # gitops/** is deliberately absent so the tag commit cannot start another run
+    # (REQ-CI-14).
+    paths:
+      - "agents/**"
+      - "tools/**"
+      - ".github/workflows/agents-images.yml"
+  pull_request:
+    paths:
+      - "agents/**"
+      - "tools/**"
+      - ".github/workflows/agents-images.yml"
+  workflow_dispatch: {}
+
+# Queue runs per branch and never cancel one in progress, so two runs never push or
+# commit at the same time (REQ-CI-09).
+concurrency:
+  group: agents-images-${{ github.ref }}
+  cancel-in-progress: false
+
+# Nothing by default; each job asks for what it needs.
+permissions: {}
+
+env:
+  AWS_REGION: eu-west-1
+  UV_VERSION: "0.10.10"
+  HELM_VERSION: "v4.3.2"
+
+jobs:
+  test:
+    name: Lint and test
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+        with:
+          version: ${{ env.HELM_VERSION }}
+      - name: Lint and test the agent packages
+        run: |
+          set -euo pipefail
+          for pkg in shared orchestrator cpu_memory; do
+            echo "::group::${pkg}"
+            (cd "agents/${pkg}" && uv sync --frozen && uv run --frozen ruff check . && uv run --frozen pytest -q)
+            echo "::endgroup::"
+          done
+      - name: Chart, Applications, chaos and tools tests
+        run: |
+          set -euo pipefail
+          helm lint gitops/charts/agents
+          shellcheck chaos/oom/oom.sh
+          uv run --frozen --project agents/shared pytest -q gitops chaos tools
+
+  build:
+    name: Build ${{ matrix.package }} (no push)
+    if: github.event_name == 'pull_request'
+    needs: test
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        package: [orchestrator, cpu_memory]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: agents/${{ matrix.package }}/Dockerfile
+          platforms: linux/amd64
+          push: false
+
+  push:
+    name: Build and push ${{ matrix.package }}
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - package: orchestrator
+            repository: kiroween/orchestrator
+          - package: cpu_memory
+            repository: kiroween/cpu-memory
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Assume the ECR push role
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.ECR_PUSH_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: agents-images-${{ github.run_id }}
+      - name: Log in to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+      # The repositories are immutable, so a re-run must not push the same tag again
+      # (REQ-CI-16).
+      - name: Check whether this commit's image already exists
+        id: exists
+        env:
+          REPOSITORY: ${{ matrix.repository }}
+          TAG: ${{ github.sha }}
+        run: |
+          set -uo pipefail
+          out="$(aws ecr describe-images --repository-name "${REPOSITORY}" --image-ids "imageTag=${TAG}" 2>&1)"
+          rc=$?
+          if [ "${rc}" -eq 0 ]; then
+            echo "found=true" >> "${GITHUB_OUTPUT}"
+            echo "${REPOSITORY}:${TAG} already exists; skipping the push"
+          elif grep -q ImageNotFoundException <<< "${out}"; then
+            echo "found=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "${out}" >&2
+            exit 1
+          fi
+      - if: steps.exists.outputs.found == 'false'
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - if: steps.exists.outputs.found == 'false'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: agents/${{ matrix.package }}/Dockerfile
+          platforms: linux/amd64
+          push: true
+          # One image per tag; attestation manifests would show up as untagged images
+          # that the lifecycle policy expires.
+          provenance: false
+          tags: ${{ steps.ecr.outputs.registry }}/${{ matrix.repository }}:${{ github.sha }}
+
+  update-chart:
+    name: Commit the image tag to the chart
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    # Runs only if every image built, tested and pushed (REQ-CI-13).
+    needs: push
+    runs-on: ubuntu-24.04
+    # No AWS credentials in this job (REQ-CI-12).
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true # needed to push the tag commit
+      - name: Set the image tags
+        id: tag
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          result="$(python3 tools/set_image_tag.py gitops/charts/agents/values.yaml "${SHA}" orchestrator cpu-memory)"
+          echo "result=${result}" >> "${GITHUB_OUTPUT}"
+          echo "tags: ${result}"
+      - name: Commit and push
+        if: steps.tag.outputs.result == 'changed'
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add gitops/charts/agents/values.yaml
+          git commit -m "chore(deploy): agents images ${SHA} [skip ci]"
+          # Rebase and retry if main moved; never force-push (REQ-CI-15).
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "push rejected (attempt ${attempt}); rebasing on main"
+            git pull --rebase origin main
+          done
+          echo "could not push the tag commit after 3 attempts" >&2
+          exit 1
