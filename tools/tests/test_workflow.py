@@ -115,8 +115,16 @@ def test_existing_tag_is_skipped() -> None:
 PACKAGES = {
     "orchestrator": "kiroween/orchestrator", "cpu_memory": "kiroween/cpu-memory",
     "network": "kiroween/network", "deploy_rollout": "kiroween/deploy-rollout",
-    "storage": "kiroween/storage",
+    "storage": "kiroween/storage", "incident_memory": "kiroween/incident-memory",
 }
+
+
+def test_every_shell_script_is_shellchecked_and_scripts_are_tested() -> None:
+    steps = workflow()["jobs"]["test"]["steps"]
+    run = next(s["run"] for s in steps if "shellcheck" in s.get("run", ""))
+    assert "shellcheck chaos/*/*.sh scripts/*.sh" in run
+    assert re.search(r"pytest -q gitops chaos tools scripts\b", run)
+    assert list(REPO.glob("chaos/*/*.sh")) and list(REPO.glob("scripts/*.sh"))
 
 
 def test_matrix_maps_each_package_to_its_repository() -> None:

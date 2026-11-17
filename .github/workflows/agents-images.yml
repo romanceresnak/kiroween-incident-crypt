@@ -57,17 +57,17 @@ jobs:
       - name: Lint and test the agent packages
         run: |
           set -euo pipefail
-          for pkg in shared orchestrator cpu_memory network deploy_rollout storage; do
+          for pkg in shared orchestrator cpu_memory network deploy_rollout storage incident_memory; do
             echo "::group::${pkg}"
             (cd "agents/${pkg}" && uv sync --frozen && uv run --frozen ruff check . && uv run --frozen pytest -q)
             echo "::endgroup::"
           done
-      - name: Chart, Applications, chaos and tools tests
+      - name: Chart, Applications, chaos, scripts and tools tests
         run: |
           set -euo pipefail
           helm lint gitops/charts/agents
-          shellcheck chaos/oom/oom.sh
-          uv run --frozen --project agents/shared pytest -q gitops chaos tools
+          shellcheck chaos/*/*.sh scripts/*.sh
+          uv run --frozen --project agents/shared pytest -q gitops chaos tools scripts
 
   build:
     name: Build ${{ matrix.package }} (no push)
@@ -78,7 +78,7 @@ jobs:
       contents: read
     strategy:
       matrix:
-        package: [orchestrator, cpu_memory, network, deploy_rollout, storage]
+        package: [orchestrator, cpu_memory, network, deploy_rollout, storage, incident_memory]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -113,6 +113,8 @@ jobs:
             repository: kiroween/deploy-rollout
           - package: storage
             repository: kiroween/storage
+          - package: incident_memory
+            repository: kiroween/incident-memory
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -180,7 +182,7 @@ jobs:
           SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          result="$(python3 tools/set_image_tag.py gitops/charts/agents/values.yaml "${SHA}" orchestrator cpu-memory network deploy-rollout storage)"
+          result="$(python3 tools/set_image_tag.py gitops/charts/agents/values.yaml "${SHA}" orchestrator cpu-memory network deploy-rollout storage incident-memory)"
           echo "result=${result}" >> "${GITHUB_OUTPUT}"
           echo "tags: ${result}"
       - name: Commit and push
