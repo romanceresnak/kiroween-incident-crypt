@@ -16,7 +16,7 @@ Confidence = Literal["low", "medium", "high"]
 Action = Literal["adjust_resources", "set_field", "investigate_further", "none"]
 Status = Literal[
     "accepted", "processing", "awaiting_approval", "no_specialist", "completed", "failed",
-    "correlated",
+    "correlated", "approved", "rejected",
 ]
 # action_required: broken now. transient: it was real but the subject is healthy now.
 # no_action: nothing is wrong. Only action_required carries a proposal (hardening REQ-OUT).
@@ -39,6 +39,17 @@ class Workload(BaseModel):
     name: str = Field(pattern=DNS_SUBDOMAIN)
 
 
+class SimilarIncident(BaseModel):
+    """A past postmortem found by incident-memory (memory-and-ui REQ-MEM-03)."""
+
+    title: str = Field(max_length=200)
+    category: str | None = Field(default=None, max_length=40)
+    score: float
+    fix: str = Field(default="", max_length=1000)
+    source: str = Field(default="", max_length=300)
+    excerpt: str = Field(default="", max_length=1000)
+
+
 class Incident(BaseModel):
     """An incident as submitted to ``POST /incidents`` (REQ-ORC-02)."""
 
@@ -56,6 +67,8 @@ class Incident(BaseModel):
     observed_at: datetime
     # Objects the pod needs, e.g. the PVCs it mounts; used for correlation (REQ-WSU-06).
     depends_on: list[Workload] = Field(default_factory=list, max_length=20)
+    # Past postmortems that look alike; hints for the specialist, not evidence (REQ-MEM-07).
+    similar_incidents: list[SimilarIncident] = Field(default_factory=list, max_length=5)
 
 
 class Classification(BaseModel):
@@ -176,6 +189,29 @@ class RelatedIncident(BaseModel):
     observed_at: datetime
 
 
+class PullRequest(BaseModel):
+    """The rendered /gitops change for an approved proposal (REQ-APR-03, APR-04)."""
+
+    mode: Literal["dry_run", "github"]
+    title: str
+    branch: str
+    path: str
+    content: str
+    body: str
+    url: str | None = None
+    error: str | None = None
+
+
+class Approval(BaseModel):
+    """A human decision on a proposal (REQ-APR-01)."""
+
+    decision: Literal["approved", "rejected"]
+    by: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9 ._@-]+$")
+    at: datetime = Field(default_factory=utcnow)
+    comment: str = Field(default="", max_length=500)
+    pull_request: PullRequest | None = None
+
+
 class IncidentRecord(BaseModel):
     """The orchestrator's record of one incident (REQ-ORC-10)."""
 
@@ -188,5 +224,7 @@ class IncidentRecord(BaseModel):
     error: str | None = None
     related_incidents: list[RelatedIncident] = Field(default_factory=list)
     related_to: str | None = None
+    similar_incidents: list[SimilarIncident] = Field(default_factory=list)
+    approval: Approval | None = None
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
