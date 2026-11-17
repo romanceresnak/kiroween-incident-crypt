@@ -89,7 +89,14 @@ data "aws_caller_identity" "current" {}
 # ---------------------------------------------------------------------------
 
 # TASK-03: VPC
-# module "vpc" { ... }
+module "vpc" {
+  source = "./modules/vpc"
+
+  project      = var.project
+  env          = var.env
+  aws_region   = var.aws_region
+  cluster_name = "${var.project}-${var.env}"
+}
 
 # TASK-04: ECR
 # module "ecr" { ... }
