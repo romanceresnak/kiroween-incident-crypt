@@ -1,0 +1,57 @@
+# OOMKilled scenario (REQ-CHO-02). Applied and removed only by oom.sh.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: chaos-oom
+  labels:
+    kiroween/chaos: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oom-demo
+  namespace: chaos-oom
+  labels:
+    app: oom-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: oom-demo
+  template:
+    metadata:
+      labels:
+        app: oom-demo
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: app
+          # Public ECR mirror of the official image: no Docker Hub rate limit.
+          image: public.ecr.aws/docker/library/python:3.12-slim
+          command: ["python", "-c"]
+          # Writes every byte it allocates; zero-filled buffers can stay unbacked by RAM
+          # and never reach the limit.
+          args:
+            - |
+              import time
+              chunks = []
+              while True:
+                  chunks.append(b"x" * (8 << 20))
+                  print(f"allocated {len(chunks) * 8} MiB", flush=True)
+                  time.sleep(0.5)
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
