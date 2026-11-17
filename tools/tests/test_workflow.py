@@ -112,10 +112,40 @@ def test_existing_tag_is_skipped() -> None:
             assert step["if"] == "steps.exists.outputs.found == 'false'"
 
 
-def test_matrix_maps_cpu_memory_package_to_its_repository() -> None:
+PACKAGES = {
+    "orchestrator": "kiroween/orchestrator", "cpu_memory": "kiroween/cpu-memory",
+    "network": "kiroween/network", "deploy_rollout": "kiroween/deploy-rollout",
+    "storage": "kiroween/storage",
+}
+
+
+def test_matrix_maps_each_package_to_its_repository() -> None:
     include = workflow()["jobs"]["push"]["strategy"]["matrix"]["include"]
-    assert {i["package"]: i["repository"] for i in include} == {
-        "orchestrator": "kiroween/orchestrator", "cpu_memory": "kiroween/cpu-memory"}
+    assert {i["package"]: i["repository"] for i in include} == PACKAGES
+
+
+def test_pr_build_matrix_covers_every_pushed_package() -> None:
+    assert workflow()["jobs"]["build"]["strategy"]["matrix"]["package"] == list(PACKAGES)
+
+
+def test_every_pushed_package_is_tested_and_has_a_dockerfile() -> None:
+    steps = workflow()["jobs"]["test"]["steps"]
+    loop = next(s["run"] for s in steps if "for pkg in" in s.get("run", ""))
+    tested = re.search(r"for pkg in ([^;]+);", loop).group(1).split()
+    assert tested == ["shared", *PACKAGES]
+    for package in PACKAGES:
+        assert (REPO / "agents" / package / "Dockerfile").is_file(), package
+
+
+def test_update_chart_sets_every_image_and_the_markers_exist() -> None:
+    steps = workflow()["jobs"]["update-chart"]["steps"]
+    run = next(s["run"] for s in steps if "set_image_tag.py" in s.get("run", ""))
+    components = re.search(r'"\$\{SHA\}" ([a-z -]+)\)', run).group(1).split()
+    # The chart component names are the ECR repository names without the prefix.
+    assert components == [r.removeprefix("kiroween/") for r in PACKAGES.values()]
+    values = (REPO / "gitops" / "charts" / "agents" / "values.yaml").read_text()
+    for component in components:
+        assert f"# ci-managed:{component}" in values, component
 
 
 # --- "image already exists" step, run for real ------------------------------

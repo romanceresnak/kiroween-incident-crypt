@@ -57,7 +57,7 @@ jobs:
       - name: Lint and test the agent packages
         run: |
           set -euo pipefail
-          for pkg in shared orchestrator cpu_memory; do
+          for pkg in shared orchestrator cpu_memory network deploy_rollout storage; do
             echo "::group::${pkg}"
             (cd "agents/${pkg}" && uv sync --frozen && uv run --frozen ruff check . && uv run --frozen pytest -q)
             echo "::endgroup::"
@@ -78,7 +78,7 @@ jobs:
       contents: read
     strategy:
       matrix:
-        package: [orchestrator, cpu_memory]
+        package: [orchestrator, cpu_memory, network, deploy_rollout, storage]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -107,6 +107,12 @@ jobs:
             repository: kiroween/orchestrator
           - package: cpu_memory
             repository: kiroween/cpu-memory
+          - package: network
+            repository: kiroween/network
+          - package: deploy_rollout
+            repository: kiroween/deploy-rollout
+          - package: storage
+            repository: kiroween/storage
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -174,7 +180,7 @@ jobs:
           SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          result="$(python3 tools/set_image_tag.py gitops/charts/agents/values.yaml "${SHA}" orchestrator cpu-memory)"
+          result="$(python3 tools/set_image_tag.py gitops/charts/agents/values.yaml "${SHA}" orchestrator cpu-memory network deploy-rollout storage)"
           echo "result=${result}" >> "${GITHUB_OUTPUT}"
           echo "tags: ${result}"
       - name: Commit and push
