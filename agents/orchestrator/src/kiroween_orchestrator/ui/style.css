@@ -28,9 +28,68 @@ a { color: var(--slime); }
 .live.ok::before { content: "\25CF  "; color: var(--slime); }
 .live.down::before { content: "\25CF  "; color: var(--blood); }
 
-.crew { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.75rem; padding: 0.75rem 1.5rem; }
-.crew figure { margin: 0; text-align: center; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 0.6rem; transition: transform 0.2s, border-color 0.2s; }
-.crew figure.busy { border-color: var(--pumpkin); transform: translateY(-3px); box-shadow: 0 6px 18px #ff8a1f33; }
+.crew { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.75rem; padding: 1.75rem 1.5rem 0.75rem; }
+.crew figure {
+  position: relative; margin: 0; text-align: center; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 12px; padding: 0.6rem;
+  transition: border-color 0.2s;
+  /* Per-character animation settings, used by the busy rules below. --motion is a keyframes
+     name; --glow-anim is "none" for characters whose own motion is the signal. */
+  --motion: bob; --motion-dur: 2s;
+  --glow-anim: glow; --glow-dur: 2s; --glow-color: #ff8a1f;
+}
+.crew figure[data-agent="orchestrator"] { --glow-color: #7dffb2; }
+.crew figure[data-agent="cpu-memory"] { --glow-color: #ff4d6d; }
+.crew figure[data-agent="incident-memory"] { --glow-color: #ffcf6b; }
+.crew figure[data-agent="network"] { --motion: dangle; --motion-dur: 2.4s; --glow-anim: none; --glow-color: #8fb4d9; }
+.crew figure[data-agent="storage"] { --motion: float; --motion-dur: 2.5s; --glow-anim: none; --glow-color: #9fb8ff; }
+.crew figure[data-agent="deploy-rollout"] { --motion: shuffle; --motion-dur: 2.2s; --glow-anim: none; --glow-color: #8fb26a; }
+
+/* The glow layer: always present, invisible while idle. Only opacity changes. */
+.crew figure::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(circle at 50% 45%, var(--glow-color), transparent 70%);
+  opacity: 0;
+}
+
+/* Busy = an agent is working on an incident (set by markBusy in app.js). Transform and
+   opacity only, so the animation stays on the compositor. */
+.crew figure.busy {
+  border-color: var(--pumpkin);
+  animation: var(--motion) var(--motion-dur) ease-in-out infinite;
+  will-change: transform, opacity;
+}
+.crew figure.busy::after {
+  opacity: 0.35;
+  animation: var(--glow-anim) var(--glow-dur) ease-in-out infinite;
+}
+
+/* The spider hangs from a thread. The line is anchored above the card: it moves up by as
+   much as the card moves down and stretches to meet it, so its top end stays put. The
+   numbers belong together: thread height 20px, dangle 10px, scaleY (20 + 10) / 20 = 1.5. */
+.crew figure[data-agent="network"].busy::before {
+  content: ""; position: absolute; left: 50%; top: -20px; width: 1px; height: 20px;
+  margin-left: -0.5px; background: #c9d6e3; transform-origin: top center;
+  animation: thread var(--motion-dur) ease-in-out infinite;
+}
+
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes float {
+  0%, 100% { transform: translateY(0); opacity: 1; }
+  50% { transform: translateY(-8px); opacity: 0.72; }
+}
+@keyframes shuffle {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-3px, -4px); }
+  50% { transform: translate(0, -6px); }
+  75% { transform: translate(3px, -3px); }
+}
+@keyframes dangle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(10px); } }
+@keyframes thread {
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  50% { transform: translateY(-10px) scaleY(1.5); }
+}
+@keyframes glow { 0%, 100% { opacity: 0.2; } 50% { opacity: 0.85; } }
 .crew img { width: 64px; height: 64px; }
 .crew figcaption { font-family: Georgia, serif; font-size: 0.9rem; }
 .crew figcaption span { display: block; font-family: ui-monospace, monospace; font-size: 0.7rem; color: var(--muted); }
@@ -87,4 +146,10 @@ footer { text-align: center; padding: 0 0 1.5rem; font-size: 0.8rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .crew figure { transition: none; }
+  /* No movement and no thread: a busy card keeps its border and its glow, which only
+     changes opacity. The selectors match the specificity of the per-character rules above
+     and come later, so they win. */
+  .crew figure.busy { animation: none; will-change: auto; }
+  .crew figure[data-agent].busy::before { display: none; animation: none; }
+  .crew figure.busy::after { animation: glow 2s ease-in-out infinite; }
 }
