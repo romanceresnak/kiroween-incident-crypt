@@ -1,0 +1,12 @@
+# Required — no defaults; supply via TF_VAR_* environment variables in CI.
+admin_iam_principal_arn = "arn:aws:iam::123456789012:role/my-admin-role"
+budget_alert_email      = "ops@example.com"
+
+# Optional overrides (defaults shown)
+# aws_region                    = "eu-west-1"
+# project                       = "kiroween"
+# env                           = "prod"
+# eks_kubernetes_version         = "1.37"
+# argocd_chart_version           = "10.16.0"
+# argocd_apps_chart_version      = "2.0.8"
+# cloudwatch_log_retention_days  = 7
