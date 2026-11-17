@@ -150,7 +150,16 @@ module "github_oidc" {
 }
 
 # TASK-08: Bedrock Knowledge Base
-# module "bedrock_kb" { ... }
+module "bedrock_kb" {
+  source = "./modules/bedrock_kb"
+
+  project    = var.project
+  env        = var.env
+  aws_region = var.aws_region
+
+  embedding_model_id = var.bedrock_embedding_model_id
+  vector_dimension   = var.bedrock_vector_dimension
+}
 
 # TASK-09: Pod Identity IAM roles
 # module "pod_identity" { ... }
