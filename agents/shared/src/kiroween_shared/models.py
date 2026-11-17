@@ -13,7 +13,7 @@ DNS_SUBDOMAIN = r"^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$"
 
 Category = Literal["cpu_memory", "network", "deploy_rollout", "storage", "unknown"]
 Confidence = Literal["low", "medium", "high"]
-Action = Literal["adjust_resources", "investigate_further", "none"]
+Action = Literal["adjust_resources", "set_field", "investigate_further", "none"]
 Status = Literal[
     "accepted", "processing", "awaiting_approval", "no_specialist", "completed", "failed"
 ]
@@ -45,8 +45,9 @@ class Incident(BaseModel):
     reason: str = Field(min_length=1, max_length=64)
     namespace: str = Field(pattern=DNS_LABEL)
     workload: Workload
-    pod: str = Field(pattern=DNS_SUBDOMAIN)
-    container: str = Field(pattern=DNS_LABEL)
+    # Optional: an incident about a PersistentVolumeClaim has no pod or container.
+    pod: str | None = Field(default=None, pattern=DNS_SUBDOMAIN)
+    container: str | None = Field(default=None, pattern=DNS_LABEL)
     message: str = Field(default="", max_length=2000)
     observed_at: datetime
 
@@ -56,6 +57,10 @@ class Classification(BaseModel):
 
     category: Category
     rationale: str = Field(description="One sentence explaining the category.", max_length=400)
+    confidence: Confidence = Field(
+        default="medium",
+        description="How sure the category is. Use low when the incident could fit more than one.",
+    )
 
 
 class Evidence(BaseModel):
@@ -74,7 +79,7 @@ class Target(BaseModel):
     namespace: str
     kind: str
     name: str
-    container: str
+    container: str | None = None
 
 
 class ProposalDraft(BaseModel):
@@ -85,8 +90,9 @@ class ProposalDraft(BaseModel):
     field: str | None = Field(
         default=None,
         description=(
-            "One of resources.limits.memory, resources.requests.memory, "
-            "resources.limits.cpu, resources.requests.cpu."
+            "adjust_resources: one of resources.limits.memory, resources.requests.memory, "
+            "resources.limits.cpu, resources.requests.cpu. set_field: the field path your "
+            "instructions allow, for example spec.selector.app."
         ),
     )
     current: str | None = Field(default=None, description="Current value exactly as read.")

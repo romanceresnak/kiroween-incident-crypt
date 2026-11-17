@@ -59,6 +59,8 @@ def render_prompt(incident: Incident) -> str:
 
 def read_observed(kube: KubeReader, incident: Incident) -> dict[str, str]:
     """Current resource values read by code, not by the model (REQ-CPU-08)."""
+    if incident.pod is None or incident.container is None:
+        return {}
     try:
         pod = kube.get_pod(incident.namespace, incident.pod)
         return observed_values((pod.get("spec") or {}).get("containers") or [], incident.container)
