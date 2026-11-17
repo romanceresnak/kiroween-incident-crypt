@@ -1,0 +1,35 @@
+[project]
+name = "kiroween-deploy-rollout"
+version = "0.1.0"
+description = "deploy-rollout specialist agent"
+requires-python = ">=3.12,<3.13"
+dependencies = ["kiroween-shared"]
+
+[tool.uv.sources]
+kiroween-shared = { path = "../shared", editable = true }
+
+[dependency-groups]
+dev = ["pytest", "pytest-asyncio", "ruff"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kiroween_deploy_rollout"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = ["S101"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["kiroween_shared", "kiroween_orchestrator", "kiroween_cpu_memory", "kiroween_network", "kiroween_deploy_rollout", "kiroween_storage"]
