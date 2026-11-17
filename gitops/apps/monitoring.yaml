@@ -87,13 +87,17 @@ spec:
           # A helm-test hook Pod; Argo CD has no use for it.
           testFramework:
             enabled: false
+          # Killed at 256Mi on 17 Nov (OOMKilled 19 s after start, 230Mi seen): Grafana loads
+          # the stack's dashboards and plugins at startup.
           resources:
-            requests: {cpu: 50m, memory: 128Mi}
-            limits: {cpu: 300m, memory: 256Mi}
+            requests: {cpu: 50m, memory: 256Mi}
+            limits: {cpu: 300m, memory: 512Mi}
           sidecar:
+            # Two sidecars (dashboards, datasources), each watching ConfigMaps in every
+            # namespace. Both were OOMKilled at 96Mi after about 65 s.
             resources:
               requests: {cpu: 10m, memory: 48Mi}
-              limits: {cpu: 100m, memory: 96Mi}
+              limits: {cpu: 100m, memory: 192Mi}
             dashboards:
               enabled: true
               label: grafana_dashboard

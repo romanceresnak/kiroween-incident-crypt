@@ -68,23 +68,57 @@ def test_every_workload_has_requests_and_limits() -> None:
         assert node["resources"]["requests"] and node["resources"]["limits"], path
 
 
+def mem(value: str) -> float:
+    """MiB."""
+    return float(value[:-2]) * (1024 if value.endswith("Gi") else 1)
+
+
+def test_grafana_survives_its_startup_and_the_sidecars_their_watches() -> None:
+    # OOMKilled on 17 Nov at 256Mi (Grafana) and 96Mi (each sidecar).
+    g = values()["grafana"]
+    assert g["resources"]["requests"]["memory"] == "256Mi"
+    assert g["resources"]["limits"]["memory"] == "512Mi"
+    assert g["resources"]["requests"]["cpu"] == "50m"  # CPU is unchanged
+    assert g["resources"]["limits"]["cpu"] == "300m"
+    assert mem(g["sidecar"]["resources"]["limits"]["memory"]) >= 192
+
+
+def test_requests_do_not_exceed_limits_anywhere() -> None:
+    v = values()
+    for path in [("prometheusOperator",), ("prometheus", "prometheusSpec"), ("grafana",),
+                 ("grafana", "sidecar"), ("kube-state-metrics",), ("prometheus-node-exporter",)]:
+        node = v
+        for key in path:
+            node = node[key]
+        r = node["resources"]
+        assert mem(r["requests"]["memory"]) <= mem(r["limits"]["memory"]), path
+
+
 def test_requests_fit_next_to_the_agents_on_two_t3_large() -> None:
-    # 2 x (2 vCPU, 8 GiB). The stack must leave most of it for the agents and the system.
+    # 2 x (2 vCPU, ~7 GiB allocatable). The stack must leave most of it for the agents.
     def cpu(value: str) -> float:
         return float(value[:-1]) / 1000 if value.endswith("m") else float(value)
 
-    def mem(value: str) -> float:
-        return float(value[:-2]) * (1024 if value.endswith("Gi") else 1)
-
     v = values()
     requests = [v["prometheusOperator"], v["prometheus"]["prometheusSpec"], v["grafana"],
-                v["grafana"]["sidecar"], v["kube-state-metrics"]]
-    node_exporter = v["prometheus-node-exporter"]["resources"]["requests"]
+                v["grafana"]["sidecar"], v["grafana"]["sidecar"],  # dashboards + datasources
+                v["kube-state-metrics"]]
+    node_exporter = v["prometheus-node-exporter"]["resources"]["requests"]  # one per node
     total_cpu = sum(cpu(r["resources"]["requests"]["cpu"]) for r in requests) + 2 * cpu(
         node_exporter["cpu"])
     total_mem = sum(mem(r["resources"]["requests"]["memory"]) for r in requests) + 2 * mem(
         node_exporter["memory"])
-    assert total_cpu <= 0.5 and total_mem <= 1.6 * 1024
+    assert total_cpu <= 0.5 and total_mem <= 1.6 * 1024, (total_cpu, total_mem)
+
+
+def test_worst_case_limits_fit_on_one_node() -> None:
+    # If every container hit its limit on the same node, it still must not exhaust it.
+    v = values()
+    limits = [v["prometheusOperator"], v["prometheus"]["prometheusSpec"], v["grafana"],
+              v["grafana"]["sidecar"], v["grafana"]["sidecar"], v["kube-state-metrics"],
+              v["prometheus-node-exporter"]]
+    total = sum(mem(r["resources"]["limits"]["memory"]) for r in limits)
+    assert total <= 4 * 1024, total  # t3.large allocatable is about 7 GiB
 
 
 @pytest.mark.skipif(shutil.which("helm") is None, reason="helm not installed")
@@ -105,5 +139,14 @@ def test_chart_renders_with_the_application_values(tmp_path: Path) -> None:
     assert "Prometheus" in kinds and "Alertmanager" not in kinds and "Ingress" not in kinds
     assert "prom-operator" not in result.stdout
     assert not [d for d in docs if d["kind"] == "Pod"]  # no helm test hook
+    grafana = next(d for d in docs if d["kind"] == "Deployment"
+                   and d["metadata"]["name"] == "monitoring-grafana")
+    rendered = {c["name"]: c["resources"] for c in grafana["spec"]["template"]["spec"][
+        "containers"]}
+    assert set(rendered) == {"grafana", "grafana-sc-dashboard", "grafana-sc-datasources"}
+    assert rendered["grafana"] == {"requests": {"cpu": "50m", "memory": "256Mi"},
+                                   "limits": {"cpu": "300m", "memory": "512Mi"}}
+    for name in ("grafana-sc-dashboard", "grafana-sc-datasources"):
+        assert rendered[name]["limits"]["memory"] == "192Mi", name
     secrets = [d for d in docs if d["kind"] == "Secret"]
     assert all(not d.get("data") and not d.get("stringData") for d in secrets)
