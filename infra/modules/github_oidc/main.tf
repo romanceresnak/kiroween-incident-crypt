@@ -341,6 +341,10 @@ data "aws_iam_policy_document" "ecr_push" {
       # Lets the workflow see that a tag already exists; the repositories are
       # immutable, so a second push of the same tag would fail.
       "ecr:DescribeImages",
+      # buildx reads the manifest and checks existing layers in the target repository
+      # while pushing; without these the push fails on BatchGetImage.
+      "ecr:BatchGetImage",
+      "ecr:GetDownloadUrlForLayer",
     ]
     resources = ["arn:aws:ecr:${var.aws_region}:${local.account_id}:repository/${var.project}/*"]
   }

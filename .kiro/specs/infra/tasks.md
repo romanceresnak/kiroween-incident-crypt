@@ -9,7 +9,7 @@ Requirement IDs in brackets map to `requirements.md`.
 > TASK-14 passes. The bootstrap module (`infra/bootstrap/`) is applied in TASK-01
 > as a one-time prerequisite and is not subject to this restriction.
 
-## Status: TASK-01 to TASK-19 complete and applied (17 Nov 2026)
+## Status: TASK-01 to TASK-20 complete and applied (17 Nov 2026)
 
 | Task | Commit |
 |---|---|
@@ -32,6 +32,7 @@ Requirement IDs in brackets map to `requirements.md`.
 | TASK-17 Managed VPC CNI, NetworkPolicy enforcement | `ce0af31` |
 | TASK-18 Immutable image tags | `7c32664` |
 | TASK-19 ecr:DescribeImages for the push role | `f10e321` |
+| TASK-20 ecr:BatchGetImage and ecr:GetDownloadUrlForLayer for the push role | see TASK-20 |
 
 Post-apply checks run: nodes `Ready` (2 Spot), both add-ons `ACTIVE`, access entries
 for the admin user and both GitHub roles, Knowledge Base `ACTIVE` with `S3_VECTORS`
@@ -463,3 +464,23 @@ Add `ecr:DescribeImages` to the `PushImages` statement of the ECR push role poli
 `module.github_oidc.aws_iam_role_policy.ecr_push` that adds exactly that action. The IAM
 policy simulator allows `ecr:DescribeImages` on `kiroween/orchestrator` and still denies
 `ecr:CreateRepository`. **Applied** (commit `f10e321`): 0 to add, 1 to change, 0 to destroy.
+
+---
+
+## TASK-20 — Let buildx read the target repository
+
+**Implements:** REQ-GHA-08 (amended)
+
+The first image push failed: `kiroween-prod-gha-ecr-push is not authorized to perform
+ecr:BatchGetImage on repository/kiroween/orchestrator`. buildx reads the manifest and checks
+existing layers in the target repository while pushing.
+
+Add `ecr:BatchGetImage` and `ecr:GetDownloadUrlForLayer` to the `PushImages` statement of
+the ECR push role policy, on `repository/<project>/*` only.
+
+**Test:** `terraform plan` shows one in-place change to
+`module.github_oidc.aws_iam_role_policy.ecr_push` adding exactly those two actions. The IAM
+policy simulator, run against the live role, allows both on `kiroween/orchestrator` and
+`kiroween/cpu-memory`, denies them on any other repository, and still denies
+`CreateRepository`, `DeleteRepository` and `SetRepositoryPolicy`. **Applied:** 0 to add,
+1 to change, 0 to destroy; Access Analyzer reports no findings on the live policy.
