@@ -211,10 +211,11 @@ Policies are named by purpose and combine additively:
 | `allow-metrics-scrape` | all agent pods | ingress 9090 from the Prometheus namespace label |
 | `allow-dns` | all pods | egress TCP and UDP 53 to `k8s-app=kube-dns` in `kube-system` |
 | `allow-https` | all pods | egress TCP 443 to `0.0.0.0/0` |
+| `allow-pod-identity-agent` | `orchestrator`, `cpu-memory` | egress TCP 80 to `169.254.170.23/32` (REQ-NET-09) |
 | `allow-watcher-egress` | `orchestrator-watcher` | egress 8080 to `orchestrator` pods |
 | `allow-orchestrator-egress` | `orchestrator` | egress 8080 to `cpu-memory` pods |
 
-Kubelet probe traffic comes from the node and is not blocked by pod policies. The first deploy confirms this: if a pod fails readiness only once policies exist, that assumption was wrong. The negative tests in REQ-E2E-07 run a pod in `default` with `nc -z -w 3`.
+The Pod Identity Agent rule was missing from the first draft of this table; without it the agents could not fetch credentials once default-deny egress applied. Kubelet probe traffic comes from the node and is not blocked by pod policies. The first deploy confirms this: if a pod fails readiness only once policies exist, that assumption was wrong. The negative tests in REQ-E2E-07 run a pod in `default` with `nc -z -w 3`.
 
 ## 10. Metrics server
 

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: agents
+description: Kiroween incident response agents (orchestrator, watcher, cpu-memory)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

@@ -298,6 +298,9 @@ The chart shall allow egress from every agent pod to TCP port 443 on any address
 **REQ-NET-07 (Ubiquitous)**
 The chart shall allow egress on the API port from the `orchestrator-watcher` pods to the `orchestrator` pods, and from the `orchestrator` pods to the `cpu-memory` pods, and no other pod-to-pod egress.
 
+**REQ-NET-09 (Ubiquitous)**
+The chart shall allow egress from the `orchestrator` and `cpu-memory` pods to the EKS Pod Identity Agent (`169.254.170.23/32`, TCP 80), from which they obtain AWS credentials. Without it, default-deny egress could block credential retrieval and every Bedrock call would fail.
+
 **REQ-NET-08 (Unwanted)**
 If a rendered policy selects pods outside the namespace `agents`, or a policy allows ingress from a source other than the ones listed above, a chart test shall fail.
 

@@ -1,0 +1,17 @@
+{{- range $name := list "orchestrator" "cpu-memory" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "agents.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: {{ $name }}
+  ports:
+    - {name: api, port: {{ $.Values.ports.api }}, targetPort: api}
+    - {name: metrics, port: {{ $.Values.ports.metrics }}, targetPort: metrics}
+{{- end }}

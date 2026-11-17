@@ -1,0 +1,75 @@
+# Values for the agents chart. Argo CD deploys it into the namespace "agents".
+
+image:
+  registry: 255834079310.dkr.ecr.eu-west-1.amazonaws.com
+  pullPolicy: IfNotPresent
+
+# The image workflow rewrites the two tag lines below (tools/set_image_tag.py). Do not
+# edit them by hand. While a tag is "unset", that component's Deployment is not
+# rendered, so the first sync does not leave pods in ImagePullBackOff.
+images:
+  orchestrator:
+    repository: kiroween/orchestrator
+    tag: unset # ci-managed:orchestrator
+  cpuMemory:
+    repository: kiroween/cpu-memory
+    tag: unset # ci-managed:cpu-memory
+
+region: eu-west-1
+
+# EU cross-region inference profiles (REQ-BED-02). Changing a model is a values change.
+models:
+  orchestrator: eu.anthropic.claude-haiku-4-5-20251001-v1:0
+  cpuMemory: eu.anthropic.claude-sonnet-4-6
+
+# USD per million tokens, by model id: {"<model id>": {input: <usd>, output: <usd>}}.
+# Empty on purpose: the per-token prices for these models have not been confirmed from
+# AWS. With no entry, token counters are recorded and the cost counter is not.
+prices: {}
+
+maxModelCalls: 15
+maxTokens: 4096
+logLevel: INFO
+
+ports:
+  api: 8080
+  metrics: 9090
+
+orchestrator:
+  workers: 2
+  queueSize: 20
+  storeCapacity: 500
+  incidentTimeoutSeconds: 300
+  delegationTimeoutSeconds: 120
+  resources:
+    requests: {cpu: 50m, memory: 192Mi}
+    limits: {cpu: 500m, memory: 384Mi}
+
+watcher:
+  reasons: [OOMKilled]
+  excludedNamespaces: [kube-system, kube-node-lease, argocd]
+  cooldownSeconds: 600
+  startupGraceSeconds: 300
+  resources:
+    requests: {cpu: 20m, memory: 128Mi}
+    limits: {cpu: 200m, memory: 256Mi}
+
+cpuMemory:
+  maxIncreaseFactor: "4"
+  resources:
+    requests: {cpu: 50m, memory: 192Mi}
+    limits: {cpu: 500m, memory: 384Mi}
+
+metrics:
+  serviceMonitor:
+    # The cluster has no Prometheus Operator CRDs yet (REQ-MET-06).
+    enabled: false
+
+networkPolicy:
+  enabled: true
+  prometheus:
+    # Namespace allowed to scrape the metrics port. Nothing runs there yet.
+    namespaceLabels:
+      kubernetes.io/metadata.name: monitoring
+  # EKS Pod Identity Agent on every node. Pods fetch their AWS credentials from it.
+  podIdentityAgentCIDR: 169.254.170.23/32

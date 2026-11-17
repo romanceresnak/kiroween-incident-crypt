@@ -1,0 +1,65 @@
+{{- /*
+Read-only RBAC per agent (REQ-CHT-04, CHT-05). Only get/list/watch, no wildcards, no
+secrets. orchestrator-sa has no Kubernetes permissions at all.
+Cluster-scoped because incidents can come from any namespace.
+*/ -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kiroween-agents-watcher
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kiroween-agents-watcher
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kiroween-agents-watcher
+subjects:
+  - kind: ServiceAccount
+    name: orchestrator-watcher-sa
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kiroween-agents-cpu-memory
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods, pods/log, events, resourcequotas, limitranges, nodes]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, replicasets, statefulsets, daemonsets]
+    verbs: [get, list, watch]
+  - apiGroups: [autoscaling]
+    resources: [horizontalpodautoscalers]
+    verbs: [get, list, watch]
+  - apiGroups: [metrics.k8s.io]
+    resources: [pods, nodes]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kiroween-agents-cpu-memory
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kiroween-agents-cpu-memory
+subjects:
+  - kind: ServiceAccount
+    name: cpu-memory-sa
+    namespace: {{ .Release.Namespace }}

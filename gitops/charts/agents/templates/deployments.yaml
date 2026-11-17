@@ -1,0 +1,153 @@
+{{- $checksum := include (print $.Template.BasePath "/configmap.yaml") . | sha256sum -}}
+{{- $orch := .Values.images.orchestrator -}}
+{{- $cpu := .Values.images.cpuMemory -}}
+
+{{- if ne (toString $orch.tag) "unset" }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orchestrator
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+    app.kubernetes.io/name: orchestrator
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: orchestrator}
+  template:
+    metadata:
+      labels:
+        {{- include "agents.labels" . | nindent 8 }}
+        app.kubernetes.io/name: orchestrator
+      annotations:
+        checksum/config: {{ $checksum }}
+    spec:
+      serviceAccountName: orchestrator-sa
+      securityContext:
+        {{- include "agents.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: orchestrator
+          image: {{ include "agents.image" (dict "root" . "image" $orch) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["-m", "kiroween_orchestrator"]
+          ports:
+            - {name: api, containerPort: {{ .Values.ports.api }}}
+            - {name: metrics, containerPort: {{ .Values.ports.metrics }}}
+          env:
+            {{- include "agents.commonEnv" . | nindent 12 }}
+            - {name: MODEL_ID, value: {{ .Values.models.orchestrator | quote }}}
+            - {name: CPU_MEMORY_URL, value: "http://cpu-memory:{{ .Values.ports.api }}"}
+            - {name: WORKERS, value: {{ .Values.orchestrator.workers | quote }}}
+            - {name: QUEUE_SIZE, value: {{ .Values.orchestrator.queueSize | quote }}}
+            - {name: STORE_CAPACITY, value: {{ .Values.orchestrator.storeCapacity | quote }}}
+            - name: INCIDENT_TIMEOUT_SECONDS
+              value: {{ .Values.orchestrator.incidentTimeoutSeconds | quote }}
+            - name: DELEGATION_TIMEOUT_SECONDS
+              value: {{ .Values.orchestrator.delegationTimeoutSeconds | quote }}
+          securityContext:
+            {{- include "agents.containerSecurityContext" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.orchestrator.resources | nindent 12 }}
+          {{- include "agents.probes" . | nindent 10 }}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        {{- include "agents.tmpVolume" . | nindent 8 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orchestrator-watcher
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+    app.kubernetes.io/name: orchestrator-watcher
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: orchestrator-watcher}
+  template:
+    metadata:
+      labels:
+        {{- include "agents.labels" . | nindent 8 }}
+        app.kubernetes.io/name: orchestrator-watcher
+    spec:
+      serviceAccountName: orchestrator-watcher-sa
+      securityContext:
+        {{- include "agents.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: watcher
+          # Same image as the orchestrator, different entrypoint (REQ-WAT-01).
+          image: {{ include "agents.image" (dict "root" . "image" $orch) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["-m", "kiroween_orchestrator.watcher"]
+          ports:
+            - {name: api, containerPort: {{ .Values.ports.api }}}
+          env:
+            - {name: HOME, value: /tmp}
+            - {name: LOG_LEVEL, value: {{ .Values.logLevel | quote }}}
+            - {name: API_PORT, value: {{ .Values.ports.api | quote }}}
+            - {name: ORCHESTRATOR_URL, value: "http://orchestrator:{{ .Values.ports.api }}"}
+            - {name: WATCH_REASONS, value: {{ join "," .Values.watcher.reasons | quote }}}
+            - name: EXCLUDED_NAMESPACES
+              value: {{ join "," .Values.watcher.excludedNamespaces | quote }}
+            - {name: COOLDOWN_SECONDS, value: {{ .Values.watcher.cooldownSeconds | quote }}}
+            - name: STARTUP_GRACE_SECONDS
+              value: {{ .Values.watcher.startupGraceSeconds | quote }}
+          securityContext:
+            {{- include "agents.containerSecurityContext" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.watcher.resources | nindent 12 }}
+          {{- include "agents.probes" . | nindent 10 }}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        {{- include "agents.tmpVolume" . | nindent 8 }}
+{{- end }}
+
+{{- if ne (toString $cpu.tag) "unset" }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cpu-memory
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+    app.kubernetes.io/name: cpu-memory
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: cpu-memory}
+  template:
+    metadata:
+      labels:
+        {{- include "agents.labels" . | nindent 8 }}
+        app.kubernetes.io/name: cpu-memory
+      annotations:
+        checksum/config: {{ $checksum }}
+    spec:
+      serviceAccountName: cpu-memory-sa
+      securityContext:
+        {{- include "agents.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: cpu-memory
+          image: {{ include "agents.image" (dict "root" . "image" $cpu) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["-m", "kiroween_cpu_memory"]
+          ports:
+            - {name: api, containerPort: {{ .Values.ports.api }}}
+            - {name: metrics, containerPort: {{ .Values.ports.metrics }}}
+          env:
+            {{- include "agents.commonEnv" . | nindent 12 }}
+            - {name: MODEL_ID, value: {{ .Values.models.cpuMemory | quote }}}
+            - {name: MAX_INCREASE_FACTOR, value: {{ .Values.cpuMemory.maxIncreaseFactor | quote }}}
+          securityContext:
+            {{- include "agents.containerSecurityContext" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.cpuMemory.resources | nindent 12 }}
+          {{- include "agents.probes" . | nindent 10 }}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        {{- include "agents.tmpVolume" . | nindent 8 }}
+{{- end }}

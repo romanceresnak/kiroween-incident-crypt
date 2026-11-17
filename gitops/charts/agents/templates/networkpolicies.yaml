@@ -1,0 +1,149 @@
+{{- /*
+Network policies (REQ-NET, design §9). Enforced because infra TASK-17 enabled the VPC
+CNI network policy agent. Policies are additive: default-deny, then each allowance.
+*/ -}}
+{{- if .Values.networkPolicy.enabled }}
+{{- $api := .Values.ports.api -}}
+{{- $metrics := .Values.ports.metrics -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  labels: {{- include "agents.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-watcher-to-orchestrator
+  labels: {{- include "agents.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: orchestrator}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: orchestrator-watcher}
+      ports:
+        - {protocol: TCP, port: {{ $api }}}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-orchestrator-to-cpu-memory
+  labels: {{- include "agents.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: cpu-memory}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: orchestrator}
+      ports:
+        - {protocol: TCP, port: {{ $api }}}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-metrics-scrape
+  labels: {{- include "agents.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/name, operator: In, values: [orchestrator, cpu-memory]}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.prometheus.namespaceLabels | nindent 14 }}
+      ports:
+        - {protocol: TCP, port: {{ $metrics }}}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  labels: {{- include "agents.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-https
+  labels: {{- include "agents.labels" . | nindent 4 }}
+spec:
+  # Bedrock, STS and the EKS API. A NetworkPolicy cannot name AWS endpoints, so this is
+  # TCP 443 to any address (REQ-NET-06).
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock: {cidr: 0.0.0.0/0}
+      ports:
+        - {protocol: TCP, port: 443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-pod-identity-agent
+  labels: {{- include "agents.labels" . | nindent 4 }}
+spec:
+  # Pods fetch AWS credentials from the EKS Pod Identity Agent on the node (REQ-NET-09).
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/name, operator: In, values: [orchestrator, cpu-memory]}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock: {cidr: {{ .Values.networkPolicy.podIdentityAgentCIDR }}}
+      ports:
+        - {protocol: TCP, port: 80}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-watcher-egress
+  labels: {{- include "agents.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: orchestrator-watcher}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: orchestrator}
+      ports:
+        - {protocol: TCP, port: {{ $api }}}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-orchestrator-egress
+  labels: {{- include "agents.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: orchestrator}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: cpu-memory}
+      ports:
+        - {protocol: TCP, port: {{ $api }}}
+{{- end }}

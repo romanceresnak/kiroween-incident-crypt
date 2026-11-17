@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agents-config
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+data:
+  prices.json: {{ .Values.prices | toJson | quote }}
