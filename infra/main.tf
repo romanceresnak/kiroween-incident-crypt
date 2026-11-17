@@ -162,7 +162,19 @@ module "bedrock_kb" {
 }
 
 # TASK-09: Pod Identity IAM roles
-# module "pod_identity" { ... }
+module "pod_identity" {
+  source = "./modules/pod_identity"
+
+  project    = var.project
+  env        = var.env
+  aws_region = var.aws_region
+
+  cluster_name = module.eks.cluster_name
+  cluster_arn  = module.eks.cluster_arn
+  agent_names  = var.agent_names
+
+  knowledge_base_arn = module.bedrock_kb.knowledge_base_arn
+}
 
 # TASK-10: Argo CD
 # module "argocd" {

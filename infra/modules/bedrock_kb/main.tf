@@ -14,6 +14,9 @@ locals {
 resource "aws_s3_bucket" "postmortems" {
   bucket = "${local.prefix}-postmortems-${local.account_id}"
 
+  # Safe to delete with contents: the source documents live in docs/postmortems in git.
+  force_destroy = true
+
   tags = { Name = "${local.prefix}-postmortems" }
 }
 

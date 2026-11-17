@@ -223,7 +223,7 @@ errors.
 **Implements:** REQ-ACD-01, REQ-ACD-02, REQ-ACD-03, REQ-ACD-04, REQ-ACD-05
 
 Create `infra/modules/argocd/`:
-- `helm_release` for `argo-cd` chart `10.16.0` from
+- `helm_release` for `argo-cd` chart `10.18.0` from
   `https://argoproj.github.io/argo-helm`, namespace `argocd`,
   `create_namespace = true`; no admin secret override (use Argo CD's default
   `argocd-initial-admin-secret`)
@@ -292,7 +292,7 @@ budget_alert_email      = "ops@example.com"
 # project                       = "kiroween"
 # env                           = "prod"
 # eks_kubernetes_version         = "1.37"
-# argocd_chart_version           = "10.16.0"
+# argocd_chart_version           = "10.18.0"
 # argocd_apps_chart_version      = "2.0.8"
 # cloudwatch_log_retention_days  = 7
 ```

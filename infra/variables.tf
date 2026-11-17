@@ -54,7 +54,7 @@ variable "admin_iam_principal_arn" {
 variable "argocd_chart_version" {
   description = "argo-cd Helm chart version to pin."
   type        = string
-  default     = "10.16.0"
+  default     = "10.18.0"
 }
 
 variable "argocd_apps_chart_version" {

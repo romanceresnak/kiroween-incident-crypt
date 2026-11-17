@@ -202,8 +202,8 @@ ECR uses `<project>/<agent>` (slash-separated) so all agent images share a logic
 | `eks_node_desired_size` | `number` | `2` | | Node group desired (REQ-EKS-05) |
 | `eks_node_max_size` | `number` | `3` | | Node group max (REQ-EKS-05) |
 | `admin_iam_principal_arn` | `string` | — | ✓ | Cluster-admin access entry IAM principal (REQ-EKS-03) |
-| `argocd_chart_version` | `string` | `"10.16.0"` | | argo-cd chart version — latest as of Nov 2026 (REQ-ACD-02) |
-| `argocd_apps_chart_version` | `string` | `"2.0.8"` | | argocd-apps chart version — latest as of Nov 2026 (REQ-ACD-03) |
+| `argocd_chart_version` | `string` | `"10.18.0"` | | argo-cd chart version — latest as of 17 Nov 2026 (helm repo index) (REQ-ACD-02) |
+| `argocd_apps_chart_version` | `string` | `"2.0.8"` | | argocd-apps chart version — latest as of 17 Nov 2026 (helm repo index) (REQ-ACD-03) |
 | `gitops_repo_url` | `string` | `"https://github.com/romanceresnak/kiroween-incident-crypt"` | | App-of-apps source repo (REQ-ACD-03) |
 | `gitops_repo_path` | `string` | `"gitops"` | | App-of-apps source path (REQ-ACD-03) |
 | `gitops_target_revision` | `string` | `"main"` | | App-of-apps branch (REQ-ACD-03) |
@@ -248,7 +248,7 @@ Multiple environments are handled by distinct backend keys and `var.env` values,
 All per-agent resources (ECR repository, Pod Identity IAM role, Pod Identity association) are created with `for_each = toset(var.agent_names)`. Adding an agent requires only updating the variable default; no new resource blocks are needed.
 
 ### Argo CD app-of-apps via `argocd-apps` chart (REQ-ACD-01, REQ-ACD-02, REQ-ACD-03)
-The root Argo CD `Application` is deployed as a second `helm_release` using the argo-helm `argocd-apps` chart (`2.0.8`), with `depends_on` pointing at the first `helm_release` (argo-cd `10.16.0`). This avoids the `kubernetes_manifest` approach, which requires the Argo CD CRDs to already be registered at plan time and fails on a fresh cluster with `Error: no matches for kind "Application"`. The `argocd-apps` chart is purpose-built for this pattern and renders `Application` CRs as Helm templates after the CRDs exist.
+The root Argo CD `Application` is deployed as a second `helm_release` using the argo-helm `argocd-apps` chart (`2.0.8`), with `depends_on` pointing at the first `helm_release` (argo-cd `10.18.0`). This avoids the `kubernetes_manifest` approach, which requires the Argo CD CRDs to already be registered at plan time and fails on a fresh cluster with `Error: no matches for kind "Application"`. The `argocd-apps` chart is purpose-built for this pattern and renders `Application` CRs as Helm templates after the CRDs exist.
 
 ```hcl
 # modules/argocd/main.tf (sketch)
@@ -257,7 +257,7 @@ resource "helm_release" "argocd" {
   name             = "argocd"
   repository       = "https://argoproj.github.io/argo-helm"
   chart            = "argo-cd"
-  version          = var.argocd_chart_version          # "10.16.0"
+  version          = var.argocd_chart_version          # "10.18.0"
   namespace        = "argocd"
   create_namespace = true
 }
@@ -270,23 +270,25 @@ resource "helm_release" "argocd_apps" {
   namespace  = "argocd"
 
   values = [yamlencode({
-    applications = [{
-      name      = "app-of-apps"
-      namespace = "argocd"
-      project   = "default"
-      source = {
-        repoURL        = var.gitops_repo_url
-        targetRevision = var.gitops_target_revision
-        path           = var.gitops_repo_path
-      }
-      destination = {
-        server    = "https://kubernetes.default.svc"
+    # argocd-apps 2.x: `applications` is a map keyed by Application name.
+    applications = {
+      "app-of-apps" = {
         namespace = "argocd"
+        project   = "default"
+        source = {
+          repoURL        = var.gitops_repo_url
+          targetRevision = var.gitops_target_revision
+          path           = var.gitops_repo_path
+        }
+        destination = {
+          server    = "https://kubernetes.default.svc"
+          namespace = "argocd"
+        }
+        syncPolicy = {
+          automated = { prune = true, selfHeal = true }
+        }
       }
-      syncPolicy = {
-        automated = { prune = true, selfHeal = true }
-      }
-    }]
+    }
   })]
 
   depends_on = [helm_release.argocd]

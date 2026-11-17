@@ -7,6 +7,6 @@ budget_alert_email      = "ops@example.com"
 # project                       = "kiroween"
 # env                           = "prod"
 # eks_kubernetes_version         = "1.37"
-# argocd_chart_version           = "10.16.0"
+# argocd_chart_version           = "10.18.0"
 # argocd_apps_chart_version      = "2.0.8"
 # cloudwatch_log_retention_days  = 7
