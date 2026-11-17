@@ -127,11 +127,10 @@ jobs:
         env:
           REPOSITORY: ${{ matrix.repository }}
           TAG: ${{ github.sha }}
+        # GitHub runs this with bash -eo pipefail, so the failing command must sit in an
+        # if condition; a bare out=$(...) would end the script on "not found".
         run: |
-          set -uo pipefail
-          out="$(aws ecr describe-images --repository-name "${REPOSITORY}" --image-ids "imageTag=${TAG}" 2>&1)"
-          rc=$?
-          if [ "${rc}" -eq 0 ]; then
+          if out="$(aws ecr describe-images --repository-name "${REPOSITORY}" --image-ids "imageTag=${TAG}" 2>&1)"; then
             echo "found=true" >> "${GITHUB_OUTPUT}"
             echo "${REPOSITORY}:${TAG} already exists; skipping the push"
           elif grep -q ImageNotFoundException <<< "${out}"; then

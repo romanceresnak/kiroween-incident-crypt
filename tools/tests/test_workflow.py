@@ -116,3 +116,61 @@ def test_matrix_maps_cpu_memory_package_to_its_repository() -> None:
     include = workflow()["jobs"]["push"]["strategy"]["matrix"]["include"]
     assert {i["package"]: i["repository"] for i in include} == {
         "orchestrator": "kiroween/orchestrator", "cpu_memory": "kiroween/cpu-memory"}
+
+
+# --- "image already exists" step, run for real ------------------------------
+#
+# GitHub runs run: steps as `bash --noprofile --norc -eo pipefail {0}`. These tests run
+# the step's own script that way, with a fake aws CLI, so a bash -e abort shows up here.
+
+
+def exists_step_script() -> str:
+    step = next(s for s in steps(workflow()["jobs"]["push"]) if s.get("id") == "exists")
+    return step["run"]
+
+
+def run_exists_step(tmp_path: Path, *, aws_exit: int, aws_output: str) -> tuple[int, str, str]:
+    import stat
+    import subprocess
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    aws = bin_dir / "aws"
+    aws.write_text(f"#!/usr/bin/env bash\necho {aws_output!r} >&2\nexit {aws_exit}\n")
+    aws.chmod(aws.stat().st_mode | stat.S_IEXEC)
+    script = tmp_path / "step.sh"
+    script.write_text(exists_step_script())
+    output = tmp_path / "github_output"
+    output.write_text("")
+    env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "GITHUB_OUTPUT": str(output),
+           "REPOSITORY": "kiroween/orchestrator", "TAG": "0" * 40}
+    result = subprocess.run(  # noqa: S603
+        ["/bin/bash", "--noprofile", "--norc", "-eo", "pipefail", str(script)],  # noqa: S607
+        env=env, capture_output=True, text=True, check=False,
+    )
+    return result.returncode, output.read_text(), result.stderr
+
+
+def test_exists_step_not_found_continues_with_found_false(tmp_path: Path) -> None:
+    # The real CLI exits 254 for ImageNotFoundException; that case broke run 44104222083.
+    code, output, _ = run_exists_step(
+        tmp_path, aws_exit=254,
+        aws_output="An error occurred (ImageNotFoundException) when calling the DescribeImages "
+                   "operation: The image with imageId {imageTag:'x'} does not exist",
+    )
+    assert code == 0
+    assert output.strip() == "found=false"
+
+
+def test_exists_step_found_sets_found_true(tmp_path: Path) -> None:
+    code, output, _ = run_exists_step(tmp_path, aws_exit=0, aws_output='{"imageDetails": []}')
+    assert code == 0
+    assert output.strip() == "found=true"
+
+
+def test_exists_step_other_error_fails_and_prints_it(tmp_path: Path) -> None:
+    message = "An error occurred (AccessDeniedException) when calling the DescribeImages operation"
+    code, output, stderr = run_exists_step(tmp_path, aws_exit=254, aws_output=message)
+    assert code == 1
+    assert output == ""
+    assert "AccessDeniedException" in stderr
