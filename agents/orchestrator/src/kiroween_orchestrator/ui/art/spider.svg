@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-labelledby="t">
+  <title id="t">The Spider, who weaves the network</title>
+  <circle cx="60" cy="60" r="58" fill="#101a24"/>
+  <!-- web -->
+  <g stroke="#6f8aa3" stroke-width="1" fill="none" opacity="0.7">
+    <path d="M60 4 L60 116 M4 60 L116 60 M20 20 L100 100 M100 20 L20 100"/>
+    <circle cx="60" cy="60" r="16"/>
+    <circle cx="60" cy="60" r="30"/>
+    <circle cx="60" cy="60" r="44"/>
+  </g>
+  <!-- legs -->
+  <g stroke="#1b1b1b" stroke-width="4" stroke-linecap="round" fill="none">
+    <path d="M52 62 Q36 46 26 52 M52 66 Q34 62 24 72 M54 70 Q40 80 32 92 M56 72 Q50 90 46 100"/>
+    <path d="M68 62 Q84 46 94 52 M68 66 Q86 62 96 72 M66 70 Q80 80 88 92 M64 72 Q70 90 74 100"/>
+  </g>
+  <!-- body -->
+  <ellipse cx="60" cy="74" rx="13" ry="15" fill="#262626"/>
+  <circle cx="60" cy="56" r="10" fill="#333333"/>
+  <path d="M55 72 L60 80 L65 72 L60 76 Z" fill="#ff7a1a"/>
+  <!-- eyes -->
+  <circle cx="56" cy="54" r="2.5" fill="#ffd23f"/>
+  <circle cx="64" cy="54" r="2.5" fill="#ffd23f"/>
+  <circle cx="58" cy="50" r="1.5" fill="#ffd23f"/>
+  <circle cx="62" cy="50" r="1.5" fill="#ffd23f"/>
+</svg>

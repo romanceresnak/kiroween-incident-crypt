@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kiroween Incident Crypt</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="art/ghost.svg" type="image/svg+xml">
+</head>
+<body>
+  <header class="crypt-header">
+    <div class="moon" aria-hidden="true"></div>
+    <div>
+      <h1>Kiroween Incident Crypt</h1>
+      <p class="tagline">Incidents rise; the crew investigates; only the living approve.</p>
+    </div>
+    <div class="live" id="live" role="status" aria-live="polite">connecting&hellip;</div>
+  </header>
+
+  <section class="crew" aria-label="The crew">
+    <figure data-agent="orchestrator"><img src="art/necromancer.svg" alt=""><figcaption>Necromancer<span>orchestrator</span></figcaption></figure>
+    <figure data-agent="cpu-memory"><img src="art/vampire.svg" alt=""><figcaption>Vampire<span>cpu-memory</span></figcaption></figure>
+    <figure data-agent="network"><img src="art/spider.svg" alt=""><figcaption>Spider<span>network</span></figcaption></figure>
+    <figure data-agent="deploy-rollout"><img src="art/zombie.svg" alt=""><figcaption>Zombie<span>deploy-rollout</span></figcaption></figure>
+    <figure data-agent="storage"><img src="art/ghost.svg" alt=""><figcaption>Ghost<span>storage</span></figcaption></figure>
+    <figure data-agent="incident-memory"><img src="art/archivist.svg" alt=""><figcaption>Archivist<span>incident-memory</span></figcaption></figure>
+  </section>
+
+  <main class="layout">
+    <section class="feed" aria-label="Incident feed">
+      <h2>Incident feed</h2>
+      <ol id="feed" class="feed-list"></ol>
+      <p id="feed-empty" class="muted">The crypt is quiet. No incidents yet.</p>
+    </section>
+
+    <section class="detail" aria-label="Incident detail">
+      <div id="detail-empty" class="muted">Choose an incident from the feed.</div>
+      <article id="detail" hidden></article>
+    </section>
+  </main>
+
+  <footer class="muted">Read-only agents. Every change is a pull request a human approves.</footer>
+  <script src="app.js"></script>
+</body>
+</html>

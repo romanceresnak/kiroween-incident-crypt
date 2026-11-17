@@ -5,10 +5,12 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
 from kiroween_shared.bedrock import make_model
@@ -46,6 +48,12 @@ def create(service: IncidentService) -> FastAPI:
             response.status_code = 200
         return {"incident_id": record.incident.incident_id, "status": record.status}
 
+    @app.get("/incidents", response_model=list[IncidentRecord])
+    async def list_incidents(limit: int = Query(default=50, ge=1, le=200)) -> list[IncidentRecord]:
+        """Most recent incidents first, for the UI feed (REQ-UI-01)."""
+        records = sorted(service.store.records(), key=lambda r: r.created_at, reverse=True)
+        return records[:limit]
+
     @app.get("/incidents/{incident_id}", response_model=IncidentRecord)
     async def get_incident(incident_id: str) -> IncidentRecord:
         record = service.store.get(incident_id)
@@ -73,7 +81,26 @@ def create(service: IncidentService) -> FastAPI:
                      request: Request) -> IncidentRecord:
         return await decide(incident_id, "rejected", body, request)
 
+    # The UI: static files in this package, same origin as the API (REQ-UI-01, UI-04).
+    @app.middleware("http")
+    async def ui_headers(request: Request, call_next):  # type: ignore[no-untyped-def]
+        response = await call_next(request)
+        if request.url.path == "/ui" or request.url.path.startswith("/ui/"):
+            response.headers["Content-Security-Policy"] = UI_CSP
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["Referrer-Policy"] = "no-referrer"
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
+    app.mount("/ui", StaticFiles(directory=UI_DIR, html=True), name="ui")
+
     return app
+
+
+UI_DIR = Path(__file__).parent / "ui"
+UI_CSP = ("default-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; "
+          "connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; "
+          "frame-ancestors 'none'")
 
 
 class DecisionRequest(BaseModel):

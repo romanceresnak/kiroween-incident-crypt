@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-labelledby="t">
+  <title id="t">The Ghost, who haunts the storage volumes</title>
+  <circle cx="60" cy="60" r="58" fill="#141b2e"/>
+  <!-- glow -->
+  <ellipse cx="60" cy="62" rx="36" ry="42" fill="#9fb8ff" opacity="0.18"/>
+  <!-- body with a wavy hem -->
+  <path d="M32 98 L32 52 Q32 22 60 22 Q88 22 88 52 L88 98 Q81 90 74 98 Q67 106 60 98 Q53 90 46 98 Q39 106 32 98 Z"
+        fill="#eef2ff"/>
+  <!-- eyes and mouth -->
+  <ellipse cx="50" cy="52" rx="5" ry="7" fill="#1c2340"/>
+  <ellipse cx="70" cy="52" rx="5" ry="7" fill="#1c2340"/>
+  <ellipse cx="60" cy="70" rx="6" ry="8" fill="#1c2340"/>
+  <!-- arms holding a disk -->
+  <path d="M32 68 Q20 74 24 84" stroke="#eef2ff" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <path d="M88 68 Q100 74 96 84" stroke="#eef2ff" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <!-- a little volume barrel -->
+  <ellipse cx="60" cy="104" rx="14" ry="4" fill="#6c7bbf"/>
+  <rect x="46" y="96" width="28" height="8" fill="#6c7bbf"/>
+  <ellipse cx="60" cy="96" rx="14" ry="4" fill="#a7b3ee"/>
+</svg>
