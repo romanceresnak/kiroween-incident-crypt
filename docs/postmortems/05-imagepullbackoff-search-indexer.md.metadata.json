@@ -1,0 +1,8 @@
+{
+  "metadataAttributes": {
+    "title": "PM-2026-072: search-indexer rollout stuck on a tag that was never pushed",
+    "category": "deploy_rollout",
+    "signal": "ImagePullBackOff",
+    "fix": "Rolled the container image back to the image of the last ReplicaSet revision that was Ready (indexer:2.13.2, revision 41) via a GitOps pull request, then rebuilt and pushed the missing tag before releasing again."
+  }
+}

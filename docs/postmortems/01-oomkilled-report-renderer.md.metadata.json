@@ -1,0 +1,8 @@
+{
+  "metadataAttributes": {
+    "title": "PM-2026-031: report-renderer OOMKilled during month-end batch",
+    "category": "cpu_memory",
+    "signal": "OOMKilled",
+    "fix": "Raised the container memory limit from 256Mi to 512Mi and the request from 128Mi to 384Mi, sized from the observed 410Mi peak plus 25% headroom, via a GitOps pull request. Long term: stream pages instead of holding the whole document in memory."
+  }
+}

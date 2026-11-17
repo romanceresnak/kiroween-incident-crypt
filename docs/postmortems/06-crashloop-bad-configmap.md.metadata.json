@@ -1,0 +1,8 @@
+{
+  "metadataAttributes": {
+    "title": "PM-2026-079: notification-gateway crash loop after a ConfigMap key rename",
+    "category": "deploy_rollout",
+    "signal": "CrashLoopBackOff",
+    "fix": "Restored the required key SMTP_HOST in the ConfigMap the Deployment loads with envFrom (keeping the new key too) and restarted the Deployment. Clue: exit code 1 with a config error in the previous container log, normal memory and CPU."
+  }
+}

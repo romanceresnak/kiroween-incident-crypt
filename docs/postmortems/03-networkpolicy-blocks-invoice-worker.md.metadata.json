@@ -1,0 +1,8 @@
+{
+  "metadataAttributes": {
+    "title": "PM-2026-058: NetworkPolicy blocked the billing worker from the ledger service",
+    "category": "network",
+    "signal": "Unhealthy",
+    "fix": "Changed spec.ingress[0].from[0].podSelector.matchLabels.app of the server's NetworkPolicy from the old client label to the client's current label, via a GitOps pull request. Clue: client probe timeouts while the server's endpoints are all ready=true."
+  }
+}

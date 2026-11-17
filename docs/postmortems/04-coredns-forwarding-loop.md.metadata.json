@@ -1,0 +1,8 @@
+{
+  "metadataAttributes": {
+    "title": "PM-2026-066: CoreDNS forwarding loop broke name resolution cluster-wide",
+    "category": "network",
+    "signal": "Unhealthy",
+    "fix": "Reverted the forward block in the kube-system/coredns ConfigMap that created a resolver loop (plugin/loop: Loop detected) and restarted CoreDNS. Clue: many unrelated workloads fail at once with 'no such host'."
+  }
+}

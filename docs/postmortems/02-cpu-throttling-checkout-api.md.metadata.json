@@ -1,0 +1,8 @@
+{
+  "metadataAttributes": {
+    "title": "PM-2026-047: checkout-api latency from CPU throttling",
+    "category": "cpu_memory",
+    "signal": "CPUThrottling",
+    "fix": "Raised the container CPU limit from 500m to 1500m and the request from 250m to 500m, and the HPA maxReplicas from 6 to 10. The throttling ratio (cfs_throttled_periods / cfs_periods) dropped from 0.78 to under 0.05."
+  }
+}

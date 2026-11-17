@@ -1,0 +1,8 @@
+{
+  "metadataAttributes": {
+    "title": "PM-2026-091: node disk pressure evicted pods after container logs filled the root volume",
+    "category": "storage",
+    "signal": "DiskPressure",
+    "fix": "Turned off the debug logging, set resources.limits.ephemeral-storage 2Gi and an emptyDir sizeLimit of 1Gi on the noisy container, and replaced the affected node. Clue: evictions of unrelated pods on one node with DiskPressure=True."
+  }
+}

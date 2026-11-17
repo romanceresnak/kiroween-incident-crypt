@@ -1,0 +1,8 @@
+{
+  "metadataAttributes": {
+    "title": "PM-2026-085: analytics-cache stuck Pending on a StorageClass that did not exist",
+    "category": "storage",
+    "signal": "ProvisioningFailed",
+    "fix": "Changed spec.storageClassName of the PVC to a StorageClass that exists in the cluster and recreated the claim (the field is immutable; the claim had never bound, so no data was lost). The pod's FailedScheduling had the same cause."
+  }
+}
