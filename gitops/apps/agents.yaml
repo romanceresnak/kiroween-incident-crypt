@@ -1,0 +1,24 @@
+# Child of app-of-apps: deploys the agents chart into the namespace "agents" (REQ-CHT-10).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: agents
+  namespace: argocd
+  # Deleting this Application also deletes the resources it created.
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/romanceresnak/kiroween-incident-crypt
+    targetRevision: main
+    path: gitops/charts/agents
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: agents
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
