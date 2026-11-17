@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Kubernetes name rules: DNS-1123 label (namespaces, containers) and subdomain (pods).
 DNS_LABEL = r"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$"
@@ -15,8 +15,12 @@ Category = Literal["cpu_memory", "network", "deploy_rollout", "storage", "unknow
 Confidence = Literal["low", "medium", "high"]
 Action = Literal["adjust_resources", "set_field", "investigate_further", "none"]
 Status = Literal[
-    "accepted", "processing", "awaiting_approval", "no_specialist", "completed", "failed"
+    "accepted", "processing", "awaiting_approval", "no_specialist", "completed", "failed",
+    "correlated",
 ]
+# action_required: broken now. transient: it was real but the subject is healthy now.
+# no_action: nothing is wrong. Only action_required carries a proposal (hardening REQ-OUT).
+Outcome = Literal["action_required", "transient", "no_action"]
 
 DELIVERY = (
     "Apply as a pull request against /gitops after a human approves it. "
@@ -50,6 +54,8 @@ class Incident(BaseModel):
     container: str | None = Field(default=None, pattern=DNS_LABEL)
     message: str = Field(default="", max_length=2000)
     observed_at: datetime
+    # Objects the pod needs, e.g. the PVCs it mounts; used for correlation (REQ-WSU-06).
+    depends_on: list[Workload] = Field(default_factory=list, max_length=20)
 
 
 class Classification(BaseModel):
@@ -108,11 +114,20 @@ class Proposal(ProposalDraft):
     delivery: Literal[DELIVERY] = DELIVERY  # type: ignore[valid-type]
 
 
-class SpecialistOutput(BaseModel):
-    """Structured output requested from the cpu-memory model."""
+OUTCOME_HELP = (
+    "action_required: the subject is broken now and needs a change or a human. "
+    "transient: the incident was real but the subject is healthy now (for example a "
+    "readiness failure while the container started). no_action: nothing is wrong. "
+    "Only action_required has a proposal; for the other two leave proposal null."
+)
 
+
+class SpecialistOutput(BaseModel):
+    """Structured output requested from a specialist model."""
+
+    outcome: Outcome = Field(default="action_required", description=OUTCOME_HELP)
     diagnosis: Diagnosis
-    proposal: ProposalDraft
+    proposal: ProposalDraft | None = None
 
 
 class Usage(BaseModel):
@@ -133,12 +148,32 @@ class Usage(BaseModel):
 
 
 class Investigation(BaseModel):
-    """cpu-memory response to ``POST /investigate`` (REQ-CPU-04)."""
+    """A specialist's response to ``POST /investigate`` (REQ-CPU-04, hardening REQ-OUT)."""
 
+    outcome: Outcome = "action_required"
     diagnosis: Diagnosis
-    proposal: Proposal
+    proposal: Proposal | None = None
     usage: Usage = Field(default_factory=Usage)
     validation_notes: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _proposal_matches_outcome(self) -> Investigation:
+        if self.outcome == "action_required" and self.proposal is None:
+            raise ValueError("outcome action_required needs a proposal")
+        if self.outcome != "action_required" and self.proposal is not None:
+            raise ValueError(f"outcome {self.outcome} must not have a proposal")
+        return self
+
+
+class RelatedIncident(BaseModel):
+    """An incident attached to a primary instead of being investigated (REQ-COR-03)."""
+
+    incident_id: str
+    reason: str
+    workload: Workload
+    pod: str | None = None
+    match: Literal["same_workload", "depends_on", "shared_dependency"]
+    observed_at: datetime
 
 
 class IncidentRecord(BaseModel):
@@ -151,5 +186,7 @@ class IncidentRecord(BaseModel):
     delegation: Literal["tool", "forced"] | None = None
     usage_by_agent: dict[str, Usage] = Field(default_factory=dict)
     error: str | None = None
+    related_incidents: list[RelatedIncident] = Field(default_factory=list)
+    related_to: str | None = None
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

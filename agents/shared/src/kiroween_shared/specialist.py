@@ -22,7 +22,8 @@ from .bedrock import CallBudget, CallBudgetExceeded, ModelUnavailable, invoke, m
 from .config import Settings
 from .context import incident_context
 from .metrics import PriceTable, record_usage, start_metrics_server
-from .models import Incident, Investigation, SpecialistOutput
+from .models import Incident, Investigation, ProposalDraft, SpecialistOutput
+from .outcome import decide
 from .proposals import PROTECTED_NAMESPACES, ChangeRule, validate_change
 from .server import configure_logging, create_app, serve
 
@@ -30,6 +31,11 @@ logger = logging.getLogger(__name__)
 
 COMMON_PROMPT = f"""
 Rules for your answer:
+- First decide the outcome. Use action_required only if the incident's subject is broken
+  now. If your tools show it healthy now (pod Ready, endpoint ready=true for that pod, PVC
+  Bound), the outcome is transient and there is no proposal; a readiness failure while a
+  container was starting is transient. Use no_action if nothing was ever wrong. Do not
+  blame an object (for example a NetworkPolicy) for a failure your evidence says is gone.
 - Every evidence entry names the tool and the field it came from. Do not state any value
   you did not read from a tool.
 - A fix is action set_field: one change to one field of one object. Give the target
@@ -95,14 +101,18 @@ async def run_investigation(
         incident_id=incident.incident_id,
     )
     output: SpecialistOutput = result.structured_output
-    proposal, notes = await asyncio.to_thread(
-        validate_change, incident, output.proposal, spec.rules, kube
-    )
+    draft = output.proposal or ProposalDraft(
+        action="investigate_further", rationale="the specialist gave no proposal")
+    proposal, notes = await asyncio.to_thread(validate_change, incident, draft, spec.rules, kube)
     diagnosis = output.diagnosis
     if notes:
         logger.warning("proposal replaced after validation: %s", "; ".join(notes))
         diagnosis = diagnosis.model_copy(update={"confidence": "low"})
-    return Investigation(diagnosis=diagnosis, proposal=proposal, usage=usage,
+    outcome, final, notes = await asyncio.to_thread(
+        decide, incident, output.outcome, proposal, notes, diagnosis, kube)
+    if outcome != output.outcome:
+        logger.info("outcome %s -> %s: %s", output.outcome, outcome, notes[-1])
+    return Investigation(outcome=outcome, diagnosis=diagnosis, proposal=final, usage=usage,
                          validation_notes=notes)
 
 
