@@ -39,15 +39,16 @@ configuration. Note the output `state_bucket_name` for use in TASK-02.
 
 Create `infra/main.tf`, `infra/variables.tf`, `infra/outputs.tf`:
 - `terraform {}` block: `required_version = ">= 1.9.0"`, providers
-  (`aws >= 6.27.0`, `helm ~> 3.0`, `kubernetes >= 2.30.0`), and a partial
+  (`aws >= 6.27.0`, `helm ~> 3.0`, `kubernetes ~> 2.38`), and a partial
   `backend "s3"` block with `key`, `region = "eu-west-1"`, `use_lockfile = true`
   — **no `bucket` attribute** (supplied at `terraform init` time)
 - AWS provider with `region = var.aws_region` and `default_tags`
   (`Project = "kiroween"`, `ManagedBy = "terraform"`)
 - Helm provider using v3 attribute syntax (`kubernetes = { ... }`,
-  `exec = { ... }`); Kubernetes provider using the same `exec` block; both
-  referencing `module.eks` outputs (the `argocd` module call in `main.tf` will
-  carry `depends_on = [module.eks]`; provider blocks do not support `depends_on`)
+  `exec = { ... }`); Kubernetes provider using v2 block syntax
+  (`exec { ... }`, pinned to `~> 2.38`); both referencing `module.eks` outputs
+  (the `argocd` module call in `main.tf` will carry `depends_on = [module.eks]`;
+  provider blocks do not support `depends_on`)
 - All variables from the design's variable table with their documented defaults
 
 **Test:** `terraform init -backend-config=bucket=<bootstrap-output> && terraform validate`
