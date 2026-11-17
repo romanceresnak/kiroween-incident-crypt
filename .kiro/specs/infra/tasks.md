@@ -445,3 +445,18 @@ In `infra/modules/ecr/`: set `image_tag_mutability = "IMMUTABLE"` on every
 **Test:** `terraform plan` shows 6 in-place updates (`MUTABLE` to `IMMUTABLE`) and no
 replacement. CI must not push a tag that already exists; a re-run of a workflow for the
 same commit has to skip the push (see `agents-core` REQ-CI-16).
+
+---
+
+## TASK-19 — Let the ECR push role detect existing tags
+
+**Implements:** REQ-GHA-08 (amended), REQ-ECR-05
+
+Add `ecr:DescribeImages` to the `PushImages` statement of the ECR push role policy in
+`infra/modules/github_oidc/`, on `repository/<project>/*` only.
+
+**Test:** `terraform plan` shows one in-place change to
+`module.github_oidc.aws_iam_role_policy.ecr_push` that adds exactly that action. The IAM
+policy simulator allows `ecr:DescribeImages` on `kiroween/orchestrator` and still denies
+`ecr:CreateRepository`. **Not applied yet:** needed before the first image workflow
+re-run (`agents-core` REQ-CI-16).

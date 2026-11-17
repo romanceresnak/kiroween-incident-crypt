@@ -229,7 +229,7 @@ The apply role shall have permissions for `terraform apply` operations (create/u
 No role shall use wildcard (`*`) subjects in the OIDC trust condition; the plan, apply and ECR push roles shall each use a fully specified subject.
 
 **REQ-GHA-08 (Ubiquitous)**
-Terraform shall create an **ECR push role** that trusts the OIDC provider with subject condition `repo:romanceresnak/kiroween-incident-crypt:ref:refs/heads/main`. The role shall allow only `ecr:GetAuthorizationToken` on all resources, and `ecr:BatchCheckLayerAvailability`, `ecr:InitiateLayerUpload`, `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload` and `ecr:PutImage` on repositories named `kiroween/*`. It shall have no other permissions, and no access entry in the EKS cluster.
+Terraform shall create an **ECR push role** that trusts the OIDC provider with subject condition `repo:romanceresnak/kiroween-incident-crypt:ref:refs/heads/main`. The role shall allow only `ecr:GetAuthorizationToken` on all resources, and `ecr:BatchCheckLayerAvailability`, `ecr:InitiateLayerUpload`, `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload`, `ecr:PutImage` and `ecr:DescribeImages` on repositories named `kiroween/*`. `ecr:DescribeImages` lets the image workflow detect that a tag already exists, which matters because the repositories are immutable (REQ-ECR-05). It shall have no other permissions, and no access entry in the EKS cluster.
 
 **REQ-GHA-09 (Ubiquitous)**
 Terraform shall output the ECR push role ARN as `gha_ecr_push_role_arn`.
