@@ -130,6 +130,9 @@ Each ECR repository shall have a lifecycle policy that retains only the 10 most-
 **REQ-ECR-04 (Ubiquitous)**
 ECR repository names shall be parameterised so the list of agents can be extended via a variable without changing resource definitions.
 
+**REQ-ECR-05 (Ubiquitous)**
+Each ECR repository shall have `image_tag_mutability = "IMMUTABLE"`, so a pushed tag, including a commit-SHA tag, can never be overwritten.
+
 ---
 
 ## 7. Postmortem Storage and Bedrock Knowledge Base

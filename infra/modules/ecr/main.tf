@@ -2,7 +2,7 @@ resource "aws_ecr_repository" "agent" {
   for_each = toset(var.agent_names)
 
   name                 = "${var.project}/${each.key}"
-  image_tag_mutability = "MUTABLE"
+  image_tag_mutability = "IMMUTABLE"
   force_delete         = true
 
   image_scanning_configuration {

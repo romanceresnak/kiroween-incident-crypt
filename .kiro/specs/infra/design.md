@@ -318,3 +318,6 @@ Image builds run on every change to agent code, so the job that pushes images sh
 
 ### VPC CNI as a managed add-on (REQ-EKS-10)
 EKS clusters start with a self-managed `aws-node` DaemonSet. In this cluster its network policy agent runs with `--enable-network-policy=false`, so `NetworkPolicy` objects do nothing. Managing `vpc-cni` as an `aws_eks_addon` with `enableNetworkPolicy = "true"` turns enforcement on. `resolve_conflicts_on_create = "OVERWRITE"` lets EKS adopt the running DaemonSet. The add-on version comes from `data "aws_eks_addon_version"` like the other add-ons. Enabling enforcement changes nothing until a `NetworkPolicy` exists, but updating the add-on rolls the `aws-node` pods.
+
+### Immutable image tags (REQ-ECR-05)
+The image workflow tags each image with the commit SHA. With immutable repositories a tag can be pushed once, so the ECR push role cannot replace an image that a running Deployment already references. The cost is that re-running a workflow for the same commit must skip the push.

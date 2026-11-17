@@ -432,3 +432,16 @@ container runs with `--enable-network-policy=true`, and every node returns to `R
 
 **Apply approach:** applying updates the `aws-node` DaemonSet, so pods roll one node at a
 time. Apply `TASK-16` and `TASK-17` together after approval, then re-run the checks.
+
+---
+
+## TASK-18 — Immutable image tags
+
+**Implements:** REQ-ECR-05
+
+In `infra/modules/ecr/`: set `image_tag_mutability = "IMMUTABLE"` on every
+`aws_ecr_repository`.
+
+**Test:** `terraform plan` shows 6 in-place updates (`MUTABLE` to `IMMUTABLE`) and no
+replacement. CI must not push a tag that already exists; a re-run of a workflow for the
+same commit has to skip the push (see `agents-core` REQ-CI-16).
