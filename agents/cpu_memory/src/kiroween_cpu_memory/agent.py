@@ -15,7 +15,8 @@ from kiroween_shared.k8s.client import KubeError
 from kiroween_shared.k8s.redact import summarize_template
 from kiroween_shared.k8s.tools import KubeReader, build_tools
 from kiroween_shared.metrics import PriceTable, record_usage
-from kiroween_shared.models import Incident, Investigation, SpecialistOutput
+from kiroween_shared.models import Incident, Investigation, ProposalDraft, SpecialistOutput
+from kiroween_shared.outcome import decide
 
 from .validate import observed_values, validate
 
@@ -34,6 +35,10 @@ How to investigate:
   for the workload, and pod metrics if they are available.
 
 Rules for your answer:
+- First decide the outcome. A container that was OOMKilled or throttled needs action, even
+  if the pod is Running and Ready again between restarts: use action_required. Use
+  no_action only if the evidence shows nothing was wrong (for example the termination was
+  not caused by memory), and then give no proposal.
 - Every evidence entry names the tool and the field it came from. Do not state any value you
   did not read from a tool.
 - A resource proposal targets exactly the incident's namespace, workload kind, workload name
@@ -105,11 +110,18 @@ async def investigate(
     )
     output: SpecialistOutput = result.structured_output
     observed = await asyncio.to_thread(read_observed, kube, incident)
-    proposal, notes = validate(incident, output.proposal, observed, max_factor=max_factor)
+    draft = output.proposal or ProposalDraft(
+        action="investigate_further", rationale="the specialist gave no proposal")
+    proposal, notes = validate(incident, draft, observed, max_factor=max_factor)
     diagnosis = output.diagnosis
     if notes:
         logger.warning("proposal replaced after validation: %s", "; ".join(notes))
         diagnosis = diagnosis.model_copy(update={"confidence": "low"})
+    # Same outcome rules as every specialist (hardening REQ-OUT-06). OOMKilled is exempt from
+    # the health checks, so a pod that is Ready between OOMs still gets its proposal.
+    outcome, final, notes = await asyncio.to_thread(
+        decide, incident, output.outcome, proposal, notes, diagnosis, kube)
     return Investigation(
-        diagnosis=diagnosis, proposal=proposal, usage=usage, validation_notes=notes
+        outcome=outcome, diagnosis=diagnosis, proposal=final, usage=usage,
+        validation_notes=notes,
     )
