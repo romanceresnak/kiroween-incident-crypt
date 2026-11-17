@@ -1,0 +1,149 @@
+"""Data exchanged between the watcher, the orchestrator and the specialists."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+# Kubernetes name rules: DNS-1123 label (namespaces, containers) and subdomain (pods).
+DNS_LABEL = r"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$"
+DNS_SUBDOMAIN = r"^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$"
+
+Category = Literal["cpu_memory", "network", "deploy_rollout", "storage", "unknown"]
+Confidence = Literal["low", "medium", "high"]
+Action = Literal["adjust_resources", "investigate_further", "none"]
+Status = Literal[
+    "accepted", "processing", "awaiting_approval", "no_specialist", "completed", "failed"
+]
+
+DELIVERY = (
+    "Apply as a pull request against /gitops after a human approves it. "
+    "The agent does not change the cluster."
+)
+
+
+def utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
+class Workload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str = Field(pattern=r"^[A-Z][A-Za-z]{0,62}$")
+    name: str = Field(pattern=DNS_SUBDOMAIN)
+
+
+class Incident(BaseModel):
+    """An incident as submitted to ``POST /incidents`` (REQ-ORC-02)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    incident_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+    source: str = Field(min_length=1, max_length=64)
+    reason: str = Field(min_length=1, max_length=64)
+    namespace: str = Field(pattern=DNS_LABEL)
+    workload: Workload
+    pod: str = Field(pattern=DNS_SUBDOMAIN)
+    container: str = Field(pattern=DNS_LABEL)
+    message: str = Field(default="", max_length=2000)
+    observed_at: datetime
+
+
+class Classification(BaseModel):
+    """Orchestrator classification of an incident (REQ-ORC-06)."""
+
+    category: Category
+    rationale: str = Field(description="One sentence explaining the category.", max_length=400)
+
+
+class Evidence(BaseModel):
+    tool: str = Field(description="Name of the tool the value came from.")
+    field: str = Field(description="Field or line in that tool result.")
+    value: str = Field(description="The value as observed.")
+
+
+class Diagnosis(BaseModel):
+    root_cause: str
+    confidence: Confidence
+    evidence: list[Evidence] = Field(default_factory=list)
+
+
+class Target(BaseModel):
+    namespace: str
+    kind: str
+    name: str
+    container: str
+
+
+class ProposalDraft(BaseModel):
+    """What the specialist model may propose. Code turns it into a ``Proposal``."""
+
+    action: Action
+    target: Target | None = None
+    field: str | None = Field(
+        default=None,
+        description=(
+            "One of resources.limits.memory, resources.requests.memory, "
+            "resources.limits.cpu, resources.requests.cpu."
+        ),
+    )
+    current: str | None = Field(default=None, description="Current value exactly as read.")
+    proposed: str | None = None
+    rationale: str = ""
+    risk: str = ""
+
+
+class Proposal(ProposalDraft):
+    """A validated proposal. It always requires human approval (REQ-CPU-05, CPU-07)."""
+
+    requires_approval: Literal[True] = True
+    delivery: Literal[DELIVERY] = DELIVERY  # type: ignore[valid-type]
+
+
+class SpecialistOutput(BaseModel):
+    """Structured output requested from the cpu-memory model."""
+
+    diagnosis: Diagnosis
+    proposal: ProposalDraft
+
+
+class Usage(BaseModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cost_usd: float | None = None
+
+    def __add__(self, other: Usage) -> Usage:
+        if self.cost_usd is None and other.cost_usd is None:
+            cost = None
+        else:
+            cost = (self.cost_usd or 0.0) + (other.cost_usd or 0.0)
+        return Usage(
+            input_tokens=self.input_tokens + other.input_tokens,
+            output_tokens=self.output_tokens + other.output_tokens,
+            cost_usd=cost,
+        )
+
+
+class Investigation(BaseModel):
+    """cpu-memory response to ``POST /investigate`` (REQ-CPU-04)."""
+
+    diagnosis: Diagnosis
+    proposal: Proposal
+    usage: Usage = Field(default_factory=Usage)
+    validation_notes: list[str] = Field(default_factory=list)
+
+
+class IncidentRecord(BaseModel):
+    """The orchestrator's record of one incident (REQ-ORC-10)."""
+
+    incident: Incident
+    status: Status = "accepted"
+    classification: Classification | None = None
+    investigation: Investigation | None = None
+    delegation: Literal["tool", "forced"] | None = None
+    usage_by_agent: dict[str, Usage] = Field(default_factory=dict)
+    error: str | None = None
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
