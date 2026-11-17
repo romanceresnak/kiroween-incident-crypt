@@ -5,8 +5,8 @@ locals {
   account_id    = data.aws_caller_identity.current.account_id
   oidc_host     = "token.actions.githubusercontent.com"
   state_bucket  = "arn:aws:s3:::${var.state_bucket_name}"
-  plan_subject  = "repo:${var.gha_repo}:pull_request"
-  apply_subject = "repo:${var.gha_repo}:ref:refs/heads/main"
+  plan_subject  = "${var.subject_prefix}:pull_request"
+  apply_subject = "${var.subject_prefix}:ref:refs/heads/main"
 
   oidc_provider_arn = (
     var.create_oidc_provider

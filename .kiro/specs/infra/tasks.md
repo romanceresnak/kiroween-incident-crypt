@@ -168,12 +168,12 @@ Create `infra/modules/github_oidc/`:
 - `aws_iam_openid_connect_provider` for `token.actions.githubusercontent.com`
   with the correct thumbprint list
 - **Plan role** (`aws_iam_role`):
-  - Trust: subject `repo:<var.gha_repo>:pull_request`
+  - Trust: subject `<var.gha_oidc_subject_prefix>:pull_request`
   - Policy: read-only on EC2, EKS, IAM, S3, ECR, Bedrock, S3 Vectors; plus
     `s3:GetObject` on the state bucket; `s3:PutObject` and `s3:DeleteObject`
     scoped to keys matching `*.tflock` on the state bucket only
 - **Apply role** (`aws_iam_role`):
-  - Trust: subject `repo:<var.gha_repo>:ref:refs/heads/main`
+  - Trust: subject `<var.gha_oidc_subject_prefix>:ref:refs/heads/main`
   - Policy: full plan/apply permissions across all managed service namespaces
     plus ECR repository management (image push moved to the ECR push role in
     TASK-16)
@@ -398,7 +398,7 @@ Verify post-apply:
 
 Extend `infra/modules/github_oidc/`:
 - `aws_iam_role` `<project>-<env>-gha-ecr-push`. Trust: the existing OIDC provider,
-  `aud = sts.amazonaws.com`, `sub = repo:<var.gha_repo>:ref:refs/heads/main`
+  `aud = sts.amazonaws.com`, `sub = <var.gha_oidc_subject_prefix>:ref:refs/heads/main`
   (`StringEquals`, no wildcard).
 - Inline policy: `ecr:GetAuthorizationToken` on `*`; and
   `ecr:BatchCheckLayerAvailability`, `ecr:InitiateLayerUpload`,

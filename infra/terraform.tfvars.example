@@ -39,7 +39,7 @@ budget_alert_email      = "ops@example.com"
 # bedrock_vector_dimension   = 1024
 
 # GitHub Actions OIDC
-# gha_repo                   = "romanceresnak/kiroween-incident-crypt"
+# gha_oidc_subject_prefix     = "repo:romanceresnak@25537084/kiroween-incident-crypt@1461265969"  # from gh api repos/<owner>/<repo>/actions/oidc/customization/sub
 # create_github_oidc_provider = false   # true only in an account with no GitHub OIDC provider
 
 # Logging

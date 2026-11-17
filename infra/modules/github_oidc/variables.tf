@@ -13,9 +13,16 @@ variable "aws_region" {
   type        = string
 }
 
-variable "gha_repo" {
-  description = "GitHub repository (org/repo) allowed to assume the roles."
+variable "subject_prefix" {
+  description = "Immutable OIDC subject prefix, repo:<owner>@<owner_id>/<repo>@<repo_id>."
   type        = string
+
+  # GitHub issues immutable subjects for this repository (owner and repo carry their
+  # numeric IDs), so a name-only prefix would never match the token.
+  validation {
+    condition     = can(regex("^repo:[^/@]+@[0-9]+/[^/@]+@[0-9]+$", var.subject_prefix))
+    error_message = "Use the immutable form repo:<owner>@<owner_id>/<repo>@<repo_id>. Get it with: gh api repos/<owner>/<repo>/actions/oidc/customization/sub (sub_claim_prefix)."
+  }
 }
 
 variable "state_bucket_name" {

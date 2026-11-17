@@ -66,6 +66,25 @@ An AWS account can hold one OIDC provider per URL. By default the
 provider. In an account that has none, set
 `create_github_oidc_provider = true`.
 
+### Subject claims are immutable
+
+This repository issues immutable OIDC subjects: the owner and repository names
+carry their numeric IDs, for example
+`repo:romanceresnak@25537084/kiroween-incident-crypt@1461265969:ref:refs/heads/main`.
+GitHub uses this format for repositories created or renamed after 15 July 2026.
+A name-only subject (`repo:romanceresnak/kiroween-incident-crypt:...`) never
+matches, and `configure-aws-credentials` fails with
+`Not authorized to perform sts:AssumeRoleWithWebIdentity`.
+
+`gha_oidc_subject_prefix` holds the prefix. Read it from GitHub, never derive it
+from names:
+
+```
+gh api repos/<owner>/<repo>/actions/oidc/customization/sub --jq .sub_claim_prefix
+```
+
+The variable's validation rejects a prefix without the IDs.
+
 ## Known trade-offs
 
 ### The apply role can modify itself

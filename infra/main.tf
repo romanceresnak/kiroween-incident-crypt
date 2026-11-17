@@ -145,7 +145,7 @@ module "github_oidc" {
   env        = var.env
   aws_region = var.aws_region
 
-  gha_repo             = var.gha_repo
+  subject_prefix       = var.gha_oidc_subject_prefix
   state_bucket_name    = local.state_bucket_name
   create_oidc_provider = var.create_github_oidc_provider
 }

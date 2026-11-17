@@ -99,10 +99,17 @@ variable "bedrock_vector_dimension" {
   default     = 1024
 }
 
-variable "gha_repo" {
-  description = "GitHub repository path (org/repo) used to scope OIDC subject conditions."
+variable "gha_oidc_subject_prefix" {
+  description = "GitHub OIDC subject prefix the CI roles trust: the sub_claim_prefix from gh api repos/<owner>/<repo>/actions/oidc/customization/sub."
   type        = string
-  default     = "romanceresnak/kiroween-incident-crypt"
+  default     = "repo:romanceresnak@25537084/kiroween-incident-crypt@1461265969"
+
+  # GitHub issues immutable subjects for this repository (owner and repo carry their
+  # numeric IDs), so a name-only prefix would never match the token.
+  validation {
+    condition     = can(regex("^repo:[^/@]+@[0-9]+/[^/@]+@[0-9]+$", var.gha_oidc_subject_prefix))
+    error_message = "Use the immutable form repo:<owner>@<owner_id>/<repo>@<repo_id>. Get it with: gh api repos/<owner>/<repo>/actions/oidc/customization/sub (sub_claim_prefix)."
+  }
 }
 
 variable "create_github_oidc_provider" {

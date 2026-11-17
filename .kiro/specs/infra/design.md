@@ -211,7 +211,7 @@ ECR uses `<project>/<agent>` (slash-separated) so all agent images share a logic
 | `agent_names` | `list(string)` | `["orchestrator","cpu-memory","network","deploy-rollout","storage","incident-memory"]` | | Drives ECR + Pod Identity `for_each` (REQ-ECR-01, REQ-IAM-01) |
 | `bedrock_embedding_model_id` | `string` | `"amazon.titan-embed-text-v2:0"` | | KB embedding model (REQ-KB-03) |
 | `bedrock_vector_dimension` | `number` | `1024` | | S3 Vectors index dimension (REQ-KB-02) |
-| `gha_repo` | `string` | `"romanceresnak/kiroween-incident-crypt"` | | GitHub repo for OIDC subject scoping (REQ-GHA-02, REQ-GHA-05) |
+| `gha_oidc_subject_prefix` | `string` | `"repo:romanceresnak@25537084/kiroween-incident-crypt@1461265969"` | | Immutable OIDC subject prefix for the CI roles (REQ-GHA-10) |
 | `budget_limit_usd` | `number` | `120` | | Monthly AWS Budget limit in USD; must be > 0 (REQ-FIN-02) |
 | `budget_alert_email` | `string` | — | ✓ | Recipient for the budget alert (REQ-FIN-02) |
 | `cloudwatch_log_retention_days` | `number` | `7` | | Retention for all CW log groups (REQ-EKS-08, REQ-FIN-03) |

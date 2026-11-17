@@ -205,7 +205,7 @@ Pod Identity associations (`aws_eks_pod_identity_association`) shall be created 
 Terraform shall configure an IAM OIDC provider for `token.actions.githubusercontent.com`.
 
 **REQ-GHA-02 (Ubiquitous)**
-Terraform shall create a **plan role** that trusts the OIDC provider with subject condition `repo:romanceresnak/kiroween-incident-crypt:pull_request`.
+Terraform shall create a **plan role** that trusts the OIDC provider with subject condition `repo:romanceresnak@25537084/kiroween-incident-crypt@1461265969:pull_request` (GitHub immutable subject format; see REQ-GHA-10).
 
 **REQ-GHA-03 (Ubiquitous)**
 The plan role shall have the following permissions:
@@ -220,7 +220,7 @@ Terraform shall create an EKS access entry for the plan role, associating `Amazo
 > `AmazonEKSAdminViewPolicy` (ARN: `arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminViewPolicy`) is confirmed as the correct policy — it is the cluster-scoped read-only equivalent of `AmazonEKSAdminPolicy`, covering all API groups with `get/list/watch` only. `AmazonEKSViewPolicy` is namespace-scoped and would require one association per namespace.
 
 **REQ-GHA-05 (Ubiquitous)**
-Terraform shall create an **apply role** that trusts the OIDC provider with subject condition `repo:romanceresnak/kiroween-incident-crypt:ref:refs/heads/main`.
+Terraform shall create an **apply role** that trusts the OIDC provider with subject condition `repo:romanceresnak@25537084/kiroween-incident-crypt@1461265969:ref:refs/heads/main`.
 
 **REQ-GHA-06 (Ubiquitous)**
 The apply role shall have permissions for `terraform apply` operations (create/update/delete across EC2, EKS, IAM, S3, ECR repositories, Bedrock, and S3 Vectors resources). It shall not have image push or ECR login permissions; those belong to the ECR push role (REQ-GHA-08).
@@ -229,7 +229,10 @@ The apply role shall have permissions for `terraform apply` operations (create/u
 No role shall use wildcard (`*`) subjects in the OIDC trust condition; the plan, apply and ECR push roles shall each use a fully specified subject.
 
 **REQ-GHA-08 (Ubiquitous)**
-Terraform shall create an **ECR push role** that trusts the OIDC provider with subject condition `repo:romanceresnak/kiroween-incident-crypt:ref:refs/heads/main`. The role shall allow only `ecr:GetAuthorizationToken` on all resources, and `ecr:BatchCheckLayerAvailability`, `ecr:InitiateLayerUpload`, `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload`, `ecr:PutImage` and `ecr:DescribeImages` on repositories named `kiroween/*`. `ecr:DescribeImages` lets the image workflow detect that a tag already exists, which matters because the repositories are immutable (REQ-ECR-05). It shall have no other permissions, and no access entry in the EKS cluster.
+Terraform shall create an **ECR push role** that trusts the OIDC provider with subject condition `repo:romanceresnak@25537084/kiroween-incident-crypt@1461265969:ref:refs/heads/main`. The role shall allow only `ecr:GetAuthorizationToken` on all resources, and `ecr:BatchCheckLayerAvailability`, `ecr:InitiateLayerUpload`, `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload`, `ecr:PutImage` and `ecr:DescribeImages` on repositories named `kiroween/*`. `ecr:DescribeImages` lets the image workflow detect that a tag already exists, which matters because the repositories are immutable (REQ-ECR-05). It shall have no other permissions, and no access entry in the EKS cluster.
+
+**REQ-GHA-10 (Ubiquitous)**
+The trust subjects shall use GitHub's immutable subject format, `repo:<owner>@<owner_id>/<repo>@<repo_id>:...`, set through `var.gha_oidc_subject_prefix`. This repository issues immutable subjects (`use_immutable_subject: true`), so a name-only subject never matches and every role assumption fails.
 
 **REQ-GHA-09 (Ubiquitous)**
 Terraform shall output the ECR push role ARN as `gha_ecr_push_role_arn`.
