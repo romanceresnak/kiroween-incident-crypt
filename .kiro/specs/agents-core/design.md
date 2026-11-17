@@ -122,14 +122,18 @@ Redaction (REQ-K8S-03): `get_pod` returns containers with `env` reduced to `[{na
 
    ```python
    @tool
-   def investigate_cpu_memory(incident_json: str) -> str:
-       """Ask the cpu-memory specialist to diagnose an OOMKilled or CPU throttling incident."""
-       # POST http://cpu-memory:8080/investigate, 120 s timeout, result stored in the
-       # per-incident context and returned to the model as text
+   async def investigate_cpu_memory() -> str:
+       """Ask the cpu-memory specialist to diagnose the incident under review."""
+       # POST http://cpu-memory:8080/investigate with the incident the orchestrator
+       # accepted, 120 s timeout. The parsed Investigation goes into a per-call sink and
+       # a short summary is returned to the model.
    ```
 
+   The tool takes no arguments. An earlier draft passed the incident as a JSON string
+   argument, which would have let the model change what is forwarded.
+
    The tool stores the parsed `Investigation` in the incident context. The record is built from that stored object, not from the model's retelling of it, so a model that paraphrases the result cannot change the proposal.
-3. **Guarantee the call.** After the agent returns, if the tool was not used (`result.metrics.tool_metrics`), the orchestrator calls the same function once directly and notes `delegation: "forced"`. The routing is therefore deterministic even if the model skips the tool.
+3. **Guarantee the call.** After the agent returns, if the sink is empty the orchestrator calls the specialist once directly and records `delegation: "forced"`, so routing is deterministic even if the model skips the tool. If the specialist call failed inside the tool, the error is raised instead and the specialist is not called again (REQ-ORC-11).
 4. **Other categories.** No specialist is registered, so the status is `no_specialist` (REQ-ORC-09).
 5. **Finish.** Status `awaiting_approval` when a proposal exists; per-agent usage is summed from the orchestrator's own result and the specialist's returned usage (REQ-ORC-10).
 

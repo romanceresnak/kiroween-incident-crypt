@@ -8,6 +8,7 @@ from collections.abc import Awaitable, Callable
 from decimal import Decimal
 
 from fastapi import FastAPI, HTTPException
+
 from kiroween_shared.bedrock import CallBudgetExceeded, ModelUnavailable, make_model
 from kiroween_shared.config import Settings
 from kiroween_shared.context import incident_context

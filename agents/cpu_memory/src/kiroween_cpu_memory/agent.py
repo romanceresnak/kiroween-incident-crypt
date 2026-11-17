@@ -7,6 +7,8 @@ import logging
 from decimal import Decimal
 from typing import Any
 
+from strands import Agent
+
 from kiroween_shared.bedrock import CallBudget, invoke
 from kiroween_shared.config import Settings
 from kiroween_shared.k8s.client import KubeError
@@ -14,7 +16,6 @@ from kiroween_shared.k8s.redact import summarize_template
 from kiroween_shared.k8s.tools import KubeReader, build_tools
 from kiroween_shared.metrics import PriceTable, record_usage
 from kiroween_shared.models import Incident, Investigation, SpecialistOutput
-from strands import Agent
 
 from .validate import observed_values, validate
 

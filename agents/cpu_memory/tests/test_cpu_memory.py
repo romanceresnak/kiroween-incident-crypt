@@ -7,6 +7,10 @@ from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
+
+from kiroween_cpu_memory.agent import investigate
+from kiroween_cpu_memory.api import create
+from kiroween_cpu_memory.validate import parse_quantity, validate
 from kiroween_shared.bedrock import ModelUnavailable
 from kiroween_shared.config import Settings
 from kiroween_shared.metrics import Price, PriceTable
@@ -20,10 +24,6 @@ from kiroween_shared.testing import (
     oom_kube,
     tool_call,
 )
-
-from kiroween_cpu_memory.agent import investigate
-from kiroween_cpu_memory.api import create
-from kiroween_cpu_memory.validate import parse_quantity, validate
 
 MODEL = "eu.anthropic.claude-sonnet-4-6"
 SETTINGS = Settings(agent_name="cpu-memory", model_id=MODEL)
