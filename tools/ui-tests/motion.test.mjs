@@ -330,6 +330,21 @@ test("vampire, necromancer and archivist pulse a glow; the others do not", async
   }
 });
 
+test("the glow sits behind the artwork and labels, in the card's own stacking context", async () => {
+  const ui = await open([]);
+  try {
+    for (const agent of AGENTS) {
+      const card = ui.figure(agent);
+      // Without isolation, z-index -1 would drop the glow behind the page background.
+      assert.equal(computed(card).isolation, "isolate", `${agent} has no stacking context`);
+      assert.equal(computed(card, "after")["z-index"], "-1", `${agent} glow covers its content`);
+      assert.equal(computed(card, "after")["pointer-events"], "none");
+    }
+  } finally {
+    ui.close();
+  }
+});
+
 test("the spider hangs from a thread that exists only while it is busy", async () => {
   const ui = await open([]);
   try {

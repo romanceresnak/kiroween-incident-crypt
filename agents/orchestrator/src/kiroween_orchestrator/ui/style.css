@@ -30,7 +30,8 @@ a { color: var(--slime); }
 
 .crew { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.75rem; padding: 1.75rem 1.5rem 0.75rem; }
 .crew figure {
-  position: relative; margin: 0; text-align: center; background: var(--panel);
+  position: relative; isolation: isolate; margin: 0; text-align: center;
+  background: var(--panel);
   border: 1px solid var(--line); border-radius: 12px; padding: 0.6rem;
   transition: border-color 0.2s;
   /* Per-character animation settings, used by the busy rules below. --motion is a keyframes
@@ -45,9 +46,12 @@ a { color: var(--slime); }
 .crew figure[data-agent="storage"] { --motion: float; --motion-dur: 2.5s; --glow-anim: none; --glow-color: #9fb8ff; }
 .crew figure[data-agent="deploy-rollout"] { --motion: shuffle; --motion-dur: 2.2s; --glow-anim: none; --glow-color: #8fb26a; }
 
-/* The glow layer: always present, invisible while idle. Only opacity changes. */
+/* The glow layer: always present, invisible while idle. Only opacity changes. It sits behind
+   the artwork and labels (z-index -1 inside the card's own stacking context), so it lights
+   the card without dimming what is on it. */
 .crew figure::after {
-  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
+  pointer-events: none;
   background: radial-gradient(circle at 50% 45%, var(--glow-color), transparent 70%);
   opacity: 0;
 }
