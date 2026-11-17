@@ -1,0 +1,57 @@
+{{- /*
+network, deploy-rollout and storage (specialists REQ-CHX-01). One shared runtime, so the
+Deployments differ only in name, image, module and model. cpu-memory stays in
+deployments.yaml because it has its own settings.
+*/ -}}
+{{- $checksum := include (print $.Template.BasePath "/configmap.yaml") . | sha256sum -}}
+{{- range $line := splitList "\n" (include "agents.specialists" .) }}
+{{- $f := splitList ":" $line }}
+{{- $name := index $f 0 }}
+{{- $key := index $f 1 }}
+{{- $image := index $.Values.images $key }}
+{{- if and (ne $name "cpu-memory") (ne (toString $image.tag) "unset") }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "agents.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: {{ $name }}}
+  template:
+    metadata:
+      labels:
+        {{- include "agents.labels" $ | nindent 8 }}
+        app.kubernetes.io/name: {{ $name }}
+      annotations:
+        checksum/config: {{ $checksum }}
+    spec:
+      serviceAccountName: {{ $name }}-sa
+      securityContext:
+        {{- include "agents.podSecurityContext" $ | nindent 8 }}
+      containers:
+        - name: {{ $name }}
+          image: {{ include "agents.image" (dict "root" $ "image" $image) }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          args: ["-m", "{{ index $f 2 }}"]
+          ports:
+            - {name: api, containerPort: {{ $.Values.ports.api }}}
+            - {name: metrics, containerPort: {{ $.Values.ports.metrics }}}
+          env:
+            {{- include "agents.commonEnv" $ | nindent 12 }}
+            - {name: MODEL_ID, value: {{ index $.Values.models $key | quote }}}
+          securityContext:
+            {{- include "agents.containerSecurityContext" $ | nindent 12 }}
+          resources:
+            {{- toYaml (index $.Values $key).resources | nindent 12 }}
+          {{- include "agents.probes" $ | nindent 10 }}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        {{- include "agents.tmpVolume" $ | nindent 8 }}
+{{- end }}
+{{- end }}

@@ -4,7 +4,7 @@ image:
   registry: 255834079310.dkr.ecr.eu-west-1.amazonaws.com
   pullPolicy: IfNotPresent
 
-# The image workflow rewrites the two tag lines below (tools/set_image_tag.py). Do not
+# The image workflow rewrites the tag lines below (tools/set_image_tag.py). Do not
 # edit them by hand. While a tag is "unset", that component's Deployment is not
 # rendered, so the first sync does not leave pods in ImagePullBackOff.
 images:
@@ -14,6 +14,15 @@ images:
   cpuMemory:
     repository: kiroween/cpu-memory
     tag: 313231ba71fc5c5c84eea217b3427783d6a92b58 # ci-managed:cpu-memory
+  network:
+    repository: kiroween/network
+    tag: unset # ci-managed:network
+  deployRollout:
+    repository: kiroween/deploy-rollout
+    tag: unset # ci-managed:deploy-rollout
+  storage:
+    repository: kiroween/storage
+    tag: unset # ci-managed:storage
 
 region: eu-west-1
 
@@ -21,6 +30,9 @@ region: eu-west-1
 models:
   orchestrator: eu.anthropic.claude-haiku-4-5-20251001-v1:0
   cpuMemory: eu.anthropic.claude-sonnet-4-6
+  network: eu.anthropic.claude-sonnet-4-6
+  deployRollout: eu.anthropic.claude-sonnet-4-6
+  storage: eu.anthropic.claude-sonnet-4-6
 
 # USD per million tokens, by model id, for the EU geo cross-region profiles. A model with
 # no entry records token counters only.
@@ -53,8 +65,15 @@ orchestrator:
     limits: {cpu: 500m, memory: 384Mi}
 
 watcher:
+  # Container termination reasons (pod status).
   reasons: [OOMKilled]
-  excludedNamespaces: [kube-system, kube-node-lease, argocd]
+  # Container waiting reasons (pod status), reported once per pod.
+  waitingReasons: [ImagePullBackOff, ErrImagePull, CrashLoopBackOff, CreateContainerConfigError]
+  # Event reasons, by involved object kind.
+  podEventReasons: [FailedScheduling, FailedMount, FailedAttachVolume, Unhealthy]
+  pvcEventReasons: [ProvisioningFailed]
+  # agents is excluded so the agents never investigate themselves.
+  excludedNamespaces: [kube-system, kube-node-lease, argocd, agents]
   cooldownSeconds: 600
   startupGraceSeconds: 300
   resources:
@@ -63,6 +82,22 @@ watcher:
 
 cpuMemory:
   maxIncreaseFactor: "4"
+  resources:
+    requests: {cpu: 50m, memory: 192Mi}
+    limits: {cpu: 500m, memory: 384Mi}
+
+# The three specialists added by the specialists spec. Same runtime, different tools.
+network:
+  resources:
+    requests: {cpu: 50m, memory: 192Mi}
+    limits: {cpu: 500m, memory: 384Mi}
+
+deployRollout:
+  resources:
+    requests: {cpu: 50m, memory: 192Mi}
+    limits: {cpu: 500m, memory: 384Mi}
+
+storage:
   resources:
     requests: {cpu: 50m, memory: 192Mi}
     limits: {cpu: 500m, memory: 384Mi}

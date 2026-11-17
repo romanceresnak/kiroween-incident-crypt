@@ -10,8 +10,10 @@ metadata:
   labels:
     {{- include "agents.labels" . | nindent 4 }}
 rules:
+  # pods: terminations, waiting states and the owner of an event's pod. events: the
+  # Pod and PVC events in specialists REQ-WTX (REQ-TLS-04).
   - apiGroups: [""]
-    resources: [pods]
+    resources: [pods, events]
     verbs: [get, list, watch]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

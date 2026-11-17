@@ -29,15 +29,18 @@ spec:
             matchLabels: {app.kubernetes.io/name: orchestrator-watcher}
       ports:
         - {protocol: TCP, port: {{ $api }}}
+{{- /* Each specialist accepts API calls from the orchestrator only (REQ-CHX-05). */}}
+{{- range $line := splitList "\n" (include "agents.specialists" .) }}
+{{- $name := index (splitList ":" $line) 0 }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-orchestrator-to-cpu-memory
-  labels: {{- include "agents.labels" . | nindent 4 }}
+  name: allow-orchestrator-to-{{ $name }}
+  labels: {{- include "agents.labels" $ | nindent 4 }}
 spec:
   podSelector:
-    matchLabels: {app.kubernetes.io/name: cpu-memory}
+    matchLabels: {app.kubernetes.io/name: {{ $name }}}
   policyTypes: [Ingress]
   ingress:
     - from:
@@ -45,6 +48,7 @@ spec:
             matchLabels: {app.kubernetes.io/name: orchestrator}
       ports:
         - {protocol: TCP, port: {{ $api }}}
+{{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -54,7 +58,7 @@ metadata:
 spec:
   podSelector:
     matchExpressions:
-      - {key: app.kubernetes.io/name, operator: In, values: [orchestrator, cpu-memory]}
+      - {key: app.kubernetes.io/name, operator: In, values: {{ include "agents.apiPods" . }}}
   policyTypes: [Ingress]
   ingress:
     - from:
@@ -107,7 +111,7 @@ spec:
   # Pods fetch AWS credentials from the EKS Pod Identity Agent on the node (REQ-NET-09).
   podSelector:
     matchExpressions:
-      - {key: app.kubernetes.io/name, operator: In, values: [orchestrator, cpu-memory]}
+      - {key: app.kubernetes.io/name, operator: In, values: {{ include "agents.apiPods" . }}}
   policyTypes: [Egress]
   egress:
     - to:
@@ -142,8 +146,10 @@ spec:
   policyTypes: [Egress]
   egress:
     - to:
+        {{- range $line := splitList "\n" (include "agents.specialists" .) }}
         - podSelector:
-            matchLabels: {app.kubernetes.io/name: cpu-memory}
+            matchLabels: {app.kubernetes.io/name: {{ index (splitList ":" $line) 0 }}}
+        {{- end }}
       ports:
         - {protocol: TCP, port: {{ $api }}}
 {{- end }}

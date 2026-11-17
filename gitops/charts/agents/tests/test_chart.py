@@ -19,6 +19,8 @@ REPO = CHART.parents[2]
 NAMESPACE = "agents"
 SHA = "0123456789abcdef0123456789abcdef01234567"
 READ_VERBS = {"get", "list", "watch"}
+IMAGE_KEYS = ["orchestrator", "cpuMemory", "network", "deployRollout", "storage"]
+SPECIALISTS = ["cpu-memory", "network", "deploy-rollout", "storage"]
 
 pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm not installed")
 
@@ -33,7 +35,7 @@ def render(*sets: str) -> list[dict]:
 
 @pytest.fixture(scope="module")
 def docs() -> list[dict]:
-    return render(f"images.orchestrator.tag={SHA}", f"images.cpuMemory.tag={SHA}")
+    return render(*(f"images.{key}.tag={SHA}" for key in IMAGE_KEYS))
 
 
 def of_kind(docs: list[dict], kind: str) -> dict[str, dict]:
@@ -61,13 +63,14 @@ def test_role_bindings(docs: list[dict]) -> None:
     }
     assert subjects == {
         "kiroween-agents-watcher": [("orchestrator-watcher-sa", NAMESPACE)],
-        "kiroween-agents-cpu-memory": [("cpu-memory-sa", NAMESPACE)],
+        **{f"kiroween-agents-{name}": [(f"{name}-sa", NAMESPACE)] for name in SPECIALISTS},
     }
 
 
-def test_watcher_can_only_read_pods(docs: list[dict]) -> None:
+def test_watcher_can_only_read_pods_and_events(docs: list[dict]) -> None:
     rules = of_kind(docs, "ClusterRole")["kiroween-agents-watcher"]["rules"]
-    assert rules == [{"apiGroups": [""], "resources": ["pods"], "verbs": ["get", "list", "watch"]}]
+    assert rules == [{"apiGroups": [""], "resources": ["pods", "events"],
+                      "verbs": ["get", "list", "watch"]}]
 
 
 def test_orchestrator_has_no_kubernetes_permissions(docs: list[dict]) -> None:
@@ -84,15 +87,17 @@ def test_service_accounts_match_infra_pod_identity(docs: list[dict]) -> None:
     assert '"${a}-sa"' in infra, "infra service account naming changed"
     assert re.search(r'variable "namespace".*?default\s*=\s*"agents"', variables, re.S)
     names = set(of_kind(docs, "ServiceAccount"))
-    assert {"orchestrator-sa", "cpu-memory-sa"} <= names
+    assert {"orchestrator-sa", *(f"{name}-sa" for name in SPECIALISTS)} <= names
     assert "orchestrator-watcher-sa" in names
 
 
 # --- Deployments (REQ-CHT-01, CHT-03, CHT-06, CHT-07) ----------------------
 
 
-def test_default_values_render_no_deployments() -> None:
-    assert of_kind(render(), "Deployment") == {}
+def test_unset_tags_render_no_deployments() -> None:
+    # values.yaml carries CI-written tags, so set every tag back to "unset" explicitly.
+    docs = render(*(f"images.{key}.tag=unset" for key in IMAGE_KEYS))
+    assert of_kind(docs, "Deployment") == {}
 
 
 def test_latest_tag_is_refused() -> None:
@@ -101,17 +106,17 @@ def test_latest_tag_is_refused() -> None:
     assert "not latest" in info.value.stderr
 
 
-def test_three_deployments_with_expected_service_accounts(docs: list[dict]) -> None:
+def test_six_deployments_with_expected_service_accounts(docs: list[dict]) -> None:
     deployments = of_kind(docs, "Deployment")
     assert {n: d["spec"]["template"]["spec"]["serviceAccountName"]
             for n, d in deployments.items()} == {
         "orchestrator": "orchestrator-sa",
         "orchestrator-watcher": "orchestrator-watcher-sa",
-        "cpu-memory": "cpu-memory-sa",
+        **{name: f"{name}-sa" for name in SPECIALISTS},
     }
 
 
-@pytest.mark.parametrize("name", ["orchestrator", "orchestrator-watcher", "cpu-memory"])
+@pytest.mark.parametrize("name", ["orchestrator", "orchestrator-watcher", *SPECIALISTS])
 def test_pod_hardening(docs: list[dict], name: str) -> None:
     pod = of_kind(docs, "Deployment")[name]["spec"]["template"]["spec"]
     psc = pod["securityContext"]
@@ -182,8 +187,8 @@ def test_ingress_sources_are_only_the_allowed_ones(docs: list[dict]) -> None:
     allowed = {
         "allow-watcher-to-orchestrator": [{"podSelector": {"matchLabels": {
             "app.kubernetes.io/name": "orchestrator-watcher"}}}],
-        "allow-orchestrator-to-cpu-memory": [{"podSelector": {"matchLabels": {
-            "app.kubernetes.io/name": "orchestrator"}}}],
+        **{f"allow-orchestrator-to-{name}": [{"podSelector": {"matchLabels": {
+            "app.kubernetes.io/name": "orchestrator"}}}] for name in SPECIALISTS},
         "allow-metrics-scrape": [{"namespaceSelector": {"matchLabels": {
             "kubernetes.io/metadata.name": "monitoring"}}}],
     }
@@ -198,13 +203,14 @@ def test_metrics_scrape_reaches_only_the_metrics_port(docs: list[dict]) -> None:
 
 
 def test_pod_to_pod_egress_is_only_watcher_and_orchestrator(docs: list[dict]) -> None:
-    pod_egress = {}
+    pod_egress: dict[str, list[str]] = {}
     for name, policy in of_kind(docs, "NetworkPolicy").items():
         for peer in peers(policy, "egress"):
             if "podSelector" in peer and "namespaceSelector" not in peer:
-                pod_egress[name] = peer["podSelector"]["matchLabels"]["app.kubernetes.io/name"]
-    assert pod_egress == {"allow-watcher-egress": "orchestrator",
-                          "allow-orchestrator-egress": "cpu-memory"}
+                pod_egress.setdefault(name, []).append(
+                    peer["podSelector"]["matchLabels"]["app.kubernetes.io/name"])
+    assert pod_egress == {"allow-watcher-egress": ["orchestrator"],
+                          "allow-orchestrator-egress": SPECIALISTS}
 
 
 def test_dns_https_and_pod_identity_egress(docs: list[dict]) -> None:
@@ -232,3 +238,132 @@ def test_service_monitor_off_by_default_and_renders_when_enabled() -> None:
     assert of_kind(render(), "ServiceMonitor") == {}
     assert set(of_kind(render("metrics.serviceMonitor.enabled=true"), "ServiceMonitor")) == {
         "orchestrator", "cpu-memory"}
+
+
+# --- specialists spec (REQ-CHX, REQ-TLS-03, REQ-TLS-04) -------------------------------
+
+SPECIALIST_RULES = {
+    "kiroween-agents-network": {
+        "": {"pods", "pods/log", "events", "services"},
+        "discovery.k8s.io": {"endpointslices"},
+        "networking.k8s.io": {"networkpolicies", "ingresses"},
+    },
+    "kiroween-agents-deploy-rollout": {
+        "": {"pods", "pods/log", "events", "configmaps"},
+        "apps": {"deployments", "replicasets", "statefulsets", "daemonsets"},
+    },
+    "kiroween-agents-storage": {
+        "": {"pods", "pods/log", "events", "persistentvolumeclaims", "persistentvolumes",
+             "nodes"},
+        "storage.k8s.io": {"storageclasses", "volumeattachments"},
+    },
+}
+
+
+def grants(role: dict) -> dict[str, set[str]]:
+    out: dict[str, set[str]] = {}
+    for rule in role["rules"]:
+        for group in rule["apiGroups"]:
+            out.setdefault(group, set()).update(rule["resources"])
+    return out
+
+
+@pytest.mark.parametrize("role", sorted(SPECIALIST_RULES))
+def test_specialist_cluster_roles_grant_exactly_what_the_tools_read(
+    docs: list[dict], role: str
+) -> None:
+    assert grants(of_kind(docs, "ClusterRole")[role]) == SPECIALIST_RULES[role]
+
+
+def test_namespaced_roles_are_narrow(docs: list[dict]) -> None:
+    roles = {(d["metadata"]["namespace"], n): d for n, d in of_kind(docs, "Role").items()}
+    assert set(roles) == {("kube-system", "kiroween-agents-network-coredns"),
+                          ("argocd", "kiroween-agents-deploy-rollout-argocd")}
+    assert roles[("kube-system", "kiroween-agents-network-coredns")]["rules"] == [
+        {"apiGroups": [""], "resources": ["configmaps"], "resourceNames": ["coredns"],
+         "verbs": ["get"]}]
+    assert roles[("argocd", "kiroween-agents-deploy-rollout-argocd")]["rules"] == [
+        {"apiGroups": ["argoproj.io"], "resources": ["applications"],
+         "verbs": ["get", "list", "watch"]}]
+    bindings = {(d["metadata"]["namespace"], d["roleRef"]["name"]):
+                [(s["name"], s["namespace"]) for s in d["subjects"]]
+                for d in of_kind(docs, "RoleBinding").values()}
+    assert bindings == {
+        ("kube-system", "kiroween-agents-network-coredns"): [("network-sa", NAMESPACE)],
+        ("argocd", "kiroween-agents-deploy-rollout-argocd"): [("deploy-rollout-sa", NAMESPACE)],
+    }
+
+
+def test_specialists_have_no_access_to_argo_or_coredns_outside_their_roles(
+    docs: list[dict],
+) -> None:
+    for role in of_kind(docs, "ClusterRole").values():
+        assert "argoproj.io" not in grants(role)
+        if role["metadata"]["name"] != "kiroween-agents-deploy-rollout":
+            assert "configmaps" not in grants(role).get("", set())
+
+
+@pytest.mark.parametrize("name,module", [("network", "kiroween_network"),
+                                         ("deploy-rollout", "kiroween_deploy_rollout"),
+                                         ("storage", "kiroween_storage")])
+def test_specialist_deployment(docs: list[dict], name: str, module: str) -> None:
+    container = of_kind(docs, "Deployment")[name]["spec"]["template"]["spec"]["containers"][0]
+    assert container["args"] == ["-m", module]
+    assert {p["name"]: p["containerPort"] for p in container["ports"]} == {
+        "api": 8080, "metrics": 9090}
+    env = {e["name"]: e.get("value") for e in container["env"]}
+    assert env["MODEL_ID"] == "eu.anthropic.claude-sonnet-4-6"
+    service = of_kind(docs, "Service")[name]
+    assert service["spec"]["selector"] == {"app.kubernetes.io/name": name}
+
+
+def orchestrator_env(docs: list[dict]) -> dict[str, str]:
+    container = of_kind(docs, "Deployment")["orchestrator"]["spec"]["template"]["spec"][
+        "containers"][0]
+    return {e["name"]: e.get("value") for e in container["env"]}
+
+
+def test_orchestrator_gets_a_url_per_specialist(docs: list[dict]) -> None:
+    env = orchestrator_env(docs)
+    assert {k: v for k, v in env.items() if k.endswith("_URL")} == {
+        "CPU_MEMORY_URL": "http://cpu-memory:8080",
+        "NETWORK_URL": "http://network:8080",
+        "DEPLOY_ROLLOUT_URL": "http://deploy-rollout:8080",
+        "STORAGE_URL": "http://storage:8080",
+    }
+
+
+def test_undeployed_specialist_has_no_deployment_and_no_url() -> None:
+    docs = render(f"images.orchestrator.tag={SHA}", f"images.cpuMemory.tag={SHA}")
+    assert set(of_kind(docs, "Deployment")) == {"orchestrator", "orchestrator-watcher",
+                                                "cpu-memory"}
+    env = orchestrator_env(docs)
+    assert "CPU_MEMORY_URL" in env
+    assert not {"NETWORK_URL", "DEPLOY_ROLLOUT_URL", "STORAGE_URL"} & set(env)
+
+
+def test_watcher_reason_sets_and_exclusions(docs: list[dict]) -> None:
+    container = of_kind(docs, "Deployment")["orchestrator-watcher"]["spec"]["template"][
+        "spec"]["containers"][0]
+    env = {e["name"]: e.get("value") for e in container["env"]}
+    assert env["WAITING_REASONS"].split(",") == [
+        "ImagePullBackOff", "ErrImagePull", "CrashLoopBackOff", "CreateContainerConfigError"]
+    assert env["POD_EVENT_REASONS"].split(",") == [
+        "FailedScheduling", "FailedMount", "FailedAttachVolume", "Unhealthy"]
+    assert env["PVC_EVENT_REASONS"] == "ProvisioningFailed"
+    excluded = env["EXCLUDED_NAMESPACES"].split(",")
+    assert "agents" in excluded
+    assert not {"chaos-oom", "chaos-netpol", "chaos-badimage", "chaos-pvc"} & set(excluded)
+
+
+@pytest.mark.parametrize("policy", ["allow-metrics-scrape", "allow-pod-identity-agent"])
+def test_new_pods_get_metrics_and_pod_identity(docs: list[dict], policy: str) -> None:
+    expr = of_kind(docs, "NetworkPolicy")[policy]["spec"]["podSelector"]["matchExpressions"][0]
+    assert set(expr["values"]) == {"orchestrator", *SPECIALISTS}
+
+
+def test_ci_markers_exist_for_every_image() -> None:
+    values = (CHART / "values.yaml").read_text()
+    for component in ["orchestrator", *SPECIALISTS]:
+        assert re.search(rf"^\s+tag: \S+ # ci-managed:{component}$", values, re.M), component
+

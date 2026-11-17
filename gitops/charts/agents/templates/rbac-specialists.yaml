@@ -1,0 +1,114 @@
+{{- /*
+Read-only RBAC for network, deploy-rollout and storage (specialists REQ-TLS-03). Each rule
+lists only what that specialist's tools call (kiroween_shared.k8s.extra_tools), with
+get/list/watch only, no wildcards and no secrets. Cluster-wide reads are for the incident's
+namespace; the two Roles cover the fixed namespaces the tools read (CoreDNS, Argo CD).
+*/ -}}
+{{- $ns := .Release.Namespace -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kiroween-agents-network
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods, pods/log, events, services]
+    verbs: [get, list, watch]
+  - apiGroups: [discovery.k8s.io]
+    resources: [endpointslices]
+    verbs: [get, list, watch]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies, ingresses]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kiroween-agents-network-coredns
+  namespace: kube-system
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+rules:
+  # The CoreDNS Corefile only. CoreDNS pods and logs come from the ClusterRole.
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [coredns]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kiroween-agents-deploy-rollout
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+rules:
+  # configmaps: the config-error tool returns key names only, never values.
+  - apiGroups: [""]
+    resources: [pods, pods/log, events, configmaps]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, replicasets, statefulsets, daemonsets]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kiroween-agents-deploy-rollout-argocd
+  namespace: argocd
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [argoproj.io]
+    resources: [applications]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kiroween-agents-storage
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods, pods/log, events, persistentvolumeclaims, persistentvolumes, nodes]
+    verbs: [get, list, watch]
+  - apiGroups: [storage.k8s.io]
+    resources: [storageclasses, volumeattachments]
+    verbs: [get, list, watch]
+{{- range $name := list "network" "deploy-rollout" "storage" }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kiroween-agents-{{ $name }}
+  labels:
+    {{- include "agents.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kiroween-agents-{{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}-sa
+    namespace: {{ $ns }}
+{{- end }}
+{{- range $binding := list (list "network-coredns" "kube-system" "network")
+                           (list "deploy-rollout-argocd" "argocd" "deploy-rollout") }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kiroween-agents-{{ index $binding 0 }}
+  namespace: {{ index $binding 1 }}
+  labels:
+    {{- include "agents.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kiroween-agents-{{ index $binding 0 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ index $binding 2 }}-sa
+    namespace: {{ $ns }}
+{{- end }}

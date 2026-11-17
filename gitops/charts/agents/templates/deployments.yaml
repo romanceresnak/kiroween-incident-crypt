@@ -37,7 +37,13 @@ spec:
           env:
             {{- include "agents.commonEnv" . | nindent 12 }}
             - {name: MODEL_ID, value: {{ .Values.models.orchestrator | quote }}}
-            - {name: CPU_MEMORY_URL, value: "http://cpu-memory:{{ .Values.ports.api }}"}
+            {{- /* A URL only for specialists that are deployed; the rest end as no_specialist. */}}
+            {{- range $line := splitList "\n" (include "agents.specialists" .) }}
+            {{- $f := splitList ":" $line }}
+            {{- if ne (toString (index $.Values.images (index $f 1)).tag) "unset" }}
+            - {name: {{ index $f 3 }}, value: "http://{{ index $f 0 }}:{{ $.Values.ports.api }}"}
+            {{- end }}
+            {{- end }}
             - {name: WORKERS, value: {{ .Values.orchestrator.workers | quote }}}
             - {name: QUEUE_SIZE, value: {{ .Values.orchestrator.queueSize | quote }}}
             - {name: STORE_CAPACITY, value: {{ .Values.orchestrator.storeCapacity | quote }}}
@@ -89,6 +95,12 @@ spec:
             - {name: API_PORT, value: {{ .Values.ports.api | quote }}}
             - {name: ORCHESTRATOR_URL, value: "http://orchestrator:{{ .Values.ports.api }}"}
             - {name: WATCH_REASONS, value: {{ join "," .Values.watcher.reasons | quote }}}
+            - name: WAITING_REASONS
+              value: {{ join "," .Values.watcher.waitingReasons | quote }}
+            - name: POD_EVENT_REASONS
+              value: {{ join "," .Values.watcher.podEventReasons | quote }}
+            - name: PVC_EVENT_REASONS
+              value: {{ join "," .Values.watcher.pvcEventReasons | quote }}
             - name: EXCLUDED_NAMESPACES
               value: {{ join "," .Values.watcher.excludedNamespaces | quote }}
             - {name: COOLDOWN_SECONDS, value: {{ .Values.watcher.cooldownSeconds | quote }}}
