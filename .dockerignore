@@ -1,0 +1,8 @@
+# The build context is the repository root; only agents/ is needed.
+*
+!agents/
+agents/**/.venv/
+agents/**/__pycache__/
+agents/**/.pytest_cache/
+agents/**/.ruff_cache/
+agents/**/tests/
