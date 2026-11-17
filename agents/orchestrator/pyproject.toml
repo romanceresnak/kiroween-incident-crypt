@@ -3,7 +3,7 @@ name = "kiroween-orchestrator"
 version = "0.1.0"
 description = "Orchestrator API and event watcher"
 requires-python = ">=3.12,<3.13"
-dependencies = ["kiroween-shared"]
+dependencies = ["kiroween-shared", "pyyaml"]
 
 [tool.uv.sources]
 kiroween-shared = { path = "../shared", editable = true }

@@ -24,3 +24,10 @@ INVESTIGATION_SECONDS = Histogram(
 def record_incident(category: str | None, status: str, outcome: str | None) -> None:
     INCIDENTS.labels(category=category or "none", status=status,
                      outcome=outcome or "none").inc()
+
+APPROVALS = Counter(
+    "orchestrator_approvals",
+    "Human decisions on proposals, and how the PR was delivered",
+    ["decision", "delivery"],
+    registry=REGISTRY,
+)

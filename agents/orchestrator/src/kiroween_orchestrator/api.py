@@ -5,8 +5,11 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
+from typing import Literal
+from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Request, Response
+from pydantic import BaseModel, ConfigDict, Field
 
 from kiroween_shared.bedrock import make_model
 from kiroween_shared.config import Settings, env_int
@@ -15,8 +18,9 @@ from kiroween_shared.models import Incident, IncidentRecord
 from kiroween_shared.server import configure_logging, create_app, serve
 
 from .agent import Orchestrator
+from .approval import Approver, GitHubClient
 from .memory import MemoryClient
-from .service import IncidentService, QueueFull
+from .service import DecisionConflict, IncidentService, QueueFull
 from .specialists import SpecialistClient
 from .store import IncidentStore
 
@@ -49,7 +53,49 @@ def create(service: IncidentService) -> FastAPI:
             raise HTTPException(status_code=404, detail="incident not found")
         return record
 
+    async def decide(incident_id: str, decision: Literal["approved", "rejected"],
+                     body: DecisionRequest, request: Request) -> IncidentRecord:
+        check_same_origin(request)
+        try:
+            return await service.decide(incident_id, decision, body.by, body.comment)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="incident not found") from exc
+        except DecisionConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @app.post("/incidents/{incident_id}/approve", response_model=IncidentRecord)
+    async def approve(incident_id: str, body: DecisionRequest,
+                      request: Request) -> IncidentRecord:
+        return await decide(incident_id, "approved", body, request)
+
+    @app.post("/incidents/{incident_id}/reject", response_model=IncidentRecord)
+    async def reject(incident_id: str, body: DecisionRequest,
+                     request: Request) -> IncidentRecord:
+        return await decide(incident_id, "rejected", body, request)
+
     return app
+
+
+class DecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    by: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9 ._@-]+$")
+    comment: str = Field(default="", max_length=500)
+
+
+def check_same_origin(request: Request) -> None:
+    """Only JSON from this host (REQ-APR-02).
+
+    A page on another site can make the operator's browser send a "simple" request (form
+    or text/plain) through the port-forward. Requiring application/json forces a CORS
+    preflight, which this app never answers; the Origin check refuses the rest.
+    """
+    content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
+    if content_type != "application/json":
+        raise HTTPException(status_code=415, detail="send application/json")
+    origin = request.headers.get("origin")
+    if origin is not None and urlsplit(origin).netloc != request.headers.get("host", ""):
+        raise HTTPException(status_code=403, detail="cross-origin decision refused")
 
 
 SPECIALIST_URL_ENV: dict[str, str] = {
@@ -80,6 +126,10 @@ def main() -> None:
     )
     memory_url = env.get("INCIDENT_MEMORY_URL", "")
     memory = MemoryClient(memory_url) if memory_url else None
+    # Optional Secret orchestrator-github/token (REQ-APR-05). Without it: dry-run PRs.
+    token = env.get("GITHUB_TOKEN", "")
+    github = GitHubClient(token, env.get("GITHUB_REPOSITORY", ""),
+                          base=env.get("GITHUB_BASE_BRANCH", "main")) if token else None
     service = IncidentService(
         classify=orchestrator.classify,
         delegate=orchestrator.delegate,
@@ -90,6 +140,7 @@ def main() -> None:
         specialists=frozenset(specialists),
         correlation_window_s=env_int(env, "CORRELATION_WINDOW_SECONDS", 300),
         similar=memory.similar if memory else None,
+        approver=Approver(github),
     )
     start_metrics_server(settings.metrics_port)
     serve(create(service), settings.api_port)

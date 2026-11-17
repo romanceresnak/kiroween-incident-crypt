@@ -479,6 +479,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "kiroween-shared" },
+    { name = "pyyaml" },
 ]
 
 [package.dev-dependencies]
@@ -489,7 +490,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "kiroween-shared", editable = "../shared" }]
+requires-dist = [
+    { name = "kiroween-shared", editable = "../shared" },
+    { name = "pyyaml" },
+]
 
 [package.metadata.requires-dev]
 dev = [

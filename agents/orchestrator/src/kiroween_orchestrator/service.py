@@ -12,6 +12,7 @@ from typing import Literal
 
 from kiroween_shared.context import incident_context
 from kiroween_shared.models import (
+    Approval,
     Classification,
     Incident,
     IncidentRecord,
@@ -22,8 +23,9 @@ from kiroween_shared.models import (
     utcnow,
 )
 
+from .approval import Approver
 from .correlation import correlate
-from .metrics import INVESTIGATION_SECONDS, record_incident
+from .metrics import APPROVALS, INVESTIGATION_SECONDS, record_incident
 from .specialists import SPECIALIST_AGENTS
 from .store import IncidentStore
 
@@ -42,6 +44,10 @@ class QueueFull(RuntimeError):
     pass
 
 
+class DecisionConflict(RuntimeError):
+    """The incident is not waiting for a decision (HTTP 409)."""
+
+
 class IncidentService:
     def __init__(
         self,
@@ -56,10 +62,12 @@ class IncidentService:
         correlation_window_s: float = 300.0,
         now: Callable[[], datetime] = utcnow,
         similar: Callable[[Incident], Awaitable[list[SimilarIncident]]] | None = None,
+        approver: Approver | None = None,
     ) -> None:
         # Categories with a configured specialist. Everything else ends as no_specialist.
         self.specialists = specialists
         self._memory = similar
+        self._approver = approver if approver is not None else Approver()
         self._correlation_window = correlation_window_s
         self._now = now
         self._classify = classify
@@ -199,3 +207,27 @@ class IncidentService:
     def _fail(self, incident_id: str, error: str, category: str | None = None) -> None:
         self.store.update(incident_id, status="failed", error=error[:500])
         record_incident(category, "failed", None)
+
+    async def decide(self, incident_id: str, decision: Literal["approved", "rejected"],
+                     by: str, comment: str = "") -> IncidentRecord:
+        """Record a human decision (REQ-APR-01). Raises KeyError / DecisionConflict."""
+        record = self.store.get(incident_id)
+        if record is None:
+            raise KeyError(incident_id)
+        if record.status != "awaiting_approval":
+            raise DecisionConflict(f"incident is {record.status}, not awaiting_approval")
+        approval = Approval(decision=decision, by=by, comment=comment, at=self._now())
+        # Claim the decision before any await, so a second click cannot open a second PR.
+        record = self.store.update(incident_id, status=decision, approval=approval)
+        if decision == "approved" and self._approver is not None and record is not None:
+            with incident_context(incident_id):
+                pr = await self._approver.pull_request(record, approval)
+            approval = approval.model_copy(update={"pull_request": pr})
+            record = self.store.update(incident_id, approval=approval)
+        delivery = "none"
+        if approval.pull_request is not None:
+            pr = approval.pull_request
+            delivery = "error" if pr.error else pr.mode
+        APPROVALS.labels(decision=decision, delivery=delivery).inc()
+        logger.info("incident %s %s by %s (%s)", incident_id, decision, by, delivery)
+        return record  # type: ignore[return-value]
