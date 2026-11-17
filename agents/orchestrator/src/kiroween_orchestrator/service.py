@@ -17,15 +17,18 @@ from kiroween_shared.models import (
     Usage,
 )
 
+from .specialists import SPECIALIST_AGENTS
 from .store import IncidentStore
 
 logger = logging.getLogger(__name__)
 
 Classify = Callable[[Incident], Awaitable[tuple[Classification, Usage]]]
-Delegate = Callable[[Incident], Awaitable[tuple[Investigation, Usage, Literal["tool", "forced"]]]]
+Delegate = Callable[
+    [Incident, str], Awaitable[tuple[Investigation, Usage, Literal["tool", "forced"]]]
+]
 
-# Categories with a deployed specialist. Everything else ends as no_specialist.
-SPECIALISTS = frozenset({"cpu_memory"})
+# A proposal of one of these actions waits for a human (core REQ-ORC-10).
+CHANGE_ACTIONS = frozenset({"adjust_resources", "set_field"})
 
 
 class QueueFull(RuntimeError):
@@ -42,7 +45,10 @@ class IncidentService:
         queue_size: int = 20,
         workers: int = 2,
         incident_timeout_s: float = 300.0,
+        specialists: frozenset[str] = frozenset({"cpu_memory"}),
     ) -> None:
+        # Categories with a configured specialist. Everything else ends as no_specialist.
+        self.specialists = specialists
         self._classify = classify
         self._delegate = delegate
         self.store = store or IncidentStore()
@@ -105,15 +111,16 @@ class IncidentService:
                         incident_id, classification=classification,
                         usage_by_agent={"orchestrator": own_usage},
                     )
-                    if classification.category not in SPECIALISTS:
+                    category = classification.category
+                    if category not in self.specialists:
                         self.store.update(incident_id, status="no_specialist")
-                        logger.info("no specialist for category %s", classification.category)
+                        logger.info("no specialist for category %s", category)
                         return
 
-                    investigation, delegate_usage, mode = await self._delegate(incident)
+                    investigation, delegate_usage, mode = await self._delegate(incident, category)
                     status = (
                         "awaiting_approval"
-                        if investigation.proposal.action == "adjust_resources"
+                        if investigation.proposal.action in CHANGE_ACTIONS
                         else "completed"
                     )
                     self.store.update(
@@ -123,7 +130,7 @@ class IncidentService:
                         delegation=mode,
                         usage_by_agent={
                             "orchestrator": own_usage + delegate_usage,
-                            "cpu-memory": investigation.usage,
+                            SPECIALIST_AGENTS[category]: investigation.usage,
                         },
                     )
                     logger.info("incident %s finished with status %s", incident_id, status)

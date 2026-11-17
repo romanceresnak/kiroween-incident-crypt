@@ -66,7 +66,7 @@ class Fakes:
         self.classify_calls += 1
         return Classification(category=self.category, rationale="r"), Usage(input_tokens=50)
 
-    async def delegate(self, incident: Incident):  # type: ignore[no-untyped-def]
+    async def delegate(self, incident: Incident, category: str = "cpu_memory"):  # type: ignore[no-untyped-def]
         self.delegate_calls += 1
         return investigation(self.action), Usage(input_tokens=60), "tool"
 
@@ -142,7 +142,7 @@ async def test_incident_timeout_marks_failed() -> None:
 
 
 async def test_delegation_error_marks_failed() -> None:
-    async def boom(incident: Incident):  # type: ignore[no-untyped-def]
+    async def boom(incident: Incident, category: str = "cpu_memory"):  # type: ignore[no-untyped-def]
         raise SpecialistError("specialist at http://cpu-memory:8080 timed out")
 
     record = await run_one(IncidentService(classify=Fakes().classify, delegate=boom),
@@ -184,7 +184,8 @@ def specialist_transport(calls: list[int], *, status: int = 200,
 def orchestrator(model: ScriptedModel, calls: list[int], **transport_args: object) -> Orchestrator:
     client = SpecialistClient("http://cpu-memory:8080", timeout_s=1,
                               transport=specialist_transport(calls, **transport_args))
-    return Orchestrator(model=model, settings=SETTINGS, prices=PriceTable({}), specialist=client)
+    return Orchestrator(model=model, settings=SETTINGS, prices=PriceTable({}),
+                        specialists={"cpu_memory": client})
 
 
 async def test_classify_uses_structured_output() -> None:
@@ -199,7 +200,7 @@ async def test_delegation_through_the_tool_calls_the_specialist_once() -> None:
     calls: list[int] = []
     model = ScriptedModel([tool_call("investigate_cpu_memory"), text("Raise the limit.")],
                           model_id=MODEL)
-    inv, _, mode = await orchestrator(model, calls).delegate(make_incident())
+    inv, _, mode = await orchestrator(model, calls).delegate(make_incident(), "cpu_memory")
     assert mode == "tool" and len(calls) == 1
     assert inv.proposal.proposed == "128Mi"
 
@@ -207,7 +208,7 @@ async def test_delegation_through_the_tool_calls_the_specialist_once() -> None:
 async def test_skipped_tool_is_forced() -> None:
     calls: list[int] = []
     model = ScriptedModel([text("I think it is fine.")], model_id=MODEL)
-    inv, _, mode = await orchestrator(model, calls).delegate(make_incident())
+    inv, _, mode = await orchestrator(model, calls).delegate(make_incident(), "cpu_memory")
     assert mode == "forced" and len(calls) == 1
     assert inv.proposal.action == "adjust_resources"
 
@@ -217,7 +218,7 @@ async def test_specialist_failure_inside_the_tool_is_not_retried() -> None:
     model = ScriptedModel([tool_call("investigate_cpu_memory"), text("It failed.")],
                           model_id=MODEL)
     with pytest.raises(SpecialistError):
-        await orchestrator(model, calls, delay=1.0).delegate(make_incident())
+        await orchestrator(model, calls, delay=1.0).delegate(make_incident(), "cpu_memory")
     assert len(calls) == 1
 
 
@@ -225,7 +226,7 @@ async def test_specialist_error_status_is_reported() -> None:
     calls: list[int] = []
     model = ScriptedModel([text("skip")], model_id=MODEL)
     with pytest.raises(SpecialistError, match="503"):
-        await orchestrator(model, calls, status=503).delegate(make_incident())
+        await orchestrator(model, calls, status=503).delegate(make_incident(), "cpu_memory")
 
 
 # --- HTTP API ---------------------------------------------------------------

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Response
@@ -51,17 +51,31 @@ def create(service: IncidentService) -> FastAPI:
     return app
 
 
+SPECIALIST_URL_ENV: dict[str, str] = {
+    "cpu_memory": "CPU_MEMORY_URL",
+    "network": "NETWORK_URL",
+    "deploy_rollout": "DEPLOY_ROLLOUT_URL",
+    "storage": "STORAGE_URL",
+}
+
+
+def specialists_from_env(env: Mapping[str, str], timeout_s: float) -> dict[str, SpecialistClient]:
+    """One client per category whose URL is set; others end as no_specialist (REQ-ORX-01)."""
+    return {
+        category: SpecialistClient(env[var], timeout_s=timeout_s)
+        for category, var in SPECIALIST_URL_ENV.items()
+        if env.get(var)
+    }
+
+
 def main() -> None:
     configure_logging(os.environ.get("LOG_LEVEL", "INFO"))
     env = os.environ
     settings = Settings.from_env("orchestrator")
     prices = PriceTable.from_json(settings.prices_json)
-    specialist = SpecialistClient(
-        env.get("CPU_MEMORY_URL", "http://cpu-memory:8080"),
-        timeout_s=env_int(env, "DELEGATION_TIMEOUT_SECONDS", 120),
-    )
+    specialists = specialists_from_env(env, env_int(env, "DELEGATION_TIMEOUT_SECONDS", 120))
     orchestrator = Orchestrator(
-        model=make_model(settings), settings=settings, prices=prices, specialist=specialist
+        model=make_model(settings), settings=settings, prices=prices, specialists=specialists
     )
     service = IncidentService(
         classify=orchestrator.classify,
@@ -70,6 +84,7 @@ def main() -> None:
         queue_size=env_int(env, "QUEUE_SIZE", 20),
         workers=env_int(env, "WORKERS", 2),
         incident_timeout_s=env_int(env, "INCIDENT_TIMEOUT_SECONDS", 300),
+        specialists=frozenset(specialists),
     )
     start_metrics_server(settings.metrics_port)
     serve(create(service), settings.api_port)

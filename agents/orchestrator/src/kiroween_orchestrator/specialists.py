@@ -59,11 +59,33 @@ class DelegationSink:
     calls: int = 0
 
 
-def make_cpu_memory_tool(client: SpecialistClient, incident: Incident, sink: DelegationSink) -> Any:
-    @tool
-    async def investigate_cpu_memory() -> str:
-        """Ask the cpu-memory specialist to diagnose the incident under review (an OOMKilled
-        container or CPU throttling) and propose a fix. Takes no arguments."""
+# Category -> the specialist's agent name (metrics label, usage key, Service name).
+SPECIALIST_AGENTS: dict[str, str] = {
+    "cpu_memory": "cpu-memory",
+    "network": "network",
+    "deploy_rollout": "deploy-rollout",
+    "storage": "storage",
+}
+
+TOOL_DESCRIPTIONS: dict[str, str] = {
+    "cpu_memory": "an OOMKilled container or CPU throttling",
+    "network": "DNS, NetworkPolicy, Service, endpoint or Ingress problems",
+    "deploy_rollout": "image pull errors, crash loops from bad config, stuck rollouts or "
+                      "Argo CD sync failures",
+    "storage": "PVCs stuck Pending, mount or attach failures, EBS CSI errors or disk pressure",
+}
+
+
+def tool_name(category: str) -> str:
+    return f"investigate_{category}"
+
+
+def make_specialist_tool(
+    category: str, client: SpecialistClient, incident: Incident, sink: DelegationSink
+) -> Any:
+    """The specialist for ``category`` as a Strands tool (agents-as-tools)."""
+
+    async def investigate() -> str:
         if sink.investigation is None and sink.error is None:
             sink.calls += 1
             try:
@@ -80,4 +102,11 @@ def make_cpu_memory_tool(client: SpecialistClient, incident: Incident, sink: Del
             "action": inv.proposal.action,
         })
 
-    return investigate_cpu_memory
+    description = (f"Ask the {SPECIALIST_AGENTS[category]} specialist to diagnose the incident "
+                   f"under review ({TOOL_DESCRIPTIONS[category]}) and propose a fix. "
+                   "Takes no arguments.")
+    return tool(name=tool_name(category), description=description)(investigate)
+
+
+def make_cpu_memory_tool(client: SpecialistClient, incident: Incident, sink: DelegationSink) -> Any:
+    return make_specialist_tool("cpu_memory", client, incident, sink)
