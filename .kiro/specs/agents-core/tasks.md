@@ -5,6 +5,27 @@ locally with no AWS calls and no cluster changes. Tasks 14 to 16 touch the live 
 the GitHub repository and the cluster, and need explicit approval (see Execution notes).
 Requirement IDs refer to `requirements.md`; section numbers refer to `design.md`.
 
+## Status (17 Nov 2026)
+
+| Task | Commit | Result |
+|---|---|---|
+| TASK-01 Scaffold, pin SDK, contract tests | `1257a28` | 5 contract tests pass on strands-agents 1.65.0 |
+| TASK-02 Models, config, context, server | `e98eaca` | 27 tests pass |
+| TASK-03 Bedrock client and call guard | `84ae8f4` | 7 tests pass |
+| TASK-04 Token and cost metrics | `fb12756` | 12 tests pass |
+| TASK-05 Read-only Kubernetes tools | `db17627` | 22 tests pass, including the write-call guard |
+| TASK-06 cpu-memory specialist | `b40f9a4` | 36 tests pass |
+| TASK-07 Orchestrator service | `0654c14` | 19 tests pass |
+| TASK-08 Event watcher | `5106e8f` | 17 tests pass |
+| TASK-09 Container images | `ea279d0` | Not built: Docker daemon not running |
+| TASK-10 Helm chart | `3f4ba06` | helm lint clean, 22 render tests pass |
+| TASK-11 Argo CD Applications | `e71d5c1` | 4 tests pass, pinned metrics-server chart renders |
+| TASK-12 Chaos scenario | `8b968ff` | shellcheck clean, 13 tests pass |
+| TASK-13 Image workflow and tag updater | `cac5136` | actionlint clean, 27 tests pass |
+| TASK-14 infra TASK-19 applied | `f10e321` | Plan 0/1/0, applied, live policy checked |
+| TASK-15 First deployment | — | Owner pushes to `main` |
+| TASK-16 End-to-end acceptance | — | Not started |
+
 ## Execution notes
 
 - **Local and reversible (tasks 1 to 13):** write code, run unit tests, build images,

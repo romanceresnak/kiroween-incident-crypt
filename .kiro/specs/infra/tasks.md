@@ -9,7 +9,7 @@ Requirement IDs in brackets map to `requirements.md`.
 > TASK-14 passes. The bootstrap module (`infra/bootstrap/`) is applied in TASK-01
 > as a one-time prerequisite and is not subject to this restriction.
 
-## Status: TASK-01 to TASK-15 complete (17 Nov 2026); TASK-16 and TASK-17 planned, not applied
+## Status: TASK-01 to TASK-19 complete and applied (17 Nov 2026)
 
 | Task | Commit |
 |---|---|
@@ -28,6 +28,10 @@ Requirement IDs in brackets map to `requirements.md`.
 | TASK-13 tfvars example + README | `3dc5e79` |
 | TASK-14 validate + plan gate | `d5d97b3` |
 | TASK-15 Two-phase apply | No commit; state is in S3. Phase 1: 37 added. Phase 2: 44 added. |
+| TASK-16 ECR push role | `ce0af31` (applied with TASK-17/18: 3 added, 7 changed) |
+| TASK-17 Managed VPC CNI, NetworkPolicy enforcement | `ce0af31` |
+| TASK-18 Immutable image tags | `7c32664` |
+| TASK-19 ecr:DescribeImages for the push role | `f10e321` |
 
 Post-apply checks run: nodes `Ready` (2 Spot), both add-ons `ACTIVE`, access entries
 for the admin user and both GitHub roles, Knowledge Base `ACTIVE` with `S3_VECTORS`
@@ -458,5 +462,4 @@ Add `ecr:DescribeImages` to the `PushImages` statement of the ECR push role poli
 **Test:** `terraform plan` shows one in-place change to
 `module.github_oidc.aws_iam_role_policy.ecr_push` that adds exactly that action. The IAM
 policy simulator allows `ecr:DescribeImages` on `kiroween/orchestrator` and still denies
-`ecr:CreateRepository`. **Not applied yet:** needed before the first image workflow
-re-run (`agents-core` REQ-CI-16).
+`ecr:CreateRepository`. **Applied** (commit `f10e321`): 0 to add, 1 to change, 0 to destroy.
