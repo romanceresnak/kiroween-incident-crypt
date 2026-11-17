@@ -185,8 +185,8 @@ data "aws_iam_policy_document" "apply" {
   }
 
   statement {
-    sid    = "ManageProjectBuckets"
-    effect = "Allow"
+    sid     = "ManageProjectBuckets"
+    effect  = "Allow"
     actions = ["s3:*"]
     resources = [
       # The trailing * also matches object keys, so one ARN covers buckets and objects.

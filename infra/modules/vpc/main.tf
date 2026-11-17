@@ -3,12 +3,12 @@ data "aws_availability_zones" "available" {
 }
 
 locals {
-  az_count      = 2
-  azs           = slice(data.aws_availability_zones.available.names, 0, local.az_count)
-  name_prefix   = "${var.project}-${var.env}"
+  az_count    = 2
+  azs         = slice(data.aws_availability_zones.available.names, 0, local.az_count)
+  name_prefix = "${var.project}-${var.env}"
 
   # Public subnets: /24 (256 addresses each)
-  public_cidrs  = [for i in range(local.az_count) : cidrsubnet(var.vpc_cidr, 8, i)]
+  public_cidrs = [for i in range(local.az_count) : cidrsubnet(var.vpc_cidr, 8, i)]
   # Private subnets: /20 (4096 addresses each) — ample room for EKS pods
   private_cidrs = [for i in range(local.az_count) : cidrsubnet(var.vpc_cidr, 4, i + 1)]
 }

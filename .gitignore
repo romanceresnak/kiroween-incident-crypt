@@ -11,3 +11,7 @@ terraform.tfvars
 
 # Crash log
 crash.log
+
+# Saved plans
+*.tfplan
+tfplan

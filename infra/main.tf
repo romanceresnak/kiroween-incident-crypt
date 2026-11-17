@@ -118,8 +118,8 @@ module "ecr" {
 module "eks" {
   source = "./modules/eks"
 
-  project    = var.project
-  env        = var.env
+  project      = var.project
+  env          = var.env
   cluster_name = local.cluster_name
 
   kubernetes_version = var.eks_kubernetes_version
