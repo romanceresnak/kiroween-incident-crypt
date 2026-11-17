@@ -334,7 +334,10 @@ def test_orchestrator_gets_a_url_per_specialist(docs: list[dict]) -> None:
 
 
 def test_undeployed_specialist_has_no_deployment_and_no_url() -> None:
-    docs = render(f"images.orchestrator.tag={SHA}", f"images.cpuMemory.tag={SHA}")
+    # values.yaml carries CI-written tags for every image, so unset three explicitly.
+    docs = render(f"images.orchestrator.tag={SHA}", f"images.cpuMemory.tag={SHA}",
+                  "images.network.tag=unset", "images.deployRollout.tag=unset",
+                  "images.storage.tag=unset")
     assert set(of_kind(docs, "Deployment")) == {"orchestrator", "orchestrator-watcher",
                                                 "cpu-memory"}
     env = orchestrator_env(docs)
@@ -367,3 +370,27 @@ def test_ci_markers_exist_for_every_image() -> None:
     for component in ["orchestrator", *SPECIALISTS]:
         assert re.search(rf"^\s+tag: \S+ # ci-managed:{component}$", values, re.M), component
 
+
+
+# --- hardening (REQ-CHH-01) -------------------------------------------------------------
+
+
+def container_env(docs: list[dict], deployment: str) -> dict[str, str]:
+    container = of_kind(docs, "Deployment")[deployment]["spec"]["template"]["spec"][
+        "containers"][0]
+    return {e["name"]: e.get("value") for e in container["env"]}
+
+
+def test_hardening_settings_reach_the_watcher_and_orchestrator(docs: list[dict]) -> None:
+    watcher = container_env(docs, "orchestrator-watcher")
+    assert watcher["UNHEALTHY_STARTUP_GRACE_SECONDS"] == "60"
+    assert watcher["UNHEALTHY_RECHECK_SECONDS"] == "30"
+    assert container_env(docs, "orchestrator")["CORRELATION_WINDOW_SECONDS"] == "300"
+
+
+def test_hardening_settings_are_values() -> None:
+    docs = render(*(f"images.{key}.tag={SHA}" for key in IMAGE_KEYS),
+                  "watcher.unhealthyStartupGraceSeconds=90",
+                  "orchestrator.correlationWindowSeconds=0")
+    assert container_env(docs, "orchestrator-watcher")["UNHEALTHY_STARTUP_GRACE_SECONDS"] == "90"
+    assert container_env(docs, "orchestrator")["CORRELATION_WINDOW_SECONDS"] == "0"

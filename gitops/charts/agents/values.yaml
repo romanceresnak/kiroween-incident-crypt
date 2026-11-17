@@ -60,6 +60,9 @@ orchestrator:
   storeCapacity: 500
   incidentTimeoutSeconds: 300
   delegationTimeoutSeconds: 120
+  # Incidents in one namespace within this window that share a workload or a dependency
+  # are attached to the first one instead of investigated again. 0 disables it.
+  correlationWindowSeconds: 300
   resources:
     requests: {cpu: 50m, memory: 192Mi}
     limits: {cpu: 500m, memory: 384Mi}
@@ -76,6 +79,11 @@ watcher:
   excludedNamespaces: [kube-system, kube-node-lease, argocd, agents]
   cooldownSeconds: 600
   startupGraceSeconds: 300
+  # An Unhealthy event is re-checked before it becomes an incident: no earlier than
+  # unhealthyRecheckSeconds after the event and unhealthyStartupGraceSeconds after the
+  # container started, and only if the pod is still not Ready (hardening REQ-WSU).
+  unhealthyStartupGraceSeconds: 60
+  unhealthyRecheckSeconds: 30
   resources:
     requests: {cpu: 20m, memory: 128Mi}
     limits: {cpu: 200m, memory: 256Mi}

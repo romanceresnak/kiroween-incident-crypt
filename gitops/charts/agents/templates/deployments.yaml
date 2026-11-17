@@ -51,6 +51,8 @@ spec:
               value: {{ .Values.orchestrator.incidentTimeoutSeconds | quote }}
             - name: DELEGATION_TIMEOUT_SECONDS
               value: {{ .Values.orchestrator.delegationTimeoutSeconds | quote }}
+            - name: CORRELATION_WINDOW_SECONDS
+              value: {{ .Values.orchestrator.correlationWindowSeconds | quote }}
           securityContext:
             {{- include "agents.containerSecurityContext" . | nindent 12 }}
           resources:
@@ -106,6 +108,10 @@ spec:
             - {name: COOLDOWN_SECONDS, value: {{ .Values.watcher.cooldownSeconds | quote }}}
             - name: STARTUP_GRACE_SECONDS
               value: {{ .Values.watcher.startupGraceSeconds | quote }}
+            - name: UNHEALTHY_STARTUP_GRACE_SECONDS
+              value: {{ .Values.watcher.unhealthyStartupGraceSeconds | quote }}
+            - name: UNHEALTHY_RECHECK_SECONDS
+              value: {{ .Values.watcher.unhealthyRecheckSeconds | quote }}
           securityContext:
             {{- include "agents.containerSecurityContext" . | nindent 12 }}
           resources:
