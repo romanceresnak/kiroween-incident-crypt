@@ -18,7 +18,8 @@ terraform {
 
   # Partial backend configuration.
   # Bucket is supplied at init time:
-  #   terraform init -backend-config=bucket=kiroween-prod-tf-state-255834079310
+  #   terraform init -backend-config=bucket=<project>-<env>-tf-state-<account_id>
+  # (the exact name is the state_bucket_name output of infra/bootstrap)
   backend "s3" {
     key          = "kiroween/terraform.tfstate"
     region       = "eu-west-1"
@@ -36,7 +37,7 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project   = "kiroween"
+      Project   = var.project
       ManagedBy = "terraform"
     }
   }
