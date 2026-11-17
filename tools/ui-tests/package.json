@@ -1,0 +1,13 @@
+{
+  "name": "kiroween-ui-tests",
+  "private": true,
+  "version": "0.0.0",
+  "description": "DOM tests for the orchestrator's /ui (jsdom). Not shipped in any image.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0"
+  }
+}

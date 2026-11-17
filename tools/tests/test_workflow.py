@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -212,3 +213,21 @@ def test_exists_step_other_error_fails_and_prints_it(tmp_path: Path) -> None:
     assert code == 1
     assert output == ""
     assert "AccessDeniedException" in stderr
+
+
+def test_ui_dom_tests_run_in_ci_from_the_lockfile_without_install_scripts() -> None:
+    steps_ = workflow()["jobs"]["test"]["steps"]
+    uses = [s.get("uses", "") for s in steps_]
+    assert any(u.startswith("actions/setup-node@") for u in uses)
+    run = next(s["run"] for s in steps_ if "npm test" in s.get("run", ""))
+    assert "cd tools/ui-tests" in run
+    assert "npm ci --ignore-scripts" in run  # lockfile only, no package scripts
+    ui_tests = REPO / "tools" / "ui-tests"
+    assert (ui_tests / "package-lock.json").is_file() and (ui_tests / "ui.test.mjs").is_file()
+    package = json.loads((ui_tests / "package.json").read_text())
+    assert package["private"] is True
+    # Exact pins: a "^" range would let CI drift from what the lockfile was tested with.
+    assert all(re.fullmatch(r"\d+\.\d+\.\d+", v) for v in package["devDependencies"].values())
+    # The DOM tests live outside every Docker build context (agents/<pkg> and agents/shared).
+    for dockerfile in REPO.glob("agents/*/Dockerfile"):
+        assert "tools/" not in dockerfile.read_text(), dockerfile

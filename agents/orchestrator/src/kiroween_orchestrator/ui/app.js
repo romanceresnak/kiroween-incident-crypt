@@ -32,11 +32,24 @@ function el(tag, props, ...children) {
     else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
     else node.setAttribute(key, String(value));
   }
-  for (const child of children.flat()) {
-    if (child === null || child === undefined || child === false) continue;
+  for (const child of nodes(children)) {
     node.append(child instanceof Node ? child : document.createTextNode(String(child)));
   }
   return node;
+}
+
+// Every list of DOM nodes goes through here before it reaches append/replaceChildren.
+// Those methods turn an array into text ("[object HTMLDListElement],..."), so nesting is
+// flattened to any depth, empty values are dropped (not shown as "null"), and anything
+// that is neither a Node nor a primitive fails loudly instead of being stringified.
+function nodes(items) {
+  return [items].flat(Infinity).filter((item) => {
+    if (item === null || item === undefined || item === false) return false;
+    if (typeof item === "object" && !(item instanceof Node)) {
+      throw new TypeError("not a DOM node: " + Object.prototype.toString.call(item));
+    }
+    return true;
+  });
 }
 
 function artFor(record) {
@@ -71,7 +84,7 @@ function setLive(ok, text) {
 function renderFeed(records) {
   const list = document.getElementById("feed");
   document.getElementById("feed-empty").hidden = records.length > 0;
-  list.replaceChildren(...records.map((r) => {
+  list.replaceChildren(...nodes(records.map((r) => {
     const i = r.incident;
     const item = el("button", {
       class: "feed-item", type: "button",
@@ -83,7 +96,7 @@ function renderFeed(records) {
         el("div", { class: "title" }, i.reason, badge(r.status)),
         el("div", { class: "sub", text: `${i.namespace}/${i.workload.name} · ${when(r.created_at)}` })));
     return el("li", {}, item);
-  }));
+  })));
   markBusy(records);
 }
 
@@ -103,7 +116,8 @@ function markBusy(records) {
 // --- detail -----------------------------------------------------------------------------
 
 function section(title, ...content) {
-  return [el("h3", { text: title }), ...content];
+  // proposalView, relatedView and approvalView return arrays: flatten them here.
+  return [el("h3", { text: title }), ...nodes(content)];
 }
 
 function kv(pairs) {
@@ -254,7 +268,7 @@ function renderDetail(record) {
   const i = record.incident;
   const c = record.classification;
   const article = document.getElementById("detail");
-  article.replaceChildren(
+  article.replaceChildren(...nodes([
     el("div", { class: "detail-head" },
       el("img", { src: artFor(record), alt: "" }),
       el("div", {},
@@ -269,7 +283,7 @@ function renderDetail(record) {
     ...section("Similar past incidents", similarView(record.similar_incidents)),
     ...section("Related incidents", relatedView(record)),
     ...section("Cost per agent", costView(record.usage_by_agent)),
-    ...section("Decision", approvalView(record)));
+    ...section("Decision", approvalView(record))]));
   document.getElementById("detail-empty").hidden = true;
   article.hidden = false;
 }

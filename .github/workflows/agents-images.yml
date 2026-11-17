@@ -54,6 +54,9 @@ jobs:
       - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
         with:
           version: ${{ env.HELM_VERSION }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
       - name: Lint and test the agent packages
         run: |
           set -euo pipefail
@@ -68,6 +71,12 @@ jobs:
           helm lint gitops/charts/agents
           shellcheck chaos/*/*.sh scripts/*.sh
           uv run --frozen --project agents/shared pytest -q gitops chaos tools scripts
+      - name: UI DOM tests (jsdom)
+        run: |
+          set -euo pipefail
+          cd tools/ui-tests
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
 
   build:
     name: Build ${{ matrix.package }} (no push)
