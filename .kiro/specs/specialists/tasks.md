@@ -60,3 +60,46 @@ manifests' shape.
 
 ## TASK-12 — Spec status
 Record the task table and what was not verified.
+
+## Status
+
+All tasks done. Nothing pushed. Final run: shared 135, orchestrator 88, cpu_memory 36,
+network 17, deploy_rollout 15, storage 18, repo-level (gitops, chaos, tools) 134; ruff clean
+in every package; helm lint, actionlint and shellcheck clean.
+
+| Task | Commit | Result |
+|---|---|---|
+| TASK-01 Proposals framework, model changes | `131329e` | shared 111 pass |
+| TASK-02 Read-only client methods and tools | `1c2fc49` | shared 130 pass |
+| TASK-03 Shared specialist runtime | `e69d4e9` | shared 135 pass |
+| TASK-04 network | `3b96c3f` | 17 pass |
+| TASK-05 deploy_rollout | `5979844` | 15 pass |
+| TASK-06 storage | `7f7650b` | 18 pass |
+| TASK-07 Orchestrator delegation | `5c053fc` | orchestrator 63 pass (36 existing + 27) |
+| TASK-08 Watcher signals | `c4accf3` | orchestrator 88 pass (+25) |
+| TASK-09 Chart | `60ecb17` | helm lint; repo-level 86 pass |
+| TASK-10 CI | `1896c76` | actionlint + shellcheck; repo-level 89 pass |
+| TASK-11 Chaos scenarios | `ab26c91` | shellcheck; repo-level 134 pass (chaos 58) |
+| TASK-12 Status | this commit | — |
+
+Changes from the design made during execution:
+- RBAC grants only what the tools call. `ingressclasses`, `csidrivers`, `csinodes` and
+  `controllerrevisions` (design §8) are not granted because no tool reads them.
+- The watcher skips a `CrashLoopBackOff` whose last termination is `OOMKilled`, so one OOM
+  is one incident (routed to cpu_memory), not two.
+- The watcher excludes the `agents` namespace by default and in the chart.
+- `chaos/badimage` uses `public.ecr.aws/docker/library/python` (a non-root server on 8080)
+  instead of nginx, which runs as root on port 80 and would not pass `runAsNonRoot`.
+- The chart test for unset tags now sets every tag to `unset` explicitly. It had failed
+  since CI wrote real tags into `values.yaml`.
+
+Not verified:
+- No Docker image for the three new packages has been built (no Docker daemon locally).
+- Real Bedrock was never called; every agent test uses a scripted model.
+- The watcher's event stream, the new RBAC and the network policies have not run on the
+  cluster. Readiness and Pod Identity under default-deny for the new pods are unproven.
+- That the PV controller emits `ProvisioningFailed` for a missing StorageClass on this
+  cluster, and that a fix to `gp2` (in-tree `kubernetes.io/aws-ebs`) provisions on 1.37.
+  `spec.storageClassName` is immutable on an existing PVC, so the approved change must be
+  delivered as delete-and-recreate of the PVC, not an in-place edit.
+- The chaos manifests have not been applied to a cluster.
