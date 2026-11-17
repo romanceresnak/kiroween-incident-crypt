@@ -17,7 +17,7 @@ Requirement IDs refer to `requirements.md`; section numbers refer to `design.md`
 | TASK-06 cpu-memory specialist | `b40f9a4` | 36 tests pass |
 | TASK-07 Orchestrator service | `0654c14` | 19 tests pass |
 | TASK-08 Event watcher | `5106e8f` | 17 tests pass |
-| TASK-09 Container images | `ea279d0` | Not built: Docker daemon not running |
+| TASK-09 Container images | `ea279d0` | Images not built (Docker daemon not running). The Dockerfiles' install step (`uv sync --frozen --no-dev --no-editable`) succeeds for both packages; the orchestrator start command imports and refuses a non-EU model before serving |
 | TASK-10 Helm chart | `3f4ba06` | helm lint clean, 22 render tests pass |
 | TASK-11 Argo CD Applications | `e71d5c1` | 4 tests pass, pinned metrics-server chart renders |
 | TASK-12 Chaos scenario | `8b968ff` | shellcheck clean, 13 tests pass |
