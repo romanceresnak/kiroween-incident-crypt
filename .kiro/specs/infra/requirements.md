@@ -235,7 +235,7 @@ ManagedBy = "terraform"
 These tags shall propagate automatically to all taggable resources.
 
 **REQ-FIN-02 (Ubiquitous)**
-Terraform shall create an AWS Budget with a monthly cost alert threshold of **50 USD**, sending an email notification to an address supplied via variable (`var.budget_alert_email`).
+Terraform shall create an AWS Budget with a monthly cost limit set by `var.budget_limit_usd` (default **120 USD**), sending an email notification to an address supplied via variable (`var.budget_alert_email`) when actual spend exceeds the limit.
 
 **REQ-FIN-03 (Ubiquitous)**
 All CloudWatch log groups created by Terraform (EKS control plane, any Lambda, etc.) shall have a retention period of **7 days**.

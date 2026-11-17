@@ -44,3 +44,6 @@ budget_alert_email      = "ops@example.com"
 
 # Logging
 # cloudwatch_log_retention_days = 7
+
+# FinOps
+# budget_limit_usd = 120

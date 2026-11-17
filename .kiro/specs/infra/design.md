@@ -211,7 +211,8 @@ ECR uses `<project>/<agent>` (slash-separated) so all agent images share a logic
 | `bedrock_embedding_model_id` | `string` | `"amazon.titan-embed-text-v2:0"` | | KB embedding model (REQ-KB-03) |
 | `bedrock_vector_dimension` | `number` | `1024` | | S3 Vectors index dimension (REQ-KB-02) |
 | `gha_repo` | `string` | `"romanceresnak/kiroween-incident-crypt"` | | GitHub repo for OIDC subject scoping (REQ-GHA-02, REQ-GHA-05) |
-| `budget_alert_email` | `string` | — | ✓ | Recipient for the $50/month budget alert (REQ-FIN-02) |
+| `budget_limit_usd` | `number` | `120` | | Monthly AWS Budget limit in USD; must be > 0 (REQ-FIN-02) |
+| `budget_alert_email` | `string` | — | ✓ | Recipient for the budget alert (REQ-FIN-02) |
 | `cloudwatch_log_retention_days` | `number` | `7` | | Retention for all CW log groups (REQ-EKS-08, REQ-FIN-03) |
 
 Variables marked Required have no default and must be supplied via `TF_VAR_*` environment variables in CI. They are never stored in a committed `terraform.tfvars` file. A `terraform.tfvars.example` documents every variable.

@@ -111,8 +111,19 @@ variable "create_github_oidc_provider" {
   default     = false
 }
 
+variable "budget_limit_usd" {
+  description = "Monthly AWS Budget limit in USD. The alert email is sent when actual spend exceeds it."
+  type        = number
+  default     = 120
+
+  validation {
+    condition     = var.budget_limit_usd > 0
+    error_message = "budget_limit_usd must be greater than 0."
+  }
+}
+
 variable "budget_alert_email" {
-  description = "Email address for the AWS Budget $50/month alert notification."
+  description = "Email address that receives the AWS Budget alert."
   type        = string
   sensitive   = true
 }

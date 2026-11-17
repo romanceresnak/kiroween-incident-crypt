@@ -244,7 +244,8 @@ Create `infra/modules/argocd/`:
 
 Create `infra/modules/finops/`:
 - `aws_budgets_budget`: `budget_type = "COST"`, `time_unit = "MONTHLY"`,
-  `limit_amount = "50"`, `limit_unit = "USD"`
+  `limit_amount = tostring(var.limit_usd)` (root variable `budget_limit_usd`,
+  default `120`), `limit_unit = "USD"`
 - Notification: `threshold = 100`, `threshold_type = "PERCENTAGE"`,
   `notification_type = "ACTUAL"`, subscriber email = `var.budget_alert_email`
 

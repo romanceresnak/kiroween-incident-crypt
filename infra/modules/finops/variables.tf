@@ -14,8 +14,7 @@ variable "budget_alert_email" {
   sensitive   = true
 }
 
-variable "monthly_limit_usd" {
+variable "limit_usd" {
   description = "Monthly cost limit in USD."
-  type        = string
-  default     = "50"
+  type        = number
 }

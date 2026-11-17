@@ -200,4 +200,5 @@ module "finops" {
   project            = var.project
   env                = var.env
   budget_alert_email = var.budget_alert_email
+  limit_usd          = var.budget_limit_usd
 }
