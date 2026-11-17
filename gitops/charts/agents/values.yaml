@@ -10,10 +10,10 @@ image:
 images:
   orchestrator:
     repository: kiroween/orchestrator
-    tag: unset # ci-managed:orchestrator
+    tag: 313231ba71fc5c5c84eea217b3427783d6a92b58 # ci-managed:orchestrator
   cpuMemory:
     repository: kiroween/cpu-memory
-    tag: unset # ci-managed:cpu-memory
+    tag: 313231ba71fc5c5c84eea217b3427783d6a92b58 # ci-managed:cpu-memory
 
 region: eu-west-1
 
