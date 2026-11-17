@@ -1,0 +1,59 @@
+# Bad image scenario (specialists REQ-CHS-03). Applied and removed only by badimage.sh.
+# This file is revision 1, which runs. badimage.sh waits for it, then sets the image to a
+# tag that does not exist (revision 2), so the new pod sits in ImagePullBackOff while
+# revision 1 keeps serving.
+# Expected fix: spec.template.spec.containers[name=web].image -> the revision 1 image below.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: chaos-badimage
+  labels:
+    kiroween/chaos: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: badimage-demo
+  namespace: chaos-badimage
+  labels:
+    app: badimage-demo
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: badimage-demo
+  template:
+    metadata:
+      labels:
+        app: badimage-demo
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: web
+          # Public ECR mirror of the official image: no Docker Hub rate limit.
+          image: public.ecr.aws/docker/library/python:3.12-slim
+          command: ["python", "-m", "http.server", "8080", "--directory", "/tmp"]
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet: {path: /, port: 8080}
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 100m, memory: 64Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Mi

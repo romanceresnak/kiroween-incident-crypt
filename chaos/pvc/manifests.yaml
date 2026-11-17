@@ -1,0 +1,67 @@
+# PVC stuck Pending scenario (specialists REQ-CHS-04). Applied and removed only by pvc.sh.
+# The claim names a StorageClass that does not exist, so it never binds (the PV controller
+# records ProvisioningFailed) and the pod that mounts it stays Pending (FailedScheduling).
+# Expected fix: spec.storageClassName -> gp2, the cluster's only StorageClass.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: chaos-pvc
+  labels:
+    kiroween/chaos: "true"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data
+  namespace: chaos-pvc
+spec:
+  storageClassName: does-not-exist
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pvc-demo
+  namespace: chaos-pvc
+  labels:
+    app: pvc-demo
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # a ReadWriteOnce volume cannot be shared during a rolling update
+  selector:
+    matchLabels:
+      app: pvc-demo
+  template:
+    metadata:
+      labels:
+        app: pvc-demo
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: app
+          # Public ECR mirror of the official image: no Docker Hub rate limit.
+          image: public.ecr.aws/docker/library/busybox:1.36
+          command: ["sh", "-c", "while true; do date >> /data/log; sleep 60; done"]
+          resources:
+            requests: {cpu: 5m, memory: 8Mi}
+            limits: {cpu: 50m, memory: 32Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - {name: data, mountPath: /data}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: data
