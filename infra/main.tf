@@ -176,11 +176,21 @@ module "pod_identity" {
   knowledge_base_arn = module.bedrock_kb.knowledge_base_arn
 }
 
-# TASK-10: Argo CD
-# module "argocd" {
-#   ...
-#   depends_on = [module.eks]
-# }
+# TASK-10: Argo CD (bootstrap only; everything else is deployed from /gitops)
+module "argocd" {
+  source = "./modules/argocd"
+
+  argocd_chart_version      = var.argocd_chart_version
+  argocd_apps_chart_version = var.argocd_apps_chart_version
+
+  gitops_repo_url        = var.gitops_repo_url
+  gitops_repo_path       = var.gitops_repo_path
+  gitops_target_revision = var.gitops_target_revision
+
+  # The helm provider needs a live cluster. Provider blocks cannot carry
+  # depends_on, so the dependency lives on the module call.
+  depends_on = [module.eks]
+}
 
 # TASK-11: FinOps (Budget)
 # module "finops" { ... }
