@@ -22,10 +22,17 @@ models:
   orchestrator: eu.anthropic.claude-haiku-4-5-20251001-v1:0
   cpuMemory: eu.anthropic.claude-sonnet-4-6
 
-# USD per million tokens, by model id: {"<model id>": {input: <usd>, output: <usd>}}.
-# Empty on purpose: the per-token prices for these models have not been confirmed from
-# AWS. With no entry, token counters are recorded and the cost counter is not.
-prices: {}
+# USD per million tokens, by model id, for the EU geo cross-region profiles. A model with
+# no entry records token counters only.
+# Verify these against https://aws.amazon.com/bedrock/pricing before relying on the cost
+# metric; they were supplied by hand, not read from AWS.
+prices:
+  "eu.anthropic.claude-haiku-4-5-20251001-v1:0":
+    input: 1.10
+    output: 5.50
+  "eu.anthropic.claude-sonnet-4-6":
+    input: 3.30
+    output: 16.50
 
 maxModelCalls: 15
 maxTokens: 4096

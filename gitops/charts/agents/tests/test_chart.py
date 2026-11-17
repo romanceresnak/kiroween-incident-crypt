@@ -145,8 +145,17 @@ def test_models_and_watcher_entrypoint(docs: list[dict]) -> None:
     assert "chaos-oom" not in env("orchestrator-watcher")["EXCLUDED_NAMESPACES"]
 
 
-def test_prices_default_to_empty(docs: list[dict]) -> None:
-    assert of_kind(docs, "ConfigMap")["agents-config"]["data"]["prices.json"] == "{}"
+def test_every_configured_model_has_a_price_the_app_can_load(docs: list[dict]) -> None:
+    from kiroween_shared.metrics import PriceTable
+
+    raw = of_kind(docs, "ConfigMap")["agents-config"]["data"]["prices.json"]
+    table = PriceTable.from_json(raw)  # the same loader the agents use at startup
+    values = yaml.safe_load((CHART / "values.yaml").read_text())
+    for model_id in values["models"].values():
+        assert table.cost(model_id, 1_000_000, 1_000_000) is not None, model_id
+    haiku = values["models"]["orchestrator"]
+    assert table.cost(haiku, 1_000_000, 0) == pytest.approx(1.10)
+    assert table.cost(haiku, 0, 1_000_000) == pytest.approx(5.50)
 
 
 # --- Network policies (REQ-NET) ---------------------------------------------
