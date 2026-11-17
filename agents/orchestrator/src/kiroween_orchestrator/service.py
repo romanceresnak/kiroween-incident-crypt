@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Literal
@@ -16,11 +17,13 @@ from kiroween_shared.models import (
     IncidentRecord,
     Investigation,
     RelatedIncident,
+    SimilarIncident,
     Usage,
     utcnow,
 )
 
 from .correlation import correlate
+from .metrics import INVESTIGATION_SECONDS, record_incident
 from .specialists import SPECIALIST_AGENTS
 from .store import IncidentStore
 
@@ -52,9 +55,11 @@ class IncidentService:
         specialists: frozenset[str] = frozenset({"cpu_memory"}),
         correlation_window_s: float = 300.0,
         now: Callable[[], datetime] = utcnow,
+        similar: Callable[[Incident], Awaitable[list[SimilarIncident]]] | None = None,
     ) -> None:
         # Categories with a configured specialist. Everything else ends as no_specialist.
         self.specialists = specialists
+        self._memory = similar
         self._correlation_window = correlation_window_s
         self._now = now
         self._classify = classify
@@ -105,6 +110,8 @@ class IncidentService:
                               related_incidents=[*primary.related_incidents, related])
             logger.info("incident %s (%s) correlated to %s by %s", incident.incident_id,
                         incident.reason, primary.incident.incident_id, rule)
+            category = primary.classification.category if primary.classification else None
+            record_incident(category, "correlated", None)
             return record, True
         if self._queue.full():
             raise QueueFull("incident queue is full")
@@ -128,22 +135,31 @@ class IncidentService:
         if record is None:  # evicted while queued
             return
         incident = record.incident
+        started = time.monotonic()
+        category: str | None = None
         with incident_context(incident_id):
             self.store.update(incident_id, status="processing")
             try:
                 async with asyncio.timeout(self._timeout):
-                    classification, own_usage = await self._classify(incident)
+                    # Memory and classification are independent: run them together.
+                    (classification, own_usage), similar = await asyncio.gather(
+                        self._classify(incident), self._similar(incident))
                     self.store.update(
                         incident_id, classification=classification,
                         usage_by_agent={"orchestrator": own_usage},
+                        similar_incidents=similar,
                     )
                     category = classification.category
                     if category not in self.specialists:
                         self.store.update(incident_id, status="no_specialist")
+                        record_incident(category, "no_specialist", None)
                         logger.info("no specialist for category %s", category)
                         return
 
-                    investigation, delegate_usage, mode = await self._delegate(incident, category)
+                    # The specialist sees the hits as context (REQ-MEM-06, MEM-07).
+                    with_memory = incident.model_copy(update={"similar_incidents": similar})
+                    investigation, delegate_usage, mode = await self._delegate(
+                        with_memory, category)
                     proposal = investigation.proposal
                     status = (
                         "awaiting_approval"
@@ -160,12 +176,26 @@ class IncidentService:
                             SPECIALIST_AGENTS[category]: investigation.usage,
                         },
                     )
+                    INVESTIGATION_SECONDS.labels(category=category).observe(
+                        time.monotonic() - started)
+                    record_incident(category, status, investigation.outcome)
                     logger.info("incident %s finished with status %s", incident_id, status)
             except TimeoutError:
-                self._fail(incident_id, f"incident exceeded its {self._timeout:g} s limit")
+                self._fail(incident_id, f"incident exceeded its {self._timeout:g} s limit",
+                           category)
             except Exception as exc:
                 logger.exception("incident %s failed", incident_id)
-                self._fail(incident_id, f"{type(exc).__name__}: {exc}")
+                self._fail(incident_id, f"{type(exc).__name__}: {exc}", category)
 
-    def _fail(self, incident_id: str, error: str) -> None:
+    async def _similar(self, incident: Incident) -> list[SimilarIncident]:
+        if self._memory is None:
+            return []
+        try:
+            return await self._memory(incident)
+        except Exception:  # memory is context, never a reason to fail the incident
+            logger.exception("similar-incident lookup failed")
+            return []
+
+    def _fail(self, incident_id: str, error: str, category: str | None = None) -> None:
         self.store.update(incident_id, status="failed", error=error[:500])
+        record_incident(category, "failed", None)

@@ -15,6 +15,7 @@ from kiroween_shared.models import Incident, IncidentRecord
 from kiroween_shared.server import configure_logging, create_app, serve
 
 from .agent import Orchestrator
+from .memory import MemoryClient
 from .service import IncidentService, QueueFull
 from .specialists import SpecialistClient
 from .store import IncidentStore
@@ -77,6 +78,8 @@ def main() -> None:
     orchestrator = Orchestrator(
         model=make_model(settings), settings=settings, prices=prices, specialists=specialists
     )
+    memory_url = env.get("INCIDENT_MEMORY_URL", "")
+    memory = MemoryClient(memory_url) if memory_url else None
     service = IncidentService(
         classify=orchestrator.classify,
         delegate=orchestrator.delegate,
@@ -86,6 +89,7 @@ def main() -> None:
         incident_timeout_s=env_int(env, "INCIDENT_TIMEOUT_SECONDS", 300),
         specialists=frozenset(specialists),
         correlation_window_s=env_int(env, "CORRELATION_WINDOW_SECONDS", 300),
+        similar=memory.similar if memory else None,
     )
     start_metrics_server(settings.metrics_port)
     serve(create(service), settings.api_port)

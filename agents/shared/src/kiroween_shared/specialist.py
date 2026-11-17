@@ -47,6 +47,9 @@ Rules for your answer:
   {", ".join(sorted(PROTECTED_NAMESPACES))}.
 - If the evidence is not enough to name a change, use action investigate_further with
   confidence low, and say in the rationale what a human should check.
+- The incident may list similar_incidents: past postmortems that may or may not apply. Use
+  them to decide what to check, then confirm with your tools. Never cite them as evidence
+  and never copy their fix without reading the current values from the cluster.
 - You cannot change the cluster. Every proposal is applied as a pull request against
   /gitops after a human approves it.
 

@@ -54,3 +54,8 @@ async def test_missing_proposal_becomes_investigate_further() -> None:
 def test_prompt_explains_outcomes() -> None:
     assert "action_required" in SYSTEM_PROMPT and "no_action" in SYSTEM_PROMPT
     assert OOM_CONTAINER  # fixture sanity
+
+
+def test_prompt_treats_similar_incidents_as_hints() -> None:
+    text = " ".join(SYSTEM_PROMPT.split())
+    assert "similar_incidents" in text and "Never cite them as evidence" in text
