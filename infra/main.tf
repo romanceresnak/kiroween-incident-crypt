@@ -193,4 +193,10 @@ module "argocd" {
 }
 
 # TASK-11: FinOps (Budget)
-# module "finops" { ... }
+module "finops" {
+  source = "./modules/finops"
+
+  project            = var.project
+  env                = var.env
+  budget_alert_email = var.budget_alert_email
+}
