@@ -215,9 +215,10 @@ data "aws_iam_policy_document" "apply" {
     resources = ["*"]
   }
 
-  # ECR repository management and image push, limited to <project>/* repos.
+  # ECR repository management for Terraform, limited to <project>/* repos.
+  # Pushing images is deliberately not here: it belongs to the ecr_push role.
   statement {
-    sid    = "EcrRepositoriesAndPush"
+    sid    = "EcrRepositories"
     effect = "Allow"
     actions = [
       "ecr:CreateRepository",
@@ -232,22 +233,12 @@ data "aws_iam_policy_document" "apply" {
       "ecr:ListTagsForResource",
       "ecr:TagResource",
       "ecr:UntagResource",
-      "ecr:BatchCheckLayerAvailability",
-      "ecr:InitiateLayerUpload",
-      "ecr:UploadLayerPart",
-      "ecr:CompleteLayerUpload",
-      "ecr:PutImage",
+      # force_delete on the repositories removes images when they are destroyed.
       "ecr:BatchDeleteImage",
       "ecr:ListImages",
+      "ecr:DescribeImages",
     ]
     resources = ["arn:aws:ecr:${var.aws_region}:${local.account_id}:repository/${var.project}/*"]
-  }
-
-  statement {
-    sid       = "EcrLogin"
-    effect    = "Allow"
-    actions   = ["ecr:GetAuthorizationToken"]
-    resources = ["*"]
   }
 
   # IAM is limited to roles and policies carrying the project prefix.
@@ -289,4 +280,71 @@ resource "aws_iam_role_policy" "apply" {
   name   = "apply"
   role   = aws_iam_role.apply.id
   policy = data.aws_iam_policy_document.apply.json
+}
+
+# ---------------------------------------------------------------------------
+# ECR push role: image build and push from GitHub Actions on main, nothing else
+# (REQ-GHA-08). Kept apart from the apply role so an image-build job does not
+# hold Terraform's permissions.
+# ---------------------------------------------------------------------------
+
+# Same subject as the apply role: a push to main. Neither role may be assumed
+# from a pull request.
+data "aws_iam_policy_document" "ecr_push_trust" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [local.oidc_provider_arn]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_host}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_host}:sub"
+      values   = [local.apply_subject]
+    }
+  }
+}
+
+resource "aws_iam_role" "ecr_push" {
+  name               = "${local.prefix}-gha-ecr-push"
+  assume_role_policy = data.aws_iam_policy_document.ecr_push_trust.json
+
+  tags = { Name = "${local.prefix}-gha-ecr-push" }
+}
+
+data "aws_iam_policy_document" "ecr_push" {
+  # The login token is account-wide by design; it grants no repository access
+  # on its own.
+  statement {
+    sid       = "EcrLogin"
+    effect    = "Allow"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "PushImages"
+    effect = "Allow"
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:InitiateLayerUpload",
+      "ecr:UploadLayerPart",
+      "ecr:CompleteLayerUpload",
+      "ecr:PutImage",
+    ]
+    resources = ["arn:aws:ecr:${var.aws_region}:${local.account_id}:repository/${var.project}/*"]
+  }
+}
+
+resource "aws_iam_role_policy" "ecr_push" {
+  name   = "ecr-push"
+  role   = aws_iam_role.ecr_push.id
+  policy = data.aws_iam_policy_document.ecr_push.json
 }

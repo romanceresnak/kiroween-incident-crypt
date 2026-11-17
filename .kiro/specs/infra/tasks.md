@@ -9,7 +9,7 @@ Requirement IDs in brackets map to `requirements.md`.
 > TASK-14 passes. The bootstrap module (`infra/bootstrap/`) is applied in TASK-01
 > as a one-time prerequisite and is not subject to this restriction.
 
-## Status: all tasks complete (17 Nov 2026)
+## Status: TASK-01 to TASK-15 complete (17 Nov 2026); TASK-16 and TASK-17 planned, not applied
 
 | Task | Commit |
 |---|---|
@@ -171,7 +171,8 @@ Create `infra/modules/github_oidc/`:
 - **Apply role** (`aws_iam_role`):
   - Trust: subject `repo:<var.gha_repo>:ref:refs/heads/main`
   - Policy: full plan/apply permissions across all managed service namespaces
-    plus ECR push actions
+    plus ECR repository management (image push moved to the ECR push role in
+    TASK-16)
 - Outputs: `plan_role_arn`, `apply_role_arn`
 
 **Test:** `terraform plan` shows two IAM roles with no wildcard `*` subjects in
@@ -384,3 +385,50 @@ Verify post-apply:
 - Budget appears in `aws budgets describe-budgets`.
 
 **Test:** Both apply phases complete without errors; all post-apply checks pass.
+
+---
+
+## TASK-16 — ECR push role for GitHub Actions
+
+**Implements:** REQ-GHA-06 (revised), REQ-GHA-07, REQ-GHA-08, REQ-GHA-09
+
+Extend `infra/modules/github_oidc/`:
+- `aws_iam_role` `<project>-<env>-gha-ecr-push`. Trust: the existing OIDC provider,
+  `aud = sts.amazonaws.com`, `sub = repo:<var.gha_repo>:ref:refs/heads/main`
+  (`StringEquals`, no wildcard).
+- Inline policy: `ecr:GetAuthorizationToken` on `*`; and
+  `ecr:BatchCheckLayerAvailability`, `ecr:InitiateLayerUpload`,
+  `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload`, `ecr:PutImage` on
+  `repository/<project>/*` only.
+- Apply role: remove the image push actions and `ecr:GetAuthorizationToken`; keep
+  repository management (create, delete, lifecycle, tags, image deletion for
+  `force_delete`).
+- Outputs: `ecr_push_role_arn` (module) and `gha_ecr_push_role_arn` (root).
+
+**Test:** `terraform plan` shows 1 new role, 1 new policy, 1 in-place change to the
+apply role policy that only removes ECR actions, and the new root output. The
+IAM policy simulator allows `PutImage` on `kiroween/orchestrator` for the push role
+and denies it for the apply role, and denies the push role `CreateRepository`,
+`DeleteRepository` and any other repository. Access Analyzer reports no findings
+on either policy.
+
+---
+
+## TASK-17 — VPC CNI as a managed add-on with NetworkPolicy enforcement
+
+**Implements:** REQ-EKS-10
+
+In `infra/modules/eks/`:
+- `data "aws_eks_addon_version"` for `vpc-cni` (`most_recent = true`).
+- `aws_eks_addon` `vpc-cni` with
+  `configuration_values = jsonencode({ enableNetworkPolicy = "true" })`,
+  `resolve_conflicts_on_create = "OVERWRITE"` and
+  `resolve_conflicts_on_update = "OVERWRITE"`, depending on the node group.
+
+**Test:** `terraform plan` shows 1 new add-on. Before apply, `aws eks
+describe-addon-configuration` confirms `enableNetworkPolicy` is a valid setting for the
+chosen version. After apply: the add-on is `ACTIVE`, the `aws-eks-nodeagent`
+container runs with `--enable-network-policy=true`, and every node returns to `Ready`.
+
+**Apply approach:** applying updates the `aws-node` DaemonSet, so pods roll one node at a
+time. Apply `TASK-16` and `TASK-17` together after approval, then re-run the checks.

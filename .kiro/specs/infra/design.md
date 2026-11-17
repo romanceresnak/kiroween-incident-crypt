@@ -47,10 +47,10 @@ infra/
     │   ├── variables.tf
     │   └── outputs.tf      # agent_role_arns = map(agent_name → arn)
     │
-    ├── github_oidc/        # OIDC provider, plan role, apply role, EKS access entries
+    ├── github_oidc/        # OIDC provider, plan role, apply role, ECR push role
     │   ├── main.tf
     │   ├── variables.tf
-    │   └── outputs.tf      # plan_role_arn, apply_role_arn
+    │   └── outputs.tf      # plan_role_arn, apply_role_arn, ecr_push_role_arn
     │
     └── finops/             # AWS Budget, (CW retention set inline in each module)
         ├── main.tf
@@ -180,6 +180,7 @@ All names follow `<project>-<env>-<component>[-<qualifier>]` using `var.project`
 | Pod Identity role | `<project>-<env>-<agent>` | `kiroween-prod-orchestrator` |
 | GHA plan role | `<project>-<env>-gha-plan` | `kiroween-prod-gha-plan` |
 | GHA apply role | `<project>-<env>-gha-apply` | `kiroween-prod-gha-apply` |
+| GHA ECR push role | `<project>-<env>-gha-ecr-push` | `kiroween-prod-gha-ecr-push` |
 | AWS Budget | `<project>-<env>-monthly` | `kiroween-prod-monthly` |
 | CloudWatch log group | `/aws/eks/<cluster_name>/cluster` | (EKS-managed pattern) |
 
@@ -231,7 +232,8 @@ Defined in root `outputs.tf`, sourced from child module outputs:
 | `knowledge_base_id` | `module.bedrock_kb.knowledge_base_id` | Agent environment config |
 | `postmortem_bucket_name` | `module.bedrock_kb.postmortem_bucket_name` | Postmortem upload scripts |
 | `gha_plan_role_arn` | `module.github_oidc.plan_role_arn` | GHA workflow `role-to-assume` |
-| `gha_apply_role_arn` | `module.github_oidc.apply_role_arn` | GHA workflow `role-to-assume` |
+| `gha_apply_role_arn` | `module.github_oidc.apply_role_arn` | GHA Terraform workflow `role-to-assume` |
+| `gha_ecr_push_role_arn` | `module.github_oidc.ecr_push_role_arn` | GHA image workflow `role-to-assume` (REQ-GHA-08) |
 
 All outputs carry a `description`. None are marked `sensitive` — ARNs and URLs are operational metadata, not secrets. GHA workflows capture them with `terraform output -json` and pass them as step outputs scoped to the jobs that need them.
 
@@ -310,3 +312,9 @@ The Terraform `helm` and `kubernetes` providers read existing release state from
 
 ### No `terraform.tfvars` committed to git (REQ-GEN-03)
 Sensitive and environment-specific values (`admin_iam_principal_arn`, `budget_alert_email`) are passed as `TF_VAR_*` environment variables in CI. A `terraform.tfvars.example` documents every variable with a placeholder value and a comment.
+
+### Separate ECR push role (REQ-GHA-06, REQ-GHA-08)
+Image builds run on every change to agent code, so the job that pushes images should not hold Terraform's permissions. The ECR push role has the same trust subject as the apply role (a push to `main`) but can only log in to ECR and push to `kiroween/*`. The apply role keeps ECR repository management, which Terraform needs, and loses push and login. Neither role can be assumed from a pull request.
+
+### VPC CNI as a managed add-on (REQ-EKS-10)
+EKS clusters start with a self-managed `aws-node` DaemonSet. In this cluster its network policy agent runs with `--enable-network-policy=false`, so `NetworkPolicy` objects do nothing. Managing `vpc-cni` as an `aws_eks_addon` with `enableNetworkPolicy = "true"` turns enforcement on. `resolve_conflicts_on_create = "OVERWRITE"` lets EKS adopt the running DaemonSet. The add-on version comes from `data "aws_eks_addon_version"` like the other add-ons. Enabling enforcement changes nothing until a `NetworkPolicy` exists, but updating the add-on rolls the `aws-node` pods.

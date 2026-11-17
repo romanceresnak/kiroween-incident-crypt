@@ -12,3 +12,8 @@ output "oidc_provider_arn" {
   description = "ARN of the GitHub OIDC provider the roles trust."
   value       = local.oidc_provider_arn
 }
+
+output "ecr_push_role_arn" {
+  description = "IAM role ARN for GitHub Actions image build and push (main branch)."
+  value       = aws_iam_role.ecr_push.arn
+}

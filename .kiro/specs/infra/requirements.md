@@ -92,6 +92,9 @@ The EKS cluster control plane shall log to CloudWatch for `api`, `audit`, and `a
 **REQ-EKS-09 (State-driven)**
 While a node group update is in progress, the cluster shall use a rolling update strategy that maintains at least one ready node.
 
+**REQ-EKS-10 (Ubiquitous)**
+The Amazon VPC CNI shall be managed by Terraform as an `aws_eks_addon` with the configuration `enableNetworkPolicy = "true"`, adopting the cluster's existing self-managed installation, so that Kubernetes `NetworkPolicy` objects are enforced.
+
 ---
 
 ## 5. Argo CD Bootstrap
@@ -217,10 +220,16 @@ Terraform shall create an EKS access entry for the plan role, associating `Amazo
 Terraform shall create an **apply role** that trusts the OIDC provider with subject condition `repo:romanceresnak/kiroween-incident-crypt:ref:refs/heads/main`.
 
 **REQ-GHA-06 (Ubiquitous)**
-The apply role shall have permissions for `terraform apply` operations (create/update/delete across EC2, EKS, IAM, S3, ECR, Bedrock, and S3 Vectors resources) plus ECR push permissions (`ecr:BatchCheckLayerAvailability`, `ecr:PutImage`, `ecr:InitiateLayerUpload`, `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload`, `ecr:GetAuthorizationToken`).
+The apply role shall have permissions for `terraform apply` operations (create/update/delete across EC2, EKS, IAM, S3, ECR repositories, Bedrock, and S3 Vectors resources). It shall not have image push or ECR login permissions; those belong to the ECR push role (REQ-GHA-08).
 
 **REQ-GHA-07 (Ubiquitous)**
-Neither role shall use wildcard (`*`) subjects in the OIDC trust condition — both subjects shall be fully specified as above.
+No role shall use wildcard (`*`) subjects in the OIDC trust condition; the plan, apply and ECR push roles shall each use a fully specified subject.
+
+**REQ-GHA-08 (Ubiquitous)**
+Terraform shall create an **ECR push role** that trusts the OIDC provider with subject condition `repo:romanceresnak/kiroween-incident-crypt:ref:refs/heads/main`. The role shall allow only `ecr:GetAuthorizationToken` on all resources, and `ecr:BatchCheckLayerAvailability`, `ecr:InitiateLayerUpload`, `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload` and `ecr:PutImage` on repositories named `kiroween/*`. It shall have no other permissions, and no access entry in the EKS cluster.
+
+**REQ-GHA-09 (Ubiquitous)**
+Terraform shall output the ECR push role ARN as `gha_ecr_push_role_arn`.
 
 ---
 
@@ -248,7 +257,7 @@ All CloudWatch log groups created by Terraform (EKS control plane, any Lambda, e
 All Terraform resource values shall be driven by `variables.tf`; no region, account ID, bucket name, or other environment-specific string shall be hardcoded in resource definitions.
 
 **REQ-GEN-02 (Ubiquitous)**
-The Terraform configuration shall define outputs for: EKS cluster name, EKS cluster endpoint, ECR repository URLs, Knowledge Base ID, GitHub Actions plan role ARN, and GitHub Actions apply role ARN.
+The Terraform configuration shall define outputs for: EKS cluster name, EKS cluster endpoint, ECR repository URLs, Knowledge Base ID, GitHub Actions plan role ARN, GitHub Actions apply role ARN, and GitHub Actions ECR push role ARN.
 
 **REQ-GEN-03 (Ubiquitous)**
 No static AWS credentials shall appear in any Terraform file; all AWS access from GitHub Actions shall use the OIDC roles (REQ-GHA-02, REQ-GHA-04).

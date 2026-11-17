@@ -215,6 +215,37 @@ resource "aws_eks_addon" "ebs_csi" {
 }
 
 # ---------------------------------------------------------------------------
+# VPC CNI as a managed add-on, with NetworkPolicy enforcement (REQ-EKS-10).
+# The cluster starts with a self-managed aws-node DaemonSet whose network policy
+# agent runs with --enable-network-policy=false. Managing the add-on takes it
+# over: OVERWRITE lets EKS adopt the existing resources instead of failing on
+# the fields it finds already set.
+# ---------------------------------------------------------------------------
+
+data "aws_eks_addon_version" "vpc_cni" {
+  addon_name         = "vpc-cni"
+  kubernetes_version = var.kubernetes_version
+  most_recent        = true
+}
+
+resource "aws_eks_addon" "vpc_cni" {
+  cluster_name  = aws_eks_cluster.main.name
+  addon_name    = "vpc-cni"
+  addon_version = data.aws_eks_addon_version.vpc_cni.version
+
+  configuration_values = jsonencode({
+    enableNetworkPolicy = "true"
+  })
+
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  tags = { Name = "vpc-cni" }
+
+  depends_on = [aws_eks_node_group.spot]
+}
+
+# ---------------------------------------------------------------------------
 # Access entries — TASK-05 creates admin + plan entries
 # Access entries for github_oidc roles are added in TASK-07
 # ---------------------------------------------------------------------------

@@ -32,3 +32,8 @@ output "gha_apply_role_arn" {
   description = "IAM role ARN for GitHub Actions terraform apply and ECR push."
   value       = module.github_oidc.apply_role_arn
 }
+
+output "gha_ecr_push_role_arn" {
+  description = "IAM role ARN for GitHub Actions ECR image push."
+  value       = module.github_oidc.ecr_push_role_arn
+}
