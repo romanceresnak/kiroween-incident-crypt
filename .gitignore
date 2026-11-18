@@ -25,3 +25,6 @@ __pycache__/
 
 # Node (tools/ui-tests)
 node_modules/
+
+# Replay site built by tools/replay/build.py
+/_site/
