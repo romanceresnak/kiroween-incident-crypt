@@ -48,8 +48,9 @@ second copy of the rendering code.
 story first, with each record's real timestamps.
 
 **REQ-RM-05 (Ubiquitous)** A banner at the top of the page shall read, exactly: "Replay of real
-runs on Amazon EKS -- the live system has no public endpoint by design". It shall not be
-dismissable.
+runs on Amazon EKS -- the live system sits behind a login". It shall not be
+dismissable. (Changed on 18 Nov by `scenario-lab`: it first read "has no public endpoint by
+design", which stopped being true when the live system got a public address with a login.)
 
 **REQ-RM-06 (Ubiquitous)** The header indicator shall say it is a replay, not "live".
 
@@ -155,7 +156,7 @@ RM-07, REQ-TL-01 to TL-05, REQ-DD-01 to DD-03, text safety, and that the live mo
 ## G. Documents (DC)
 
 **REQ-DC-01** `README.md` shall have a "Live demo (replay)" link to the Pages address, saying it is
-a replay of saved records and that the live system has no public endpoint.
+a replay of saved records and that the live system sits behind a login.
 
 **REQ-DC-02** `docs/DEVPOST.md` shall give the Pages address as the working-app URL, say what it
 is, and drop the open decision about the working-app URL.

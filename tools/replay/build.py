@@ -38,8 +38,7 @@ RECORDS = [
      "Grafana is killed for memory on the same cluster, submitted by hand. Left unapproved."),
 ]
 
-BANNER = ("Replay of real runs on Amazon EKS -- the live system has no public endpoint "
-          "by design")
+BANNER = "Replay of real runs on Amazon EKS -- the live system sits behind a login"
 CSP = ("default-src 'none'; img-src 'self'; style-src 'self'; script-src 'self'; "
        "connect-src 'self'; base-uri 'none'; form-action 'none'")
 

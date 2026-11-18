@@ -122,7 +122,7 @@ test("the banner is exact, first on the page, and cannot be dismissed", async ()
   try {
     const banner = ui.document.querySelector(".replay-banner");
     assert.equal(banner.textContent,
-      "Replay of real runs on Amazon EKS -- the live system has no public endpoint by design");
+      "Replay of real runs on Amazon EKS -- the live system sits behind a login");
     assert.equal(ui.document.body.firstElementChild, banner);
     assert.equal(banner.querySelectorAll("button, a, input").length, 0);
     assert.equal(ui.document.title, "Kiroween Incident Crypt (replay)");

@@ -115,7 +115,7 @@ def test_index_html_is_the_real_one_plus_the_insertions(built: Path) -> None:
 def test_the_banner_text_is_exact_and_the_scripts_load_in_order(built: Path) -> None:
     html = (built / "index.html").read_text()
     assert ('<div class="replay-banner" role="note">Replay of real runs on Amazon EKS -- the '
-            'live system has no public endpoint by design</div>') in html
+            'live system sits behind a login</div>') in html
     assert html.index("replay-banner") < html.index("replay-bar") < html.index('id="live"')
     scripts = re.findall(r'<script src="([^"]+)"></script>', html)
     assert scripts == ["replay.js", "app.js"]
