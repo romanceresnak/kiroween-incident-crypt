@@ -121,7 +121,7 @@ ingestion job.
 cost per agent, per incident, and the tokens. One real investigation, a Grafana out-of-memory,
 cost about eleven cents.
 
-**Shot 9 (10 s).** Built with Kiro: seven specs, five hooks, three steering files. The code
+**Shot 9 (10 s).** Built with Kiro: eight specs, five hooks, three steering files. The code
 is on GitHub under the MIT licence.
 
 ## What not to claim

@@ -14,7 +14,7 @@ The repository's history runs from 17 Nov 2026 (first commit) to the time of wri
 
 | Kiro feature | Used? | Where |
 |---|---|---|
-| Specs (requirements, design, tasks) | Yes, for all work | `.kiro/specs/`: [seven specs](#specs) |
+| Specs (requirements, design, tasks) | Yes, for all work | `.kiro/specs/`: [eight specs](#specs) |
 | Steering docs | Yes, three files | `.kiro/steering/` |
 | MCP servers | Configured: three | `.kiro/settings/mcp.json` |
 | Agent hooks | Yes, five, added at the end | `.kiro/hooks/` |
@@ -59,6 +59,7 @@ names the task, and tests name the requirement they check.
 | `memory-and-ui` | 10 | 25 | Seeded postmortems, incident memory, approval and real pull request, the UI with six characters, Grafana |
 | `polish` | 8 | 23 | Per-character animation, category filter and score threshold, learned postmortems |
 | `submission` | 7 | 28 | These hooks and the documents for the hackathon |
+| `replay` | 4 | 34 | A public, read-only replay of the real UI on GitHub Pages |
 
 Counts come from the files (`## TASK-n` headings; distinct `REQ-…` identifiers in
 `requirements.md`) and are asserted by a test.

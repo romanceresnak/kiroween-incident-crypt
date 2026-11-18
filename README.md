@@ -20,6 +20,10 @@ The agents cannot write to Kubernetes at all. Their only output is a proposal, a
 proposal becomes a pull request. Applying it is a separate step that is **not automated yet**:
 see [Approved changes are not applied](#known-trade-offs-and-what-is-not-verified).
 
+> **Live demo (replay):** <https://romanceresnak.github.io/kiroween-incident-crypt/>. A read-only replay of the real UI, built from the saved
+> records of real runs on EKS, with Approve and Reject disabled. The live system has no public
+> endpoint by design (see [Replay](#replay)).
+>
 > **Status, 18 Nov 2026.** Running on a real cluster in `eu-west-1`. The full loop has run
 > twice, for the same broken NetworkPolicy. Run 1: approval, pull request
 > [#2](https://github.com/romanceresnak/kiroween-incident-crypt/pull/2) (merged), a learned
@@ -260,6 +264,18 @@ curl -s -X POST localhost:8080/incidents -H 'content-type: application/json' -d 
   "observed_at": "2026-11-18T09:00:00Z"}'
 ```
 
+## Replay
+
+<https://romanceresnak.github.io/kiroween-incident-crypt/> serves the real `/ui` in a replay mode, built by
+`tools/replay/build.py` from the five incident records in
+[`docs/demo-results`](docs/demo-results/) and deployed by the `replay-pages` GitHub Actions
+workflow. The crew animates through each incident's stages, and Approve and Reject are shown
+disabled with a link to the real pull request. It sends no request except a GET of those saved
+files, and it has no secret and no AWS access. The stage timing is illustrative: the saved
+records keep only two timestamps, and the page prints the recorded duration beside the stages.
+
+Build it locally with `python3 tools/replay/build.py --out _site`.
+
 ## Development
 
 ```bash
@@ -271,7 +287,7 @@ cd tools/ui-tests && npm ci --ignore-scripts && npm test      # jsdom tests of t
 
 CI (`.github/workflows/agents-images.yml`) runs the same commands. Five Kiro hooks in
 `.kiro/hooks/` run them for the file you save; see [`docs/KIRO-WRITEUP.md`](docs/KIRO-WRITEUP.md).
-The design lives in `.kiro/specs/` (seven specs: requirements, design, tasks) and the project's
+The design lives in `.kiro/specs/` (eight specs: requirements, design, tasks) and the project's
 rules in `.kiro/steering/`.
 
 ## Teardown
@@ -329,7 +345,7 @@ infra/        Terraform: VPC, EKS, ECR, Knowledge Base, Pod Identity, GitHub OID
 gitops/       Argo CD applications, the agents Helm chart, remediations merged by pull request
 chaos/        scenarios that break a cluster on purpose
 docs/         postmortems (seeded), demo results, and the hackathon write-ups
-tools/        tests for CI, the image-tag tool and the UI DOM tests
+tools/        tests for CI, the image-tag tool, the UI DOM tests and the replay build
 scripts/      operator scripts (postmortem sync, IAM check, Kiro hook runner)
 .kiro/        specs, steering, MCP settings and hooks
 ```

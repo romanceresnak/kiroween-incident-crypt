@@ -305,7 +305,7 @@ def test_readme_model_ids_are_the_ones_in_the_chart(model: str) -> None:
 WRITEUP_PATH = REPO / "docs" / "KIRO-WRITEUP.md"
 WRITEUP = WRITEUP_PATH.read_text() if WRITEUP_PATH.exists() else ""
 SPECS = ["infra", "agents-core", "specialists", "hardening", "memory-and-ui", "polish",
-         "submission"]
+         "submission", "replay"]
 
 needs_writeup = pytest.mark.skipif(not WRITEUP, reason="docs/KIRO-WRITEUP.md not written yet")
 
@@ -587,8 +587,8 @@ def test_blog_numbers_come_from_the_saved_records_and_the_specs() -> None:
         assert f"pull/{number})" in BLOG
     tasks = sum(spec_counts(name)[0] for name in SPECS)
     reqs = sum(spec_counts(name)[1] for name in SPECS)
-    assert len(SPECS) == 7
-    assert f"seven specs, {tasks} tasks and more than {reqs // 10 * 10} requirement IDs" in BLOG
+    assert len(SPECS) == 8
+    assert f"eight specs, {tasks} tasks and more than {reqs // 10 * 10} requirement IDs" in BLOG
 
 
 @needs_blog
@@ -650,7 +650,7 @@ def test_devpost_answers_all_five_judging_criteria() -> None:
 def test_devpost_numbers_match_the_repository() -> None:
     tasks = sum(spec_counts(name)[0] for name in SPECS)
     reqs = sum(spec_counts(name)[1] for name in SPECS)
-    assert f"seven specs, {tasks} tasks and {reqs} requirement IDs" in DEVPOST
+    assert f"eight specs, {tasks} tasks and {reqs} requirement IDs" in DEVPOST
     first = demo_result("netpol-first-run-real.json")
     second = demo_result("netpol-second-run-real.json")
     top = second["similar_incidents"][0]
@@ -717,3 +717,47 @@ def test_no_document_leaves_a_stray_marker() -> None:
         stripped = (REPO / name).read_text().replace("TODO(user)", "")
         for marker in ("TODO", "FIXME", "XXX", "TBD", "lorem"):
             assert marker not in stripped, (name, marker)
+
+
+# -------------------------------------------------------------------- the replay
+
+PAGES = "https://romanceresnak.github.io/kiroween-incident-crypt/"
+
+
+def test_the_readme_links_the_replay_and_says_what_it_is() -> None:
+    assert f"**Live demo (replay):** <{PAGES}>" in README
+    text = " ".join(README.replace("\n> ", "\n").split())
+    assert "read-only replay of the real UI" in text
+    assert "has no public endpoint by design" in text
+    assert "## Replay" in README and "tools/replay/build.py" in README
+    assert "eight specs" in README and "seven specs" not in README
+
+
+@needs_devpost
+def test_devpost_gives_the_replay_as_the_working_app_and_drops_the_open_decision() -> None:
+    text = " ".join(DEVPOST.split())
+    section = DEVPOST.split('## "URL to your working app"')[1].split("## Prizes")[0]
+    assert f"**<{PAGES}>**" in section
+    assert "is a **replay**" in " ".join(section.split())
+    assert "no public URL by design" in " ".join(section.split())
+    assert f"- Working app (replay): <{PAGES}>" in DEVPOST
+    assert "a decision for you" not in text
+    assert "Options, none built" not in text
+    assert "Expose the UI behind authentication" not in text
+
+
+def test_the_pages_url_follows_the_repository_and_matches_the_workflow_and_the_build() -> None:
+    assert PAGES == "https://romanceresnak.github.io/kiroween-incident-crypt/"
+    workflow = (REPO / ".github" / "workflows" / "replay-pages.yml").read_text()
+    assert "actions/deploy-pages@" in workflow
+    build = (REPO / "tools" / "replay" / "build.py").read_text()
+    assert "no public endpoint" in build
+    for doc in (README, DEVPOST, BLOG):
+        assert PAGES in doc
+
+
+@needs_blog
+def test_the_blog_names_the_replay_and_says_it_is_one() -> None:
+    text = " ".join(BLOG.split())
+    assert f"<{PAGES}>" in BLOG
+    assert "It is a replay: the live system has no public endpoint" in text

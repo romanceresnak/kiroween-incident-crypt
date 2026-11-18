@@ -63,7 +63,7 @@ What it does not do: merging the pull request does not change the cluster yet. N
 ## How I built it
 
 Every piece of work was a Kiro spec: requirements with numbered IDs in EARS style, a design,
-and tasks with one commit each. There are seven specs, 80 tasks and 293 requirement IDs, and the
+and tasks with one commit each. There are eight specs, 84 tasks and 327 requirement IDs, and the
 tests and commit messages cite them. Three steering files fix the rules that stay fixed: agents
 are read-only, remediation is a pull request, AWS access uses EKS Pod Identity. I gave Kiro
 stop conditions (an unapproved AWS permission, a Terraform plan that replaces or destroys
@@ -87,7 +87,8 @@ The system itself:
 - **Observability:** token and cost metrics labelled by agent and incident in Prometheus, and a
   Grafana dashboard.
 - **UI:** one page with six original SVG characters, per-character animation, a strict
-  content-security policy, and 34 jsdom tests.
+  content-security policy, and 34 jsdom tests. A replay mode of the same code, with 22 more DOM
+  tests, serves the public demo.
 
 ## Challenges
 
@@ -149,13 +150,14 @@ Amazon EKS 1.37 · EKS Pod Identity · Amazon ECR · Terraform · Argo CD · Hel
 | Criterion | Evidence |
 |---|---|
 | Potential impact | A real task (incident triage) with a safety design for teams that will not let an agent touch production; honest about being proven on a demo cluster, not in production. |
-| Technological implementation | Seven specs, three steering files, five hooks, three MCP servers; a "Kiro caught it" table with ten real catches and their commits; mutation-checked tests. |
+| Technological implementation | Eight specs, three steering files, five hooks, three MCP servers; a "Kiro caught it" table with ten real catches and their commits; mutation-checked tests. |
 | Design | A complete flow in one page: crew, feed, evidence, similar incidents, proposal, decision, cost; six original SVG characters, per-character animation, reduced-motion support. |
 | Innovation | Learned postmortems from approved incidents, found by the next similar incident; read-only agents with remediation as a pull request; cost per incident. |
 | Presentation | A 2:50 script that shows the real run end to end, a blog post and a write-up. |
 
 ## Links
 
+- Working app (replay): <https://romanceresnak.github.io/kiroween-incident-crypt/>
 - Repository: <https://github.com/romanceresnak/kiroween-incident-crypt> (MIT, `.kiro/` committed)
 - Kiro write-up: [`docs/KIRO-WRITEUP.md`](KIRO-WRITEUP.md)
 - Demo script: [`docs/DEMO-SCRIPT.md`](DEMO-SCRIPT.md)
@@ -164,19 +166,24 @@ Amazon EKS 1.37 · EKS Pod Identity · Amazon ECR · Terraform · Argo CD · Hel
 >
 > **TODO(user):** the blog post URL and the social post URL, for the two bonus prizes.
 
-## "URL to your working app": a decision for you
+## "URL to your working app"
 
-The form asks for a URL to the working app. This app runs on an EKS cluster in the author's
-AWS account and has **no public URL by design**: the UI has no login, and it can open pull
-requests, so it is only reachable through `kubectl port-forward`. Options, none built:
-1. Give the repository URL and the video URL, and describe how to reproduce it (the README
-   quickstart). The tests run without a cluster (`uv run --frozen pytest -q` in each
-   `agents/<package>`).
-2. Give a read-only replay built from the saved records in `docs/demo-results/`.
-3. Expose the UI behind authentication. This changes the security model, so it is not
-   recommended without a new spec.
+**<https://romanceresnak.github.io/kiroween-incident-crypt/>**
 
-> **TODO(user):** choose one and say so in the form's instructions field, which only judges see.
+The live system runs on an EKS cluster in the author's AWS account and has **no public URL by
+design**: its UI has no login and can open pull requests, so it is only reachable through
+`kubectl port-forward`. The URL above is a **replay**: the real UI code, run in a read-only mode
+over the saved records of five real runs on EKS (`docs/demo-results/`). The crew animates through
+each incident's stages, Approve and Reject are disabled with a link to the real pull request, a
+banner says it is a replay, and the page sends no request except a GET of the saved files. It has
+no secret and no AWS access.
+
+For the instructions field, which only judges see: the replay needs no login. To run the real
+system, follow the README quickstart (it needs an AWS account). The tests need no cluster
+(`uv run --frozen pytest -q` in each `agents/<package>`).
+
+> **TODO(user):** after you push, enable Pages once (Settings, Pages, Source: GitHub Actions) if
+> it is not already on, open the URL, and check it loads before you submit.
 
 ## Prizes this submission could be considered for
 

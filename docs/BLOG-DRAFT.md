@@ -80,7 +80,7 @@ Kiro wrote and ran most of this under the specs. My part was reviewing its plans
 the AWS changes it stopped to ask about, and pushing.
 
 Everything started as a spec: requirements with numbered IDs, a design, and tasks with one
-commit each. There are seven specs, 80 tasks and more than 290 requirement IDs, and the tests
+commit each. There are eight specs, 84 tasks and more than 320 requirement IDs, and the tests
 and commit messages cite the IDs. Three steering files hold the rules that should never be
 renegotiated: agents are read-only, fixes are pull requests, AWS access uses Pod Identity.
 
@@ -129,4 +129,7 @@ app, so I cannot tell you how they behave there.
 - Incident state is in memory, so a restart of the orchestrator loses it.
 
 The repository has the specs, the steering files, the hooks and the saved records of the real
-incidents: <https://github.com/romanceresnak/kiroween-incident-crypt>.
+incidents: <https://github.com/romanceresnak/kiroween-incident-crypt>. A read-only replay of the
+real UI, built from those records, is at
+<https://romanceresnak.github.io/kiroween-incident-crypt/>. It is a replay: the live system has no public
+endpoint, because its UI can open pull requests and has no login.
