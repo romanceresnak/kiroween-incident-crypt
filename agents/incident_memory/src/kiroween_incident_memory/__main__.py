@@ -12,7 +12,7 @@ from kiroween_shared.metrics import start_metrics_server
 from kiroween_shared.server import configure_logging, serve
 
 from .api import create
-from .memory import Memory
+from .memory import Memory, parse_min_score
 
 
 def main() -> None:
@@ -24,7 +24,7 @@ def main() -> None:
                                         connect_timeout=5, read_timeout=20))
     memory = Memory(client, env.get("KNOWLEDGE_BASE_ID", ""),
                     top_k=env_int(env, "TOP_K", 3),
-                    min_score=float(env.get("MIN_SCORE", "0.3")))
+                    min_score=parse_min_score(env.get("MIN_SCORE")))
     start_metrics_server(env_int(env, "METRICS_PORT", 9090))
     serve(create(memory), env_int(env, "API_PORT", 8080))
 

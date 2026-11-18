@@ -16,7 +16,7 @@ from botocore.stub import Stubber
 from fastapi.testclient import TestClient
 
 from kiroween_incident_memory.api import create
-from kiroween_incident_memory.memory import Memory, build_query, to_similar
+from kiroween_incident_memory.memory import POOL, Memory, build_query, to_similar
 from kiroween_shared.metrics import REGISTRY
 from kiroween_shared.models import Incident
 
@@ -52,14 +52,16 @@ META = {"title": "PM-2026-085: analytics-cache stuck Pending on a StorageClass t
         "x-amz-bedrock-kb-source-uri": "s3://.../07.md"}
 
 
-def stubbed(results: list[dict], *, top_k: int = 3, error: str | None = None,
-            query: str | None = None):  # type: ignore[no-untyped-def]
+def stubbed(results: list[dict], *, pool: int = POOL, error: str | None = None,
+            query: str | None = None, flt: dict | None = None):  # type: ignore[no-untyped-def]
     client = boto3.client("bedrock-agent-runtime", region_name="eu-west-1")
     stub = Stubber(client)
+    search: dict = {"numberOfResults": pool}
+    if flt is not None:
+        search["filter"] = flt
     expected = {"knowledgeBaseId": KB,
                 "retrievalQuery": {"text": query or build_query(incident())},
-                "retrievalConfiguration": {
-                    "vectorSearchConfiguration": {"numberOfResults": top_k}}}
+                "retrievalConfiguration": {"vectorSearchConfiguration": search}}
     if error:
         stub.add_client_error("retrieve", service_error_code=error, http_status_code=403,
                               expected_params=expected)
@@ -107,7 +109,7 @@ def test_chunk_without_heading_or_fix() -> None:
 
 
 def test_low_scores_are_dropped_and_top_k_respected() -> None:
-    client, stub = stubbed([result(0.9, META), result(0.29, META), result(0.5, META)], top_k=2)
+    client, stub = stubbed([result(0.9, META), result(0.29, META), result(0.5, META)])
     hits = Memory(client, KB, top_k=2, min_score=0.3).similar(incident())
     assert [h.score for h in hits] == [0.9, 0.5]
 

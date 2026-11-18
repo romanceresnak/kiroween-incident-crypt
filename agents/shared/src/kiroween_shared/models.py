@@ -48,6 +48,9 @@ class SimilarIncident(BaseModel):
     fix: str = Field(default="", max_length=1000)
     source: str = Field(default="", max_length=300)
     excerpt: str = Field(default="", max_length=1000)
+    # Where the postmortem came from (polish REQ-LRN-08): written by hand and seeded from
+    # docs/postmortems, or learned from an approved incident.
+    origin: Literal["seeded", "learned"] = "seeded"
 
 
 class Incident(BaseModel):
