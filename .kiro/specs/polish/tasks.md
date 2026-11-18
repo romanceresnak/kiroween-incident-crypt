@@ -48,11 +48,11 @@ Record the task table and what was not verified.
 ## Status
 
 Nothing pushed. All tasks are done. The AWS session was renewed on 18 Nov and the open AWS
-steps were completed (see "Done after the AWS login"). One defect in TASK-02 was found by the
-live probe and is not fixed yet (see "Open").
+steps were completed (see "Done after the AWS login"). The duplicate-chunk defect that the
+live probe found in TASK-02 is fixed (`cb84a75`).
 
 Final run: shared 171, orchestrator 236, cpu_memory 41, network 21, deploy_rollout 17,
-storage 21, incident_memory 48, repo-level (gitops, chaos, tools, scripts) 197, UI DOM 34;
+storage 21, incident_memory 61, repo-level (gitops, chaos, tools, scripts) 206, UI DOM 34;
 ruff, helm lint, terraform fmt/validate, shellcheck and actionlint clean.
 
 | Task | Commit | Result |
@@ -60,6 +60,7 @@ ruff, helm lint, terraform fmt/validate, shellcheck and actionlint clean.
 | Spec documents | `0333eb2` | — |
 | TASK-01 UI animation | `b1e6824`, `3105f04` (before this spec, pushed) | 28 DOM tests still pass; no new commit |
 | TASK-02 Category filter, fallback, minimum score | `ecd3ea1` | incident_memory 48 (+35) |
+| TASK-02 One hit per source document (defect fix) | `cb84a75` | incident_memory 61 (+13) |
 | TASK-03 Classify first, look up by category | `ae57b8c` | orchestrator 195, gitops 65 |
 | TASK-04 Learn a postmortem on approval | `fe3fad8` | orchestrator 236 (+41) |
 | TASK-05 UI: learned badge and learning outcome | `ff568be` | DOM 34 (+6) |
@@ -99,16 +100,26 @@ expects `MIN_SCORE` 0.5.
    - All ten unfiltered scores were 0.635 to 0.727, so `MIN_SCORE` 0.5 drops nothing on this
      corpus; the score threshold does not discriminate here.
 
+5. **State refresh** (`terraform plan -refresh-only`, then apply of the saved plan). The plan
+   had no resource or output changes and one drift entry: the orchestrator role's read-only
+   `inline_policy` attribute, which now lists `learn-postmortems` (a result of step 2). The
+   ECR push role drift from step 2 was already gone: applying the step 2 plan had refreshed it
+   in state. Applied the saved refresh-only plan: `0 added, 0 changed, 0 destroyed` (state
+   only). Afterwards the normal plan exits 0 with `No changes`. Oddity, unexplained: a
+   `-refresh-only -detailed-exitcode` plan still exits 2 while printing `No changes` and
+   showing no drift or changes in its JSON.
+6. **Duplicate chunks fixed** (`cb84a75`): incident-memory keeps only the best chunk per
+   source document before cutting to `top_k`; 13 new tests; incident_memory 61.
+
 ### Open
 
-1. **Duplicate chunks (defect in TASK-02, not fixed).** Retrieve returns several chunks of
-   the same document: in the filtered result PM-2026-058 appears three times and PM-2026-066
-   twice. incident-memory keeps the best `top_k` chunks, so the UI can show the same
-   postmortem twice and crowd out another one. The fix is to keep the best chunk per source
-   document before cutting to `top_k`, with a test.
-2. **Minimum score.** One query is not a calibration. 0.5 is harmless but not tuned; raising it
+1. **Minimum score.** One query is not a calibration. 0.5 is harmless but not tuned; raising it
    to about 0.65 would have dropped the weaker network chunks (0.61 to 0.64) as well. Measure
    the three chaos scenarios before choosing.
+2. **Candidate pool.** Retrieve is asked for 10 chunks. A document can take 2 to 3 of them, so
+   a query may yield fewer than `top_k` distinct documents (on 18 Nov the network query gave
+   2 documents from 5 chunks, which is all the seeded network documents there are). If
+   recall looks thin, raise `POOL` in `memory.py`.
 
 ### Not verified
 
