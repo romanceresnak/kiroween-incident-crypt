@@ -23,6 +23,8 @@ from . import auth as auth_module
 from .agent import Orchestrator
 from .approval import Approver, GitHubClient
 from .auth import Auth, AuthConfig, is_lab_namespace
+from .lab import routes as lab_routes
+from .lab.client import LabClient
 from .learning import build_learner
 from .memory import MemoryClient
 from .service import DecisionConflict, IncidentService, QueueFull
@@ -32,10 +34,12 @@ from .store import IncidentStore
 logger = logging.getLogger(__name__)
 
 
-def create(service: IncidentService, auth: Auth | None = None) -> FastAPI:
+def create(service: IncidentService, auth: Auth | None = None,
+           lab: LabClient | None = None) -> FastAPI:
     """The API and the UI. With ``auth`` every route except the health probes and the login
     needs a session (or, for POST /incidents, the watcher's token). Without it nothing does,
-    which is how the tests and a local run use it; main() always passes one."""
+    which is how the tests and a local run use it; main() always passes one. ``lab`` is the
+    client of the lab-runner; without it the Lab answers 503."""
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -109,6 +113,7 @@ def create(service: IncidentService, auth: Auth | None = None) -> FastAPI:
     # Installed before ui_headers, so ui_headers wraps it and its responses get the headers too.
     if auth is not None:
         auth_module.install(app, auth)
+    lab_routes.install(app, service, lab, auth)
 
     # The UI: static files in this package, same origin as the API (REQ-UI-01, UI-04).
     @app.middleware("http")
@@ -198,5 +203,7 @@ def main() -> None:
                        "password: every route except the health probes answers 503")
     if auth.config.required and not auth.config.internal_token:
         logger.warning("no internal token: the watcher cannot submit incidents")
+    lab_url = env.get("LAB_RUNNER_URL", "")
+    lab = LabClient(lab_url) if lab_url else None
     start_metrics_server(settings.metrics_port)
-    serve(create(service, auth), settings.api_port)
+    serve(create(service, auth, lab), settings.api_port)
