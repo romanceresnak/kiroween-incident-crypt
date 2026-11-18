@@ -1,0 +1,58 @@
+# Build the read-only replay of the real UI and deploy it to GitHub Pages (replay REQ-DP).
+#
+# The site is static: the repository's own UI plus the saved incident records in
+# docs/demo-results. It uses no secret, no repository variable and no AWS credential, and
+# calls no AWS action.
+#
+# One-time setup by a repository admin (not done by this workflow): Settings -> Pages ->
+# Build and deployment -> Source: GitHub Actions.
+
+name: replay-pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agents/orchestrator/src/kiroween_orchestrator/ui/**"
+      - "tools/replay/**"
+      - "docs/demo-results/**"
+      - ".github/workflows/replay-pages.yml"
+  workflow_dispatch: {}
+
+# Nothing by default; each job asks for what it needs.
+permissions: {}
+
+# One deployment at a time, and never cancel one that is running.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the replay site
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the static site
+        run: python3 tools/replay/build.py --out _site
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
