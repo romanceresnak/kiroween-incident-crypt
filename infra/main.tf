@@ -43,6 +43,19 @@ provider "aws" {
   }
 }
 
+# CloudFront web ACLs exist only in us-east-1 (scenario-lab REQ-PA-05).
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+
+  default_tags {
+    tags = {
+      Project   = var.project
+      ManagedBy = "terraform"
+    }
+  }
+}
+
 # Helm v3 uses attribute syntax for the kubernetes block.
 # The argocd module call below carries depends_on = [module.eks] so Helm only
 # connects after the cluster is ACTIVE. Provider blocks do not support depends_on.
@@ -202,4 +215,33 @@ module "finops" {
   env                = var.env
   budget_alert_email = var.budget_alert_email
   limit_usd          = var.budget_limit_usd
+}
+
+# scenario-lab TASK-01: public HTTPS access for judging. CloudFront (default certificate and
+# a WAF) reaches an internal ALB through a VPC origin; the ALB's target group is bound to the
+# orchestrator Service by the AWS Load Balancer Controller from /gitops.
+module "public_access" {
+  source = "./modules/public_access"
+
+  providers = {
+    aws           = aws
+    aws.us_east_1 = aws.us_east_1
+  }
+
+  project                = var.project
+  env                    = var.env
+  vpc_id                 = module.vpc.vpc_id
+  private_subnet_ids     = module.vpc.private_subnet_ids
+  node_security_group_id = module.eks.cluster_security_group_id
+}
+
+# AWS Load Balancer Controller IAM (Pod Identity): read-only plus one target group.
+module "lb_controller" {
+  source = "./modules/lb_controller"
+
+  project          = var.project
+  env              = var.env
+  cluster_name     = module.eks.cluster_name
+  cluster_arn      = module.eks.cluster_arn
+  target_group_arn = module.public_access.target_group_arn
 }

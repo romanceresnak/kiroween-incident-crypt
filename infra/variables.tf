@@ -119,9 +119,9 @@ variable "create_github_oidc_provider" {
 }
 
 variable "budget_limit_usd" {
-  description = "Monthly AWS Budget limit in USD. The alert email is sent when actual spend exceeds it."
+  description = "Monthly AWS Budget limit in USD. The alert email is sent when actual spend exceeds it. 400 for the judging period (scenario-lab REQ-PA-07)."
   type        = number
-  default     = 120
+  default     = 400
 
   validation {
     condition     = var.budget_limit_usd > 0

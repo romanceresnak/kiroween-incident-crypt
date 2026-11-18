@@ -22,3 +22,8 @@ output "oidc_issuer_url" {
   description = "OIDC issuer URL for the EKS cluster (used for IRSA if needed)."
   value       = aws_eks_cluster.main.identity[0].oidc[0].issuer
 }
+
+output "cluster_security_group_id" {
+  description = "EKS-created cluster security group. Managed node group nodes, and so pod IPs, use it."
+  value       = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+}
