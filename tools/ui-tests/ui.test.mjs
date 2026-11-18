@@ -335,3 +335,123 @@ test("the feed lists incidents newest first as buttons and selecting one loads i
     ui.close();
   }
 });
+
+// --- polish: learned postmortems (REQ-LRN-08) --------------------------------------------------
+
+const hit = (over) => ({ title: "PM", category: "network", score: 0.7, fix: "relabel the client",
+                         source: "s3://b/x.md", excerpt: "", ...over });
+
+test("similar incidents say where they came from, and a learned fix is not called one that worked", async () => {
+  const rec = record();
+  rec.similar_incidents = [
+    hit({ title: "PM-2026-058: seeded one", origin: "seeded", fix: "relabel the client" }),
+    hit({ title: "LRN-inc-9: learned one", origin: "learned", score: 0.64,
+          fix: "Approved fix (not yet confirmed): set a on NetworkPolicy/p from x to y." })];
+  const ui = await open(rec);
+  try {
+    const items = [...detailOf(ui).querySelectorAll("ol.similar li")];
+    assert.equal(items.length, 2);
+    const [seeded, learned] = items;
+    assert.equal(seeded.querySelector(".badge.source-seeded").textContent, "source: seeded");
+    assert.equal(learned.querySelector(".badge.source-learned").textContent, "source: learned");
+    assert.equal(seeded.querySelector(".badge.source-learned"), null);
+    assert.match(seeded.textContent, /Fix that worked: relabel the client/);
+    assert.doesNotMatch(learned.textContent, /Fix that worked/);
+    assert.match(learned.textContent, /Approved fix \(not yet confirmed\)/);
+    assertNoLeaks(ui);
+  } finally {
+    ui.close();
+  }
+});
+
+test("a hit from an older record without an origin is shown as seeded", async () => {
+  const rec = record();
+  rec.similar_incidents = [hit({ title: "old record" })];
+  const ui = await open(rec);
+  try {
+    assert.ok(detailOf(ui).querySelector(".similar .badge.source-seeded"));
+    assert.equal(detailOf(ui).querySelector(".similar .badge.source-learned"), null);
+  } finally {
+    ui.close();
+  }
+});
+
+const approvedWith = (learning) => record({
+  status: "approved",
+  approval: { decision: "approved", by: "romanceresnak", at: NOW, comment: "",
+              pull_request: { mode: "dry_run", title: "t", branch: "b", path: "p", content: "",
+                              body: "", url: null, error: null },
+              learning },
+});
+
+const OUTCOMES = [
+  [{ status: "written", key: "learned/inc-1.md", ingestion: "started", ingestion_job_id: "JOB-7",
+     error: null },
+   /Written to learned\/inc-1\.md; indexing started \(job JOB-7\)\. It can be found as a similar incident once indexing finishes\./],
+  [{ status: "written", key: "learned/inc-1.md", ingestion: "already_running",
+     ingestion_job_id: null, error: null },
+   /an indexing job was already running, so it is picked up by the next one/],
+  [{ status: "written", key: "learned/inc-1.md", ingestion: "failed", ingestion_job_id: null,
+     error: "AccessDeniedException" },
+   /Written to learned\/inc-1\.md; indexing failed \(AccessDeniedException\)\./],
+  [{ status: "error", key: null, ingestion: null, ingestion_job_id: null, error: "AccessDenied" },
+   /Not learned: AccessDenied/],
+  [{ status: "disabled", key: null, ingestion: null, ingestion_job_id: null, error: null },
+   /Not learned: learning is not configured\./],
+];
+
+test("an approved incident shows what happened to its postmortem", async () => {
+  for (const [learning, expected] of OUTCOMES) {
+    const ui = await open(approvedWith(learning));
+    try {
+      const rows = [...detailOf(ui).querySelectorAll("dl.kv")]
+        .flatMap((dl) => [...dl.querySelectorAll("dt")])
+        .filter((dt) => dt.textContent === "Memory");
+      assert.equal(rows.length, 1, JSON.stringify(learning));
+      assert.match(rows[0].nextElementSibling.textContent, expected);
+      assertNoLeaks(ui);
+    } finally {
+      ui.close();
+    }
+  }
+});
+
+test("a learning error is styled as an error and the others are not", async () => {
+  const bad = await open(approvedWith(OUTCOMES[3][0]));
+  const good = await open(approvedWith(OUTCOMES[0][0]));
+  try {
+    assert.ok(bad.document.querySelector("#detail dd .error"));
+    assert.equal(good.document.querySelector("#detail dd .error"), null);
+  } finally {
+    bad.close();
+    good.close();
+  }
+});
+
+test("no Memory line for a rejection or an approval that has no learning outcome", async () => {
+  const rejected = record({ status: "rejected", approval: {
+    decision: "rejected", by: "r", at: NOW, comment: "no", pull_request: null, learning: null } });
+  const none = approvedWith(null);
+  for (const rec of [rejected, none]) {
+    const ui = await open(rec);
+    try {
+      const labels = [...detailOf(ui).querySelectorAll("dt")].map((dt) => dt.textContent);
+      assert.ok(!labels.includes("Memory"), labels.join(","));
+      assertNoLeaks(ui);
+    } finally {
+      ui.close();
+    }
+  }
+});
+
+test("learning text from the server is shown as text, never as HTML", async () => {
+  const ui = await open(approvedWith({
+    status: "written", key: "learned/<img src=x onerror=alert(1)>.md", ingestion: "failed",
+    ingestion_job_id: null, error: "<script>alert(2)</script>" }));
+  try {
+    assert.ok(detailOf(ui).textContent.includes("learned/<img src=x onerror=alert(1)>.md"));
+    assert.equal(detailOf(ui).querySelector("img[src='x'], script"), null);
+  } finally {
+    ui.close();
+  }
+});

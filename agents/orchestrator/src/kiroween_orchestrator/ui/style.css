@@ -114,6 +114,8 @@ a { color: var(--slime); }
 .badge.failed, .badge.rejected { background: #4a1020; color: #ffc2cf; }
 .badge.correlated { background: #22304a; color: #c5d6ff; }
 .badge.processing, .badge.accepted { background: #3b2a5c; color: #e2d4ff; }
+.badge.source-learned { background: #4a3500; color: #ffd27a; border: 1px solid #8a6200; }
+.badge.source-seeded { background: #1d2433; color: var(--muted); }
 
 .detail-head { display: flex; gap: 1rem; align-items: center; }
 .detail-head img { width: 84px; height: 84px; }

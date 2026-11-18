@@ -165,10 +165,31 @@ function similarView(items) {
   if (!items || !items.length) {
     return el("p", { class: "muted", text: "The Archivist found no similar past incidents." });
   }
-  return el("ol", { class: "similar" }, items.map((s) => el("li", {},
-    el("strong", { text: s.title }), " ", el("span", { class: "score", text: s.score.toFixed(2) }),
-    s.category ? el("span", { class: "badge", text: s.category }) : null,
-    el("div", { text: "Fix that worked: " + (s.fix || "(not recorded)") }))));
+  return el("ol", { class: "similar" }, items.map((s) => {
+    const origin = s.origin === "learned" ? "learned" : "seeded";
+    return el("li", {},
+      el("strong", { text: s.title }), " ", el("span", { class: "score", text: s.score.toFixed(2) }),
+      s.category ? el("span", { class: "badge", text: s.category }) : null,
+      el("span", { class: "badge source-" + origin, text: "source: " + origin }),
+      // A learned fix was approved, not confirmed: its own text says so, so no "worked" label.
+      el("div", { text: origin === "learned" ? (s.fix || "(not recorded)")
+                                              : "Fix that worked: " + (s.fix || "(not recorded)") }));
+  }));
+}
+
+// What happened when the approved incident was turned into a postmortem (polish REQ-LRN-08).
+function learningText(l) {
+  if (l.status === "disabled") return "Not learned: learning is not configured.";
+  if (l.status === "error") return "Not learned: " + (l.error || "error");
+  const where = "Written to " + l.key;
+  if (l.ingestion === "started") {
+    return where + "; indexing started" + (l.ingestion_job_id ? " (job " + l.ingestion_job_id + ")" : "")
+      + ". It can be found as a similar incident once indexing finishes.";
+  }
+  if (l.ingestion === "already_running") {
+    return where + "; an indexing job was already running, so it is picked up by the next one.";
+  }
+  return where + "; indexing failed" + (l.error ? " (" + l.error + ")" : "") + ".";
 }
 
 function relatedView(record) {
@@ -222,6 +243,10 @@ function approvalView(record) {
                    ["Title", pr.title], ["Branch", pr.branch], ["File", pr.path],
                    ["Error", pr.error ? el("span", { class: "error", text: pr.error }) : null]]));
       if (pr.content) out.push(el("pre", { text: pr.content }));
+    }
+    if (a.learning) {
+      out.push(kv([["Memory", el("span", { class: a.learning.status === "error" ? "error" : null,
+                                          text: learningText(a.learning) })]]));
     }
     return out;
   }
