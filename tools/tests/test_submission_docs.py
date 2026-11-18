@@ -17,7 +17,7 @@ README = (REPO / "README.md").read_text()
 TOP_LEVEL = {"agents", "infra", "gitops", "chaos", "docs", "tools", "scripts", ".kiro"}
 # Documents the README links to that a later task of this spec writes. Each task removes its
 # own entry; the last test of this file fails while any is left.
-PENDING = {"docs/DEMO-SCRIPT.md"}
+PENDING = {"docs/DEVPOST.md"}
 
 
 def git(*args: str) -> str:
@@ -389,3 +389,101 @@ def test_writeup_second_run_facts_match_the_saved_records() -> None:
         assert f"${totals(demo_result(name))[2]:.4f}" in WRITEUP, name
     assert "Still not verified" in WRITEUP
     assert "Not verified:** that a second" not in WRITEUP
+
+
+# -------------------------------------------------------------- demo script
+
+DEMO_PATH = REPO / "docs" / "DEMO-SCRIPT.md"
+DEMO = DEMO_PATH.read_text() if DEMO_PATH.exists() else ""
+needs_demo = pytest.mark.skipif(not DEMO, reason="docs/DEMO-SCRIPT.md not written yet")
+
+
+def shot_rows() -> list[tuple[int, int, str]]:
+    rows = []
+    for m in re.finditer(r"^\| (\d+):(\d{2}) \| (\d+) \| ([^|]+) \|", DEMO, re.M):
+        rows.append((int(m.group(1)) * 60 + int(m.group(2)), int(m.group(3)), m.group(4).strip()))
+    return rows
+
+
+@needs_demo
+def test_demo_timings_are_contiguous_and_under_three_minutes() -> None:
+    rows = shot_rows()
+    assert len(rows) == 9
+    clock = 0
+    for start, seconds, name in rows:
+        assert start == clock, name
+        clock += seconds
+    assert clock <= 170, f"{clock} s"
+    assert "2:50" in DEMO and clock == 170
+
+
+def narration() -> dict[int, int]:
+    """Words per shot. The alternative lines of shot 5 count once, as the longer one."""
+    words: dict[int, int] = {}
+    for m in re.finditer(r"^\*\*Shot (\d+) \((\d+) s\)\.\*\* (.+?)(?:\n\n|\Z)", DEMO, re.M | re.S):
+        text = m.group(3)
+        variants = [len(v.split()) for v in re.findall(r"\*[^*]+\*", text)]
+        base = len(re.sub(r"\*[^*]+\*", " ", text).split())
+        words[int(m.group(1))] = base + (max(variants) if variants else 0)
+    return words
+
+
+@needs_demo
+def test_narration_fits_each_shot_at_a_speakable_pace() -> None:
+    words = narration()
+    lengths = {i + 1: seconds for i, (_, seconds, _) in enumerate(shot_rows())}
+    assert sorted(words) == sorted(lengths)
+    for shot, count in words.items():
+        assert count <= 2.8 * lengths[shot], (shot, count, lengths[shot])
+
+
+@needs_demo
+def test_demo_shows_everything_the_brief_asks_for() -> None:
+    for needle in ("Necromancer then the Spider animating", "Evidence table",
+                   "Similar past incidents", "Approve: open the PR", "pull request", "learned",
+                   "Kiroween Incident Crypt", "cost per incident", "ingestion job"):
+        assert needle in DEMO, needle
+    assert "second" in DEMO.lower() and "10 minutes" in DEMO and "600 s" in DEMO
+
+
+@needs_demo
+def test_demo_labels_and_ids_are_the_real_ones() -> None:
+    ui = REPO / "agents" / "orchestrator" / "src" / "kiroween_orchestrator" / "ui"
+    page = (ui / "index.html").read_text() + (ui / "app.js").read_text()
+    for label in ("Approve: open the PR", "Similar past incidents", "Incident feed", "Evidence",
+                  "Incidents rise; the crew investigates; only the living approve."):
+        assert label in page, label
+    values = (REPO / "gitops" / "charts" / "agents" / "values.yaml").read_text()
+    for ident in ("VIBAT27SDH", "UCADW10RQV", "kiroween-prod-postmortems-255834079310"):
+        assert ident in values and ident in DEMO, ident
+    dash = json.loads((REPO / "gitops" / "charts" / "agents" / "dashboards"
+                       / "kiroween-agents.json").read_text())
+    assert f"/d/{dash['uid']}" in DEMO
+    assert "kiroween-prod" in DEMO
+    assert (REPO / "chaos" / "netpol" / "netpol.sh").is_file()
+    assert "chaos/netpol/netpol.sh up" in DEMO and "chaos/netpol/netpol.sh down" in DEMO
+
+
+@needs_demo
+def test_the_rehearsal_one_liner_works_on_a_real_record() -> None:
+    match = re.search(r"python3 -c '([^']+)'", DEMO)
+    assert match
+    record = demo_result("netpol-second-run-real.json")
+    result = subprocess.run(  # noqa: S603
+        ["python3", "-c", match.group(1)],  # noqa: S607
+        input=json.dumps([record]), capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    assert lines[0] == "approved"
+    assert lines[1].startswith("learned 0.846 LRN-2e4fd60547e332f6")
+    assert lines[2].startswith("seeded 0.708")
+
+
+@needs_demo
+def test_demo_does_not_overclaim() -> None:
+    assert "Do not say the pull request fixed the cluster" in DEMO
+    assert "applying it is not automated yet" in DEMO
+    assert missing_paths(DEMO, DEMO_PATH.parent) == []
+    assert DEMO.count("TODO(user)") == 1
+    assert "has not been observed" not in DEMO
