@@ -233,7 +233,11 @@ was labelled `app: netpol-client`. The proposal was a change of
    `remediation/2e4fd60547e332f6`, commit `0c4d20b` made through the GitHub API, adding
    [`gitops/remediations/chaos-netpol/networkpolicy-allow-trusted.yaml`](../gitops/remediations/chaos-netpol/networkpolicy-allow-trusted.yaml),
    a Kustomize JSON patch with a `test` and a `replace`.
-3. The pull request was merged (`c2ba64d`, 18 Nov 08:55).
+3. The pull request was merged (`c2ba64d`, 18 Nov 08:55). Merging did not change the
+   cluster: no Argo CD Application applies `gitops/remediations/`, the chaos workloads are
+   not managed by Argo CD, and the patch was not run through `kustomize build`
+   (`memory-and-ui/tasks.md` records this). The pull request is the audit trail of the
+   approved change.
 4. The orchestrator wrote `learned/2e4fd60547e332f6.md` and its metadata sidecar to the
    postmortem bucket and started a Knowledge Base ingestion job. The job completed: nine
    documents scanned, one new document indexed.
@@ -244,6 +248,9 @@ because an approval is not proof that the fix worked.
 
 ## What Kiro got wrong, and limits
 
+- The first draft of the README said an approved change is "a merged pull request that Argo CD
+  applies". The `memory-and-ui` spec says the opposite for remediation files, and the
+  README was corrected after reading it.
 - The first designs missed the Pod Identity egress rule (3), used the wrong provider resource
   name (2) and, on one occasion, a stale chart pin (`f21466e`).
 - The UI shipped with a bug that showed only on the live page (9). The tests that existed

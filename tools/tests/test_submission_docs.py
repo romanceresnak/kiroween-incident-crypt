@@ -167,11 +167,21 @@ def test_every_path_the_readme_cites_exists() -> None:
 
 
 def test_readme_states_the_learning_loop_is_not_fully_verified() -> None:
-    assert "has not been recorded yet" in README
+    assert "has not yet been *found* by a second incident" in README
     assert "A second incident that finds the **learned** postmortem" in README
     assert "pull/2" in README
     assert (REPO / "gitops" / "remediations" / "chaos-netpol"
             / "networkpolicy-allow-trusted.yaml").is_file()
+
+
+def test_readme_does_not_claim_remediations_are_applied() -> None:
+    """No Application syncs gitops/remediations, so the README must not say Argo applies it."""
+    apps = "".join(p.read_text() for p in (REPO / "gitops" / "apps").glob("*.y*ml"))
+    assert "remediations" not in apps, "an Application now applies them: update the docs"
+    assert "Approved changes are not applied" in README
+    assert "no Argo CD Application applies `gitops/remediations/`" in README
+    assert "that Argo CD applies" not in README
+    assert "Merging that pull request did not" in README
 
 
 def test_readme_hook_claim_is_true() -> None:

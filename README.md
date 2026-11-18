@@ -16,14 +16,16 @@ cuts a service off, the crew:
 6. on **Approve** in the web UI, opens a real GitHub pull request against `gitops/`,
 7. writes the approved incident back as a postmortem, so it can be found next time.
 
-Nothing changes the cluster except a merged pull request that Argo CD applies. The agents
-cannot write to Kubernetes at all.
+The agents cannot write to Kubernetes at all. Their only output is a proposal, and an approved
+proposal becomes a pull request. Applying it is a separate step that is **not automated yet**:
+see [Approved changes are not applied](#known-trade-offs-and-what-is-not-verified).
 
 > **Status, 18 Nov 2026.** Running on a real cluster in `eu-west-1`. The full loop has run end
 > to end once, for a broken NetworkPolicy: approval, pull request
 > [#2](https://github.com/romanceresnak/kiroween-incident-crypt/pull/2) (merged), a learned
-> postmortem in S3 and a finished knowledge-base ingestion. That the learned postmortem is then
-> *found* by a second incident has not been recorded yet. See
+> postmortem in S3 and a finished knowledge-base ingestion. Merging that pull request did not
+> change the cluster, and the learned postmortem has not yet been *found* by a second incident.
+> See
 > [What is not verified](#known-trade-offs-and-what-is-not-verified).
 
 ## The crew
@@ -82,8 +84,8 @@ flowchart TB
   necro -->|proposal and evidence| human
   human -->|Approve| necro
   necro -->|open pull request| gh
-  gh -->|merge| argo
-  argo -->|apply| kube
+  gh -->|"merge: GitOps source"| argo
+  argo -->|"sync gitops/apps"| kube
   necro -->|learned postmortem| s3
   necro -->|metrics| graf
 ```
@@ -121,7 +123,8 @@ pushes the six images with commit-SHA tags, then commits the tags to the chart.
    and clicks Approve or Reject in `/ui`.
 7. **Real pull request.** Approve renders a Kustomize patch,
    `gitops/remediations/<namespace>/<kind>-<name>.yaml`, and opens a pull request through the
-   GitHub API. Without a token, every approval is a dry run.
+   GitHub API. Without a token, every approval is a dry run. Merging records the approved
+   change; no Argo CD Application applies `gitops/remediations/` yet.
 8. **Learned postmortem.** The approved incident is written to
    `learned/<incident-id>.md` (with a metadata sidecar) in the postmortem bucket, and an
    ingestion job re-indexes the Knowledge Base. The document says "approved change, not yet
@@ -141,7 +144,7 @@ and proposed the patch in
 |---|---|---|
 | Read-only agents | RBAC verbs are `get`, `list`, `watch` only; no secrets, no wildcards. A test walks the source and fails on any write-style Kubernetes call. | `gitops/charts/agents`, `agents/shared` tests |
 | Human approval | Every proposal has `requires_approval: true`. Approve and Reject act only on an incident that is `awaiting_approval`, accept only same-origin JSON, and nothing else changes the cluster. | `agents/orchestrator` |
-| Pull-request remediation | The only way a change reaches the cluster is a merged pull request that Argo CD applies. Git history is the audit trail and the rollback. | `gitops/remediations/` |
+| Pull-request remediation | An approved change is a pull request, never a write to the cluster, so git history is the audit trail. Today merging it records the change and does not apply it (see trade-offs). | `gitops/remediations/` |
 | Proposals checked by code | Allowed fields, protected namespaces and value shapes are validated outside the model. | `agents/shared` |
 | Untrusted tool output | Logs, events and annotations are wrapped in `<tool_data>` and treated as data. | `agents/shared` |
 | Least-privilege IAM | One EKS Pod Identity role per agent, trusted only for its cluster, namespace and service account. Bedrock invoke is limited to `eu.*` inference profiles. The orchestrator can write `learned/*` and start one ingestion job, nothing else (checked with the IAM policy simulator, 10 of 10). | `infra/modules/pod_identity`, `scripts/verify-learning-iam.sh` |
@@ -270,7 +273,13 @@ console for leftovers (EBS volumes created by PVCs, load balancers, ECR images).
 
 ## Known trade-offs and what is not verified
 
-Chosen on purpose:
+Chosen on purpose, or not finished:
+- **Approved changes are not applied.** The remediation files land in `gitops/remediations/`,
+  which no Argo CD Application syncs. The chaos workloads are not managed by Argo CD, and
+  applying a patch needs the workload's manifests to live in `gitops/`. So merged pull request
+  [#2](https://github.com/romanceresnak/kiroween-incident-crypt/pull/2) records the approved
+  NetworkPolicy change; it did not repair the policy in the cluster. The patch files have not
+  been run through `kustomize build`.
 - The approval endpoints have no login. Access is `kubectl port-forward`, so whoever can
   forward the port can approve. The UI is not exposed publicly for this reason.
 - The incident store, the correlation state and pending `Unhealthy` re-checks are in memory.
@@ -281,6 +290,8 @@ Chosen on purpose:
 
 Not verified:
 - A second incident that finds the **learned** postmortem as a similar incident.
+- That a rendered patch applies cleanly (`kustomize build`), and the pull request against a
+  protected branch (a protected `main` may block it).
 - The `badimage` and `pvc` scenarios after the latest watcher changes, and the `gp2` fix for
   `pvc` on Kubernetes 1.37.
 - The minimum similarity score (0.5) is a first guess; scores seen ranged from 0.64 to 0.73,
