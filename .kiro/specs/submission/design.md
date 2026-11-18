@@ -53,8 +53,8 @@ Hand-written from facts gathered on 18 Nov 2026; nothing generated. What each dr
 | `docs/BLOG-DRAFT.md`, `docs/SOCIAL-POST.md` | the write-up |
 | `docs/DEVPOST.md` | the Devpost rules and judging criteria |
 
-Placeholders the operator must fill are written as `<!-- TODO(user): ... -->`, so they are
-visible when edited and findable by a test. There are only these: the video URL, the blog
+Placeholders the operator must fill are written as a visible `TODO(user)` line (a blockquote
+in the write-up, plain text elsewhere), so they show when rendered and a test can find them. There are only these: the video URL, the blog
 URL, the social post URL and the confirmation of which Kiro surfaces were used.
 
 ## 3. Tests (`tools/tests/test_kiro_hooks.py`, `test_submission_docs.py`)

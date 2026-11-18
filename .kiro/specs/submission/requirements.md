@@ -108,7 +108,7 @@ counted from the files, including this one.
 cluster-creator admin bootstrap, GitHub's immutable OIDC subjects, `bash -e` in CI,
 `ecr:BatchGetImage` for buildx, the missing Pod Identity Agent egress rule, the wrong S3
 Vectors resource name, the model-availability API, the Grafana sidecar OOM, the
-`[object HTMLElement]` UI bug and the duplicate retrieval chunks. Each entry shall cite
+`[object …]` UI bug and the duplicate retrieval chunks. Each entry shall cite
 the commit that exists in the history, say how the problem was found (a CI failure, a live
 run, a user report or a check made before applying) and what test or verification followed.
 
