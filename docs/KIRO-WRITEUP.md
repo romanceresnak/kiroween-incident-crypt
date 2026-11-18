@@ -18,8 +18,9 @@ The repository's history runs from 17 Nov 2026 (first commit) to the time of wri
 | Steering docs | Yes, three files | `.kiro/steering/` |
 | MCP servers | Configured: three | `.kiro/settings/mcp.json` |
 | Agent hooks | Yes, five, added at the end | `.kiro/hooks/` |
-| Kiro Crew | Yes, per the author's sessions (not recorded in git) | see [Which Kiro](#which-kiro-ide-cli-web-crew) |
-| Kiro IDE, CLI, Web | Not recorded in the history | see [Which Kiro](#which-kiro-ide-cli-web-crew) |
+| Kiro Crew (desktop app) | Yes, the whole project | see [Which Kiro](#which-kiro-ide-cli-web-crew) | see [Which Kiro](#which-kiro-ide-cli-web-crew) |
+| Kiro CLI | Only to sign in | see [Which Kiro](#which-kiro-ide-cli-web-crew) |
+| Kiro IDE, Kiro web app | No | |
 | Custom agents | **No.** No custom agent files exist under `.kiro`. | |
 | Property-based testing | **No.** No PBT library is a dependency. | see [Testing](#testing-without-property-based-tests) |
 | Powers | **No.** | |
@@ -29,18 +30,19 @@ EKS. They are not Kiro custom agents.
 
 ## Which Kiro: IDE, CLI, Web, Crew
 
-> **TODO(user):** say which Kiro apps you used (IDE, CLI, Web, Crew), what you used each for,
-> and how they differed. The history cannot answer this: every commit is authored by you, and
-> none carries a co-author trailer or a Kiro mention besides the steering and MCP commits.
+I built the whole project in Kiro Crew (the desktop app). Every spec ran as its own session,
+with subagents and per-command approvals. I used `kiro-cli` only to sign in. I did not use the
+IDE or the web app, so I cannot compare the four from experience. This is the author's account;
+git does not record which app made a commit.
 
 What the repository does show:
 - `.kiro/settings/cli.json` (a file named for the Kiro CLI) enables `toolSearch`.
 - The steering documents arrived through pull request #1 (`add-steering-docs`, commit
   `5b88fe5`) and the MCP servers through two commits named "Add Kiro MCP servers"
   (`2cdcbfd`, `51719df`).
-- The specs and the code they drove were written and executed in sessions with a Kiro agent
-  in Kiro Crew, with file, shell, AWS CLI, kubectl and web tools. That comes from the sessions,
-  not from the git history, which does not record it.
+- The specs and the code they drove were written and executed in Kiro Crew sessions, with
+  file, shell, AWS CLI, kubectl and web tools. That is the author's account, not something the
+  git history records.
 
 ## Specs
 
@@ -111,17 +113,20 @@ the constraints held, which tests check (no write verbs in RBAC, no write-style 
 | `eks` | `awslabs.eks-mcp-server` | pinned to `eu-west-1` |
 | `terraform` | `awslabs.terraform-mcp-server` | provider documentation |
 
-> **TODO(user):** say which of these you actually used, and for what. The history records
-> that they were added, not which tool calls the sessions made.
+**What happened with them.** The three servers were configured, but the first session could not
+start them: the config named the wrong `uvx` path. That session fell back to web research
+instead, which fits `f21466e`, where a chart pin came from stale search results. The path was
+then fixed. Whether and how the servers were used in later sessions is not recorded in the
+repository, so this document does not claim it.
 
-The config names `/opt/homebrew/bin/uvx` as the command, so it works as is only on a Mac with
+The config now names `/opt/homebrew/bin/uvx` as the command, so it works as is only on a Mac with
 Homebrew; on another machine change the path.
 
 The corrections in the history that documentation access would help with are the provider
 and chart facts: the S3 Vectors resource name, the Helm and Kubernetes provider syntax and
 the Argo CD chart pin (`f21466e`: "10.16.0 → 10.18.0", the first pin having come from stale
-search results). The history does not say how each was found, so this is not a claim that MCP
-found them.
+search results). The history does not say how each was found, and the first session ran without the servers,
+so this is not a claim that MCP found them.
 
 ## Hooks
 

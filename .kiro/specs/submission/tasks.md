@@ -96,8 +96,9 @@ this commit's two tests). `.kiro` has 31 tracked files and no ignore rule.
 
 ### What you still have to do
 
-Placeholders to fill (9 placeholders, each a visible `TODO(user)` in these files):
-`docs/KIRO-WRITEUP.md` (2: which Kiro apps; which MCP tools), `docs/DEMO-SCRIPT.md` (1: video
+Placeholders to fill (7 placeholders, each a visible `TODO(user)` in these files; the two in
+`docs/KIRO-WRITEUP.md` were filled on 18 Nov from the author's account):
+`docs/DEMO-SCRIPT.md` (1: video
 URL), `docs/SOCIAL-POST.md` (2: confirm the sentence is yours; the post URL), `docs/DEVPOST.md`
 (4: your voice; video URL; blog and social URLs; the "working app" answer).
 

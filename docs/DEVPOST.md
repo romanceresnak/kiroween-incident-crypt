@@ -68,9 +68,11 @@ tests and commit messages cite them. Three steering files fix the rules that sta
 are read-only, remediation is a pull request, AWS access uses EKS Pod Identity. I gave Kiro
 stop conditions (an unapproved AWS permission, a Terraform plan that replaces or destroys
 something, a step that fails twice, an ambiguous requirement) and let it run the rest. Five
-Kiro hooks, written last, run the same checks as CI for the file you save. Three MCP servers
-(AWS documentation, EKS, Terraform) are configured. The full account, including what was not
-used (custom agents, property-based testing, powers), is in
+Kiro hooks, written last, run the same checks as CI for the file you save. The whole project was
+built in Kiro Crew (the desktop app), one session per spec. Three MCP servers (AWS
+documentation, EKS, Terraform) are configured; the first session could not start them, so it
+used web research. The full account, including what was not used (custom agents, property-based
+testing, powers), is in
 [`docs/KIRO-WRITEUP.md`](KIRO-WRITEUP.md).
 
 The system itself:

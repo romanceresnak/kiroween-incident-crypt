@@ -421,9 +421,9 @@ def test_writeup_grafana_and_pull_request_facts_match_the_evidence() -> None:
 
 
 @needs_writeup
-def test_writeup_paths_and_links_exist_and_placeholders_are_marked() -> None:
+def test_writeup_paths_and_links_exist_and_no_placeholder_is_left() -> None:
     assert missing_paths(WRITEUP, WRITEUP_PATH.parent) == []
-    assert WRITEUP.count("TODO(user)") == 2
+    assert WRITEUP.count("TODO(user)") == 0
     assert "not verified" in WRITEUP.lower()
 
 
@@ -695,7 +695,7 @@ def test_devpost_links_exist() -> None:
 
 EXPECTED_TODOS = {
     "README.md": 0,
-    "docs/KIRO-WRITEUP.md": 2,
+    "docs/KIRO-WRITEUP.md": 0,
     "docs/DEMO-SCRIPT.md": 1,
     "docs/BLOG-DRAFT.md": 0,
     "docs/SOCIAL-POST.md": 2,
