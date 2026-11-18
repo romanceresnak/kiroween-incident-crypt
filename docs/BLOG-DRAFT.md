@@ -58,8 +58,10 @@ text.
   proposed change is allowed.
 - Each agent has its own AWS role through EKS Pod Identity, and default-deny network policies
   keep the specialists reachable only from the orchestrator.
-- The UI has no login. It is only reachable through `kubectl port-forward`, so I did not expose
-  it. That is a trade-off, and the README says so.
+- The UI sits behind a login and a public address: CloudFront with a WAF, an internal load
+  balancer with no public IP, one account whose credentials come from a Kubernetes Secret, and a
+  session cookie that is `HttpOnly`, `Secure` and `SameSite=Strict`. That account may approve
+  lab incidents only, so a judge cannot open a pull request for a real one.
 
 One limit matters. **Merging the pull request does not change the cluster yet.** Nothing in
 Argo CD applies `gitops/remediations/`, and the demo workloads are not managed by it. The pull
@@ -80,7 +82,7 @@ Kiro wrote and ran most of this under the specs. My part was reviewing its plans
 the AWS changes it stopped to ask about, and pushing.
 
 Everything started as a spec: requirements with numbered IDs, a design, and tasks with one
-commit each. There are eight specs, 84 tasks and more than 320 requirement IDs, and the tests
+commit each. There are nine specs, 94 tasks and more than 400 requirement IDs, and the tests
 and commit messages cite the IDs. Three steering files hold the rules that should never be
 renegotiated: agents are read-only, fixes are pull requests, AWS access uses Pod Identity.
 
@@ -105,6 +107,9 @@ The part I trust most is how many mistakes surfaced when something was actually 
   page script, and they all failed against the old one.
 - Retrieval returned one postmortem three times, because the service returns chunks. It now
   returns one hit per document.
+- Reset and Log out on the Lab page would have failed on the live system. They sent an empty
+  JSON body without the JSON header, which the server's origin check refuses. A DOM test that
+  records every request found it before a judge did.
 
 The crew also diagnosed a real out-of-memory in Grafana on my own cluster. It found the
 256Mi limit with 229 MiB in use right after a restart, and it proposed 512Mi for the Grafana
@@ -128,8 +133,20 @@ app, so I cannot tell you how they behave there.
 - The similarity threshold of 0.5 is a first guess.
 - Incident state is in memory, so a restart of the orchestrator loses it.
 
+## The Scenario Lab
+
+A judge can break the real cluster on purpose, 14 ways, and watch the crew investigate. I ran
+all 14 on the cluster before shipping the page. Each produced an incident in its own namespace,
+and the whole run cost $1.26. Twelve behaved as their card says. Two did not: a CPU-starved
+server and a rollout stuck on a 404 health check were both sent to the network specialist,
+which diagnosed them correctly but may not propose a resource or probe change. I tried two
+rewordings of the classifier prompt, replayed the 14 incidents through the real classifier three
+times each, and every version scored 36 of 42. None helped, so I did not ship them. Seven of the
+14 scenarios end with a fix to approve and seven end as a diagnosis, because the crew cannot
+create a Secret.
+
 The repository has the specs, the steering files, the hooks and the saved records of the real
-incidents: <https://github.com/romanceresnak/kiroween-incident-crypt>. A read-only replay of the
-real UI, built from those records, is at
-<https://romanceresnak.github.io/kiroween-incident-crypt/>. It is a replay: the live system has no public
-endpoint, because its UI can open pull requests and has no login.
+incidents: <https://github.com/romanceresnak/kiroween-incident-crypt>. The live system is at
+<https://d3uh8kq3w5msy5.cloudfront.net> behind a login (the judges have the credentials). A read-only replay of the real
+UI, built from the saved records, needs no login: <https://romanceresnak.github.io/kiroween-incident-crypt/>. The public path has not yet
+been used end to end as I write this.

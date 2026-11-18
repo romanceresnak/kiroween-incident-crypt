@@ -14,7 +14,7 @@ The repository's history runs from 17 Nov 2026 (first commit) to the time of wri
 
 | Kiro feature | Used? | Where |
 |---|---|---|
-| Specs (requirements, design, tasks) | Yes, for all work | `.kiro/specs/`: [eight specs](#specs) |
+| Specs (requirements, design, tasks) | Yes, for all work | `.kiro/specs/`: [nine specs](#specs) |
 | Steering docs | Yes, three files | `.kiro/steering/` |
 | MCP servers | Configured: three | `.kiro/settings/mcp.json` |
 | Agent hooks | Yes, five, added at the end | `.kiro/hooks/` |
@@ -60,6 +60,7 @@ names the task, and tests name the requirement they check.
 | `polish` | 8 | 23 | Per-character animation, category filter and score threshold, learned postmortems |
 | `submission` | 7 | 28 | These hooks and the documents for the hackathon |
 | `replay` | 4 | 34 | A public, read-only replay of the real UI on GitHub Pages |
+| `scenario-lab` | 10 | 76 | Public HTTPS access with a login, and a Lab of 14 live failure scenarios run by a separate runner |
 
 Counts come from the files (`## TASK-n` headings; distinct `REQ-…` identifiers in
 `requirements.md`) and are asserted by a test.
@@ -189,6 +190,9 @@ check caught them.
 | 8 | Grafana was in `CrashLoopBackOff`. All three containers were OOM-killed: Grafana at its 256Mi limit, 19 s after start; both sidecars at 96Mi after about 65 s. Raising only Grafana would have left the pod at 1 of 3 ready. | The live cluster | `fdb0d1c` | Grafana 256Mi/512Mi, sidecars 192Mi; a test fixed to count the sidecar twice, and new tests on the rendered pod. |
 | 9 | The UI showed `[object HTMLDListElement],[object HTMLHeadingElement],…` in three sections and had no Approve or Reject buttons. `replaceChildren` stringifies an array argument. | The live UI | `7de072f` | `nodes()` flattens and refuses to stringify; 11 jsdom tests, all failing on the old `app.js`; a CI step. |
 | 10 | The category-filtered result for the netpol client contained one postmortem three times and another twice, because Retrieve returns chunks. | A live Retrieve probe | `cb84a75` | One hit per document, the best chunk; 13 tests. |
+| 11 | The Lab page sent Reset and Log out as POSTs with an empty body and no `application/json` header. The server's same-origin check refuses that with 415, so both buttons would have failed on the live system. | DOM tests that record every request | `a9c4449` | Every POST is JSON; a test checks the header. |
+| 12 | The sign-in redirect rule accepted `?next=/ui/../auth/logout`. It is not a cross-site redirect, but a crafted link could send a user to any path on the site. | A DOM test of the redirect rule | `a9c4449` | Segments cannot be `.`, `..`, empty or percent-encoded. |
+| 13 | A prompt line meant to send a CPU-starved server to the Vampire changed nothing. Replaying the 14 recorded incidents through the real classifier three times each scored 36 of 42 under the old prompt, the new one and a third wording. | A measurement on Bedrock, not a unit test | `fbfee86` | The prompt line is reverted, and the measurement and the limit are written down. |
 
 Smaller ones: `f21466e` (Argo CD chart pin 10.16.0 → 10.18.0), `154a73d` and `0d7f81d`
 (Helm and provider syntax in the specs), `b8eb6ba` (the kube-prometheus-stack pin was
@@ -196,7 +200,8 @@ verified before use).
 
 Items 5 to 10 were found by running the thing (a CI run, the live cluster, the live UI, a
 live query) and item 4 by calling the API. Items 1 to 3 were found before the thing ran,
-while writing it.
+while writing it. Items 11 to 13 came from the Scenario Lab: two from DOM tests that record every
+request, and one from measuring a change against the model instead of trusting it.
 
 ## The real Grafana OOM, diagnosed by the crew's own agent
 
@@ -286,8 +291,35 @@ scenario both times, so it shows that retrieval works, not that a different inci
 find a useful postmortem. The 0.5 threshold is a first guess. Pull request #3 had not been
 merged when this was written, and neither pull request was applied to the cluster.
 
+## The Scenario Lab, measured
+
+Before shipping the Lab page, all 14 scenarios were run on the real cluster with the same
+renderer the runner uses ([`summary.json`](demo-results/lab/summary.json)). Each produced an
+incident in its own namespace, in 3 to 86 seconds, and the investigation then took 11 to 26
+seconds. The whole run cost $1.26. Nothing was approved, and the cluster was left clean.
+
+- **Twelve behaved as described.** Seven ended with a fix to approve, five as a diagnosis, for
+  example a `Secret` or `ConfigMap` that does not exist, which the crew cannot create.
+- **Two were sent to the wrong specialist.** `cpu-throttling` (card: Vampire) and
+  `rollout-stuck-readiness` (card: Zombie) both went to the Spider. It found the right causes,
+  the 20m CPU limit and the `/ready` path that returns 404, and could not propose a resource or
+  probe change, so both ended as a diagnosis.
+- **A prompt change did not fix it.** Replaying the 14 incidents three times each through the
+  real classifier gave 36 of 42 for the old prompt, my one-line change and a third wording
+  ([`routing.txt`](demo-results/lab/routing.txt)). The classifier sees one event, and a failed
+  health check looks the same whatever caused it. The lines were not kept. A real fix needs more
+  input than the event text.
+
+The runner's tests also hung once for 1 hour 50 minutes. The cause was a test, not the runner:
+it called `reset()` from inside `apply()`, which in the test ran the cleanup inline and waited
+on a lock it already held. The cleanup now runs after the apply, as it does in the service, and
+test runs carry a hard timeout.
+
 ## What Kiro got wrong, and limits
 
+- I added a prompt line meant to send a CPU-starved server to the Vampire and committed it
+  with a note that its effect would be measured, not assumed. The measurement showed it
+  changed nothing, and the commit that follows says so and reverts it.
 - The first draft of the README said an approved change is "a merged pull request that Argo CD
   applies". The `memory-and-ui` spec says the opposite for remediation files, and the
   README was corrected after reading it.

@@ -20,9 +20,11 @@ The agents cannot write to Kubernetes at all. Their only output is a proposal, a
 proposal becomes a pull request. Applying it is a separate step that is **not automated yet**:
 see [Approved changes are not applied](#known-trade-offs-and-what-is-not-verified).
 
-> **Live demo (replay):** <https://romanceresnak.github.io/kiroween-incident-crypt/>. A read-only replay of the real UI, built from the saved
-> records of real runs on EKS, with Approve and Reject disabled. The live system has no public
-> endpoint by design (see [Replay](#replay)).
+> **Try it.** The live system, behind a login: <https://d3uh8kq3w5msy5.cloudfront.net> (the credentials are in the Devpost
+> judges-only field). There, the [Scenario Lab](#scenario-lab) breaks the real cluster on
+> purpose, 14 ways, and the crew investigates. No login needed: a read-only
+> [replay](https://romanceresnak.github.io/kiroween-incident-crypt/) of the real UI, built from the saved records of real runs, with Approve and
+> Reject disabled (see [Replay](#replay)).
 >
 > **Status, 18 Nov 2026.** Running on a real cluster in `eu-west-1`. The full loop has run
 > twice, for the same broken NetworkPolicy. Run 1: approval, pull request
@@ -57,12 +59,14 @@ orchestrator, and agents never call each other directly.
 ```mermaid
 flowchart TB
   human(["Human operator"])
+  judge(["Judge, signed in"])
   gh["GitHub repo<br/>gitops/remediations"]
 
   subgraph aws["AWS eu-west-1"]
     bedrock["Amazon Bedrock<br/>Haiku 4.5 and Sonnet 4.6"]
     kb["Knowledge Base<br/>S3 Vectors + Titan v2"]
     s3["S3 postmortems<br/>postmortems/ and learned/"]
+    cf["CloudFront + WAF<br/>HTTPS, default certificate"]
   end
 
   subgraph eks["EKS cluster"]
@@ -75,11 +79,18 @@ flowchart TB
       ghost["Ghost<br/>storage"]
     end
     archivist["Archivist<br/>incident-memory"]
+    alb["Internal ALB<br/>no public IP"]
+    runner["Lab runner<br/>lab-01 to lab-14 only"]
     kube["Kubernetes API"]
     argo["Argo CD"]
     graf["Prometheus<br/>and Grafana"]
   end
 
+  judge -->|HTTPS and login| cf
+  cf -->|VPC origin| alb
+  alb -->|TargetGroupBinding| necro
+  necro -->|run or reset a scenario| runner
+  runner -->|create and delete lab objects| kube
   watcher -->|incident signal| necro
   necro -->|classify| bedrock
   necro -->|similar incidents| archivist
@@ -98,7 +109,8 @@ flowchart TB
 ```
 
 Terraform builds the VPC, EKS (Kubernetes 1.37, Spot nodes), ECR, the Knowledge Base, one
-Pod Identity role per agent and the GitHub OIDC roles. Argo CD deploys the agents Helm chart,
+Pod Identity role per agent, the GitHub OIDC roles, and the public path: an internal ALB, a
+CloudFront distribution reaching it through a VPC origin, and a WAF. Argo CD deploys the agents Helm chart,
 metrics-server and kube-prometheus-stack from `gitops/apps`. GitHub Actions tests, builds and
 pushes the six images with commit-SHA tags, then commits the tags to the chart.
 
@@ -160,7 +172,11 @@ and proposed the patch in
 | CI hygiene | Actions pinned to full SHAs; ECR tags immutable and equal to commit SHAs; the push role is limited to `kiroween/*`. | `.github/workflows` |
 | NetworkPolicies | Default deny both ways. Specialists and the Archivist accept traffic only from the orchestrator; the orchestrator only from the watcher; metrics only from `monitoring`. Egress: DNS, 443 and the Pod Identity Agent. | `gitops/charts/agents` |
 | Hardened pods | Non-root (10001), read-only root filesystem, all capabilities dropped, seccomp `RuntimeDefault`, no static AWS credentials. | `gitops/charts/agents` |
-| UI | Same-origin scripts and styles only (CSP), `textContent` only, no `innerHTML`. Reachable only by `kubectl port-forward`, never through an ingress. | `agents/orchestrator/.../ui` |
+| UI | Same-origin scripts and styles only (CSP), `textContent` only, no `innerHTML`. | `agents/orchestrator/.../ui` |
+| Public access | CloudFront (HTTPS only, default certificate) reaches an **internal** ALB through a VPC origin: no public load balancer, no public IP. The ALB accepts only the VPC origin's security group. A WAF rate-limits an IP to 300 requests per 5 minutes and runs the AWS common rule set. | `infra/modules/public_access` |
+| Login | Every route except the health probes needs a session. One account from a Secret you create; constant-time comparison of both fields; an `HttpOnly`, `Secure`, `SameSite=Strict` cookie; five failures lock an address for 15 minutes; the address is the one the trusted proxies appended. The watcher uses a separate token, accepted only for `POST /incidents`. | `agents/orchestrator/.../auth.py` |
+| The judge can decide only lab incidents | The signed-in account may approve, reject and submit incidents in `lab-01` to `lab-14` only, so it cannot open a pull request for a real incident. | `agents/orchestrator/.../api.py` |
+| The only writer | The lab runner is the one workload that may create or delete anything, and only in the 14 lab namespaces, by a RoleBinding in each. The orchestrator and every agent stay read-only. A test derives the role from the calls in the code. | `gitops/charts/agents/templates/lab.yaml` |
 
 ## What an incident costs
 
@@ -225,12 +241,17 @@ repository (the Argo CD applications point at `romanceresnak/kiroween-incident-c
    # Optional. Without it every approval is a dry run. Use a fine-grained token limited to this
    # repository with Contents and Pull requests write access.
    kubectl -n agents create secret generic orchestrator-github --from-literal=token='<token>'
+   # The login for the UI and the API. Without it every route but the health probes answers 503.
+   kubectl -n agents create secret generic orchestrator-auth \
+     --from-literal=username='<judge>' --from-literal=password='<a long password>' \
+     --from-literal=internal-token="$(openssl rand -hex 32)"
    ```
 6. **Postmortems.** `scripts/sync-postmortems.sh` uploads the eight seeded postmortems and
    re-indexes the Knowledge Base. Set `incidentMemory.knowledgeBaseId` and
    `orchestrator.learning.dataSourceId` in `gitops/charts/agents/values.yaml` (the command to
    read the data source ID is in the comment above it).
-7. **Open it.**
+7. **Open it.** The address is the Terraform output `public_url` (sign in with the account from
+   `orchestrator-auth`), or by port-forward:
    ```bash
    kubectl -n agents port-forward svc/orchestrator 8080:8080      # http://localhost:8080/ui/
    kubectl -n monitoring port-forward svc/monitoring-grafana 3000:80
@@ -252,17 +273,71 @@ For `netpol`, the `Unhealthy` event appears about 60 to 70 seconds after `up`. T
 UI, read the evidence, click Approve and open the pull request. The step-by-step recording
 plan, with timings, is in [`docs/DEMO-SCRIPT.md`](docs/DEMO-SCRIPT.md).
 
-To submit an incident by hand, `POST /incidents` through the port-forward. The watcher does not
-watch `monitoring`, so this is how the Grafana case above was investigated:
+To submit an incident by hand, `POST /incidents` through the port-forward, with the internal
+token from the Secret `orchestrator-auth` as a bearer token (the Grafana case above was run
+before the login existed, without it). The watcher does not watch `monitoring`, so this is how
+that case was investigated:
 
 ```bash
-curl -s -X POST localhost:8080/incidents -H 'content-type: application/json' -d '{
+TOKEN=$(kubectl -n agents get secret orchestrator-auth -o jsonpath='{.data.internal-token}' | base64 -d)
+curl -s -X POST localhost:8080/incidents -H "authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' -d '{
   "incident_id": "manual-grafana-1", "source": "manual", "reason": "OOMKilled",
   "namespace": "monitoring", "workload": {"kind": "Deployment", "name": "monitoring-grafana"},
   "pod": "<pod name>", "container": "grafana",
   "message": "Container grafana terminated: OOMKilled (exit code 137)",
   "observed_at": "2026-11-18T09:00:00Z"}'
 ```
+
+## Scenario Lab
+
+A judge, or anyone with the login, can break the real cluster on purpose and watch the crew
+investigate. Open <https://d3uh8kq3w5msy5.cloudfront.net>, sign in, choose **Scenario Lab**, pick a card and press **Run**.
+The lab applies a small failing workload in its own namespace, the watcher notices, and the
+page links to the incident the run produced: read the evidence, the similar past incidents and
+the proposal. If the crew proposes a fix you can press **Approve**; that opens a pull request
+on the sandbox branch `lab-remediations`, never on `main`, and nothing is applied to the
+cluster and nothing is saved as memory. Press **Reset** to clean up at once.
+
+Limits: one scenario at a time, ten runs an hour, cleaned up by itself after 15 minutes.
+
+The 14 scenarios, **as measured on the live cluster on 18 Nov 2026** (one run each, before this
+change was deployed; records in [`docs/demo-results/lab`](docs/demo-results/lab/)):
+
+| Namespace | Scenario | What breaks | Answered by | Result | To incident | To decision | Cost |
+|---|---|---|---|---|---:|---:|---:|
+| `lab-01` | `oom-killed` | A container eats all its memory | Vampire | a fix to approve: `resources.limits.memory` | 11 s | 18 s | $0.08 |
+| `lab-02` | `cpu-throttling` | A busy server starved of CPU | **Spider** (card says Vampire) | a diagnosis only | 74 s | 19 s | $0.09 |
+| `lab-03` | `memory-leak` | A slow memory leak | Vampire | a fix to approve: `resources.limits.memory` | 51 s | 18 s | $0.08 |
+| `lab-04` | `netpol-blocks-client` | A firewall rule blocks the client | Spider | a fix to approve: `spec.ingress[0].from[0].podSelector.matchLabels.app` | 71 s | 26 s | $0.08 |
+| `lab-05` | `service-selector-mismatch` | A Service that points at nothing | Spider | a fix to approve: `spec.selector.app` | 69 s | 13 s | $0.08 |
+| `lab-06` | `wrong-target-port` | A Service sends traffic to the wrong port | Spider | a fix to approve: `spec.ports[0].targetPort` | 68 s | 17 s | $0.11 |
+| `lab-07` | `dns-missing-service` | A client calls a Service that does not exist | Spider | a diagnosis only | 70 s | 20 s | $0.10 |
+| `lab-08` | `bad-image-tag` | A rollout with an image that does not exist | Zombie | a fix to approve: `spec.template.spec.containers[name=web].image` | 21 s | 16 s | $0.06 |
+| `lab-09` | `crashloop-missing-config-key` | A program that cannot find its settings | Zombie | a diagnosis only | 11 s | 26 s | $0.16 |
+| `lab-10` | `missing-secret` | A container that needs a Secret that is not there | Zombie | a diagnosis only | 6 s | 20 s | $0.09 |
+| `lab-11` | `rollout-stuck-readiness` | An update that never becomes ready | **Spider** (card says Zombie) | a diagnosis only | 86 s | 18 s | $0.09 |
+| `lab-12` | `pvc-missing-storageclass` | A disk request for a storage type that does not exist | Ghost | a fix to approve: `spec.storageClassName` | 3 s | 11 s | $0.05 |
+| `lab-13` | `rwx-on-ebs` | A shared disk that block storage cannot give | Ghost | a diagnosis only | 3 s | 18 s | $0.09 |
+| `lab-14` | `missing-configmap-mount` | A pod that mounts a ConfigMap that is not there | Ghost | a diagnosis only | 3 s | 24 s | $0.10 |
+
+All 14 produced an incident in their own namespace, and the whole run cost
+$1.26. Twelve behaved as their card says. Two did not:
+`cpu-throttling` and `rollout-stuck-readiness` were both sent to the Spider. The Spider
+diagnosed both correctly (the 20m CPU limit; a `/ready` path that answers 404) but may not
+propose a resource or probe change, so they ended as a diagnosis. The classifier sees one
+event, and a failed health check looks the same whatever caused it. Three prompt wordings were
+measured (36 of 42 each, [`routing.txt`](docs/demo-results/lab/routing.txt)); none helped, so
+none was kept. Seven scenarios end as a diagnosis because the crew cannot create a Secret or a
+ConfigMap, or change what block storage can do.
+
+How it is built: `lab/scenarios.py` holds the 14 fixed scenarios, `render.py` checks each
+object before anything is applied (five kinds, images only from the public ECR mirror, explicit
+limits, a locked-down pod, no Secret), and `runner.py` and `kube.py` are the runner. The
+runner is the orchestrator image with another entrypoint. A request carries only a scenario id.
+Every Deployment and claim gets a run suffix, so a second run is a new incident and not held
+back by the watcher's cooldown. `tools/lab/run_scenarios.py` runs the scenarios on the cluster
+and `tools/lab/measure_routing.py` replays the incidents through the classifier.
 
 ## Replay
 
@@ -287,7 +362,7 @@ cd tools/ui-tests && npm ci --ignore-scripts && npm test      # jsdom tests of t
 
 CI (`.github/workflows/agents-images.yml`) runs the same commands. Five Kiro hooks in
 `.kiro/hooks/` run them for the file you save; see [`docs/KIRO-WRITEUP.md`](docs/KIRO-WRITEUP.md).
-The design lives in `.kiro/specs/` (eight specs: requirements, design, tasks) and the project's
+The design lives in `.kiro/specs/` (nine specs: requirements, design, tasks) and the project's
 rules in `.kiro/steering/`.
 
 ## Teardown
@@ -311,8 +386,14 @@ Chosen on purpose, or not finished:
   [#2](https://github.com/romanceresnak/kiroween-incident-crypt/pull/2) records the approved
   NetworkPolicy change; it did not repair the policy in the cluster. The patch files have not
   been run through `kustomize build`.
-- The approval endpoints have no login. Access is `kubectl port-forward`, so whoever can
-  forward the port can approve. The UI is not exposed publicly for this reason.
+- One shared account, and the credentials are given to the judges. The session, the lockout
+  counters and the Lab's run count are in memory: a restart of the orchestrator signs everyone
+  out and forgets them. The judge account can decide only lab incidents; the owner can lift
+  that with `auth.labOnly`.
+- The CloudFront address is `*.cloudfront.net` with the default certificate, no custom domain.
+  CloudFront reaches the ALB over plain HTTP inside the VPC.
+- A NetworkPolicy can only name the ALB by its two private subnets, which every pod also uses.
+  The login is the control; the policy keeps the other pods and ports closed.
 - The incident store, the correlation state and pending `Unhealthy` re-checks are in memory.
   A restart of the orchestrator loses them.
 - Prometheus keeps two days of data on `emptyDir`. Nodes are Spot.
@@ -336,6 +417,19 @@ Not verified:
   worked, and text from the cluster ends up in it. Both are limited (the text is bounded, only
   approved incidents are stored, and the document says so) but not eliminated.
 - The Kiro hooks have been run by hand and tested against fake tools, not inside the Kiro IDE.
+- **The public path has not been used end to end.** It needs a push, an Argo CD sync of the
+  controller and the chart, and the Secret `orchestrator-auth`. Checked so far: the address
+  redirects HTTP to HTTPS, serves the `*.cloudfront.net` certificate, reaches the internal ALB
+  (which answers 503 until a pod is registered), and has the WAF attached.
+- The lab-runner has never run on the cluster. The 14 scenarios were applied by a harness with
+  the same renderer and the same objects; the runner's limits, cleanup and RBAC are tested
+  against fakes and a rendered chart only.
+- That the WAF's common rule set lets the UI's JSON requests through.
+- That Approve opens a pull request on `lab-remediations` against the real GitHub API: tested
+  with a fake only.
+- That the Lab page looks right in a browser: it was tested in jsdom and never viewed.
+- Whether the target group registers the orchestrator pod through the AWS Load Balancer
+  Controller with the narrow role in `infra/modules/lb_controller`.
 
 ## Repository layout
 
@@ -345,7 +439,7 @@ infra/        Terraform: VPC, EKS, ECR, Knowledge Base, Pod Identity, GitHub OID
 gitops/       Argo CD applications, the agents Helm chart, remediations merged by pull request
 chaos/        scenarios that break a cluster on purpose
 docs/         postmortems (seeded), demo results, and the hackathon write-ups
-tools/        tests for CI, the image-tag tool, the UI DOM tests and the replay build
+tools/        tests for CI, the image-tag tool, the UI DOM tests, the replay build and the lab harness
 scripts/      operator scripts (postmortem sync, IAM check, Kiro hook runner)
 .kiro/        specs, steering, MCP settings and hooks
 ```

@@ -63,7 +63,7 @@ What it does not do: merging the pull request does not change the cluster yet. N
 ## How I built it
 
 Every piece of work was a Kiro spec: requirements with numbered IDs in EARS style, a design,
-and tasks with one commit each. There are eight specs, 84 tasks and 327 requirement IDs, and the
+and tasks with one commit each. There are nine specs, 94 tasks and 403 requirement IDs, and the
 tests and commit messages cite them. Three steering files fix the rules that stay fixed: agents
 are read-only, remediation is a pull request, AWS access uses EKS Pod Identity. I gave Kiro
 stop conditions (an unapproved AWS permission, a Terraform plan that replaces or destroys
@@ -112,6 +112,11 @@ The system itself:
   retrieved next time.
 - The crew diagnosed a real out-of-memory in Grafana on its own cluster and matched the fix I
   had committed.
+- A **Scenario Lab** on the live system: a login-protected page where a judge breaks the real cluster
+  14 ways and watches the crew investigate. All 14 scenarios were run on the cluster and each
+  produced an incident (one run each, 1.26 USD in all). Twelve behaved as described; two
+  (a CPU-starved server, a rollout stuck on a 404 probe) were sent to the wrong specialist, which
+  still diagnosed them correctly. Both are in the README.
 - More than 900 automated tests, many checked by deliberately breaking the code and watching the
   test fail.
 - Security that is tested, not only described: a test fails on any write-style Kubernetes
@@ -123,7 +128,11 @@ The system itself:
   request is applied, and check that the patch renders with `kustomize build`.
 - Check whether a learned fix worked before it is trusted, and tune the 0.5 similarity
   threshold with more incidents.
-- Add login to the approval page, and persist incident state outside memory.
+- Persist incident state outside memory: a restart of the orchestrator loses incidents, sessions
+  and the Lab's run count.
+- Route a failed health check to the right specialist. The classifier sees one event, and three
+  prompt wordings all scored 36 of 42 on the 14 scenarios, so it needs more input (the pod's limits
+  or rollout state) or a hand-over between specialists.
 - Approve the image and storage proposals and check that they fix the cluster; both scenarios
   stopped at `awaiting_approval` and were left unapproved.
 
@@ -149,15 +158,16 @@ Amazon EKS 1.37 · EKS Pod Identity · Amazon ECR · Terraform · Argo CD · Hel
 
 | Criterion | Evidence |
 |---|---|
-| Potential impact | A real task (incident triage) with a safety design for teams that will not let an agent touch production; honest about being proven on a demo cluster, not in production. |
-| Technological implementation | Eight specs, three steering files, five hooks, three MCP servers; a "Kiro caught it" table with ten real catches and their commits; mutation-checked tests. |
+| Potential impact | A real task (incident triage) with a safety design for teams that will not let an agent touch production; a judge can break the live cluster 14 ways and watch it work; honest about being proven on a demo cluster, not in production. |
+| Technological implementation | Nine specs, three steering files, five hooks, three MCP servers; a "Kiro caught it" table with thirteen real catches and their commits; tests that were checked by breaking the code in most specs. |
 | Design | A complete flow in one page: crew, feed, evidence, similar incidents, proposal, decision, cost; six original SVG characters, per-character animation, reduced-motion support. |
 | Innovation | Learned postmortems from approved incidents, found by the next similar incident; read-only agents with remediation as a pull request; cost per incident. |
 | Presentation | A 2:50 script that shows the real run end to end, a blog post and a write-up. |
 
 ## Links
 
-- Working app (replay): <https://romanceresnak.github.io/kiroween-incident-crypt/>
+- Working app (live, behind a login): <https://d3uh8kq3w5msy5.cloudfront.net>
+- Public demo, no login (replay): <https://romanceresnak.github.io/kiroween-incident-crypt/>
 - Repository: <https://github.com/romanceresnak/kiroween-incident-crypt> (MIT, `.kiro/` committed)
 - Kiro write-up: [`docs/KIRO-WRITEUP.md`](KIRO-WRITEUP.md)
 - Demo script: [`docs/DEMO-SCRIPT.md`](DEMO-SCRIPT.md)
@@ -168,22 +178,38 @@ Amazon EKS 1.37 · EKS Pod Identity · Amazon ECR · Terraform · Argo CD · Hel
 
 ## "URL to your working app"
 
-**<https://romanceresnak.github.io/kiroween-incident-crypt/>**
+**<https://d3uh8kq3w5msy5.cloudfront.net>** (live system, behind a login)
 
-The live system runs on an EKS cluster in the author's AWS account and has **no public URL by
-design**: its UI has no login and can open pull requests, so it is only reachable through
-`kubectl port-forward`. The URL above is a **replay**: the real UI code, run in a read-only mode
-over the saved records of five real runs on EKS (`docs/demo-results/`). The crew animates through
-each incident's stages, Approve and Reject are disabled with a link to the real pull request, a
-banner says it is a replay, and the page sends no request except a GET of the saved files. It has
-no secret and no AWS access.
+The rules ask for access to the working project and allow a private site with credentials. The
+credentials are in the judges-only instructions field of the form, never in this repository.
 
-For the instructions field, which only judges see: the replay needs no login. To run the real
-system, follow the README quickstart (it needs an AWS account). The tests need no cluster
-(`uv run --frozen pytest -q` in each `agents/<package>`).
+How to test it:
 
-> **TODO(user):** after you push, enable Pages once (Settings, Pages, Source: GitHub Actions) if
-> it is not already on, open the URL, and check it loads before you submit.
+1. Open the address and sign in with the credentials from the instructions field.
+2. Choose **Scenario Lab**. Pick a card, for example "A firewall rule blocks the client", and
+   press **Run**. It breaks a small workload in its own namespace on the real EKS cluster.
+3. The page links to the incident the run produced. It appears after about 3 to 90 seconds (a
+   failed health check is reported after the watcher waits 60 s, so those take about a minute).
+   Open it: the crew animates, then you see the classification, the evidence table, similar past
+   incidents, the proposal and the cost per agent.
+4. If the crew proposes a fix, press **Approve**. It opens a pull request on the sandbox branch
+   `lab-remediations`, never on `main`; nothing is applied to the cluster and nothing is saved
+   as memory. Seven of the 14 scenarios end with a fix to approve; the other seven end as a
+   diagnosis, because the crew cannot create a Secret or a ConfigMap.
+5. Press **Reset**, or wait: a scenario cleans itself up after 15 minutes. One scenario runs at a
+   time, and ten runs an hour are allowed. The account can approve and reject lab incidents only.
+
+**<https://romanceresnak.github.io/kiroween-incident-crypt/>** is the public demo with no login: the same UI code run in a read-only mode over
+the saved records of five real runs, with Approve and Reject disabled and a banner that says it
+is a replay. It sends no request except a GET of the saved files.
+
+The tests need no cluster (`uv run --frozen pytest -q` in each `agents/<package>`).
+
+> **TODO(user):** after you push, wait for Argo CD to sync, then create the Secret
+> `orchestrator-auth` (README, quickstart step 5), open the address, sign in, and run one scenario
+> yourself before you submit. Until the Secret exists the address answers 503. Paste the user
+> name and password into the judges-only instructions field. Enable Pages once (Settings, Pages,
+> Source: GitHub Actions) if it is not already on, and check the replay loads.
 
 ## Prizes this submission could be considered for
 

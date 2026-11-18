@@ -27,7 +27,7 @@ shot honest.
    kubectl -n agents port-forward svc/orchestrator 8080:8080
    kubectl -n monitoring port-forward svc/monitoring-grafana 3000:80
    ```
-   Open <http://localhost:8080/ui/> and <http://localhost:3000/d/kiroween-agents>. Log in to
+   Open <http://localhost:8080/ui/> (it asks for the login from Secret `orchestrator-auth`) and <http://localhost:3000/d/kiroween-agents>. Log in to
    Grafana now, with the password from Secret `grafana-admin`, so it never appears on screen.
 3. **Start from a clean scenario.** The watcher reports one incident per workload per 10
    minutes (cooldown 600 s), and an approved incident counts as open for the 5-minute
@@ -121,7 +121,7 @@ ingestion job.
 cost per agent, per incident, and the tokens. One real investigation, a Grafana out-of-memory,
 cost about eleven cents.
 
-**Shot 9 (10 s).** Built with Kiro: eight specs, five hooks, three steering files. The code
+**Shot 9 (10 s).** Built with Kiro: nine specs, five hooks, three steering files. The code
 is on GitHub under the MIT licence.
 
 ## What not to claim

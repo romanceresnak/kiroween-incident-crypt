@@ -305,7 +305,7 @@ def test_readme_model_ids_are_the_ones_in_the_chart(model: str) -> None:
 WRITEUP_PATH = REPO / "docs" / "KIRO-WRITEUP.md"
 WRITEUP = WRITEUP_PATH.read_text() if WRITEUP_PATH.exists() else ""
 SPECS = ["infra", "agents-core", "specialists", "hardening", "memory-and-ui", "polish",
-         "submission", "replay"]
+         "submission", "replay", "scenario-lab"]
 
 needs_writeup = pytest.mark.skipif(not WRITEUP, reason="docs/KIRO-WRITEUP.md not written yet")
 
@@ -353,6 +353,9 @@ CAUGHT = {
     8: ("OOM-killed", "fdb0d1c"),
     9: ("HTMLDListElement", "7de072f"),
     10: ("three times", "cb84a75"),
+    11: ("415", "a9c4449"),
+    12: ("../auth/logout", "a9c4449"),
+    13: ("36 of 42", "fbfee86"),
 }
 
 
@@ -631,7 +634,7 @@ def test_blog_says_it_is_part_of_the_hackathon_and_is_about_kiro_and_the_project
     assert BLOG.startswith("# ")
     assert len(re.findall(r"\bKiro\b", BLOG)) >= 8
     assert "https://github.com/romanceresnak/kiroween-incident-crypt" in BLOG
-    assert 700 <= len(BLOG.split()) <= 1500
+    assert 700 <= len(BLOG.split()) <= 1700
 
 
 @needs_blog
@@ -658,8 +661,8 @@ def test_blog_numbers_come_from_the_saved_records_and_the_specs() -> None:
         assert f"pull/{number})" in BLOG
     tasks = sum(spec_counts(name)[0] for name in SPECS)
     reqs = sum(spec_counts(name)[1] for name in SPECS)
-    assert len(SPECS) == 8
-    assert f"eight specs, {tasks} tasks and more than {reqs // 10 * 10} requirement IDs" in BLOG
+    assert len(SPECS) == 9
+    assert f"nine specs, {tasks} tasks and more than {reqs // 10 * 10} requirement IDs" in BLOG
 
 
 @needs_blog
@@ -721,7 +724,7 @@ def test_devpost_answers_all_five_judging_criteria() -> None:
 def test_devpost_numbers_match_the_repository() -> None:
     tasks = sum(spec_counts(name)[0] for name in SPECS)
     reqs = sum(spec_counts(name)[1] for name in SPECS)
-    assert f"eight specs, {tasks} tasks and {reqs} requirement IDs" in DEVPOST
+    assert f"nine specs, {tasks} tasks and {reqs} requirement IDs" in DEVPOST
     first = demo_result("netpol-first-run-real.json")
     second = demo_result("netpol-second-run-real.json")
     top = second["similar_incidents"][0]
@@ -748,8 +751,8 @@ def test_devpost_numbers_match_the_repository() -> None:
 def test_devpost_states_the_limits_and_the_url_decision() -> None:
     text = " ".join(DEVPOST.split())
     assert "merging the pull request does not change the cluster yet" in text
-    assert "no public URL by design" in text
     assert "URL to your working app" in text
+    assert "no public URL by design" not in text
     assert "More than 900 automated tests" in text
     assert "Best Kiro Crew App" in text and "is not claimed" in text
     assert DEVPOST.count("TODO(user)") == 4
@@ -796,12 +799,12 @@ PAGES = "https://romanceresnak.github.io/kiroween-incident-crypt/"
 
 
 def test_the_readme_links_the_replay_and_says_what_it_is() -> None:
-    assert f"**Live demo (replay):** <{PAGES}>" in README
     text = " ".join(README.replace("\n> ", "\n").split())
-    assert "read-only replay of the real UI" in text
-    assert "has no public endpoint by design" in text
+    assert f"[replay]({PAGES})" in text
+    assert "read-only [replay]" in text and "No login needed" in text
+    assert "no public endpoint" not in text and "by `kubectl port-forward`, never through" not in text
     assert "## Replay" in README and "tools/replay/build.py" in README
-    assert "eight specs" in README and "seven specs" not in README
+    assert "nine specs" in README and "eight specs" not in README
 
 
 @needs_devpost
@@ -809,9 +812,9 @@ def test_devpost_gives_the_replay_as_the_working_app_and_drops_the_open_decision
     text = " ".join(DEVPOST.split())
     section = DEVPOST.split('## "URL to your working app"')[1].split("## Prizes")[0]
     assert f"**<{PAGES}>**" in section
-    assert "is a **replay**" in " ".join(section.split())
-    assert "no public URL by design" in " ".join(section.split())
-    assert f"- Working app (replay): <{PAGES}>" in DEVPOST
+    assert "is a replay" in " ".join(section.split())
+    assert "no public URL by design" not in text
+    assert f"- Public demo, no login (replay): <{PAGES}>" in DEVPOST
     assert "a decision for you" not in text
     assert "Options, none built" not in text
     assert "Expose the UI behind authentication" not in text
@@ -822,7 +825,7 @@ def test_the_pages_url_follows_the_repository_and_matches_the_workflow_and_the_b
     workflow = (REPO / ".github" / "workflows" / "replay-pages.yml").read_text()
     assert "actions/deploy-pages@" in workflow
     build = (REPO / "tools" / "replay" / "build.py").read_text()
-    assert "no public endpoint" in build
+    assert "behind a login" in build
     for doc in (README, DEVPOST, BLOG):
         assert PAGES in doc
 
@@ -831,4 +834,73 @@ def test_the_pages_url_follows_the_repository_and_matches_the_workflow_and_the_b
 def test_the_blog_names_the_replay_and_says_it_is_one() -> None:
     text = " ".join(BLOG.split())
     assert f"<{PAGES}>" in BLOG
-    assert "It is a replay: the live system has no public endpoint" in text
+    assert "read-only replay of the real UI" in text and "needs no login" in text
+    assert "no public endpoint" not in text
+
+
+# ------------------------------------------------------------- the Scenario Lab claims
+
+LIVE = "https://d3uh8kq3w5msy5.cloudfront.net"
+LAB_RESULTS = REPO / "docs" / "demo-results" / "lab"
+
+
+def lab_summary() -> dict:
+    return json.loads((LAB_RESULTS / "summary.json").read_text())
+
+
+def test_lab_numbers_in_the_docs_come_from_the_saved_run() -> None:
+    summary = lab_summary()
+    rows = summary["scenarios"]
+    assert len(rows) == 14
+    total = f"${summary['total_cost_usd']:.2f}"
+    assert total == "$1.26"
+    approvable = [r for r in rows if r["status"] == "awaiting_approval"]
+    assert len(approvable) == 7
+    for text in (README, DEVPOST, BLOG, WRITEUP):
+        assert total in text or "1.26 USD" in text
+    flat = " ".join(README.split())
+    assert "All 14 produced an incident in their own namespace" in flat
+    assert "Twelve behaved as their card says. Two did not" in flat
+    for row in rows:
+        assert f"`{row['scenario']}`" in README, row["scenario"]
+        if row["status"] == "awaiting_approval":
+            assert f"a fix to approve: `{row['proposal_field']}`" in README
+
+
+def test_the_two_misrouted_scenarios_are_named_and_match_the_saved_records() -> None:
+    rows = {r["scenario"]: r for r in lab_summary()["scenarios"]}
+    wrong = sorted(n for n, r in rows.items() if r["category_observed"] != r["category_expected"])
+    assert wrong == ["cpu-throttling", "rollout-stuck-readiness"]
+    for name in wrong:
+        assert rows[name]["category_observed"] == "network"
+        assert name in README
+    routing = (LAB_RESULTS / "routing.txt").read_text()
+    assert routing.count("36/42") >= 3
+    assert "36 of 42" in README and "36 of 42" in WRITEUP
+
+
+def test_the_docs_give_the_live_address_and_the_lab_limits() -> None:
+    for text in (README, DEVPOST, BLOG):
+        assert LIVE in text
+    flat = " ".join(README.split())
+    assert "one scenario at a time, ten runs an hour, cleaned up by itself after 15 minutes" in flat
+    assert "`lab-remediations`" in README and "`lab-remediations`" in DEVPOST
+    assert "nothing is saved as memory" in flat or "nothing is saved as\n" in README
+    main_tf = (REPO / "infra" / "variables.tf").read_text()
+    assert 'default     = 400' in main_tf or "default = 400" in main_tf
+
+
+def test_nobody_is_told_the_live_system_has_no_login() -> None:
+    for name, text in (("README", README), ("DEVPOST", DEVPOST), ("BLOG", BLOG)):
+        flat = " ".join(text.split())
+        assert "has no login" not in flat, name
+        assert "no public endpoint" not in flat, name
+        assert "only reachable through" not in flat, name
+
+
+def test_the_devpost_testing_steps_name_what_a_judge_can_and_cannot_do() -> None:
+    section = DEVPOST.split('## "URL to your working app"')[1].split("## Prizes")[0]
+    flat = " ".join(section.split())
+    for needle in ("judges-only instructions field", "Scenario Lab", "**Run**", "**Approve**",
+                   "**Reset**", "never on `main`", "lab incidents only"):
+        assert needle in flat, needle
