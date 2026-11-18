@@ -668,7 +668,8 @@ def test_devpost_numbers_match_the_repository() -> None:
     assert len(list((REPO / "docs" / "postmortems").glob("*.md"))) == 8
     assert "eight postmortems" in DEVPOST
     ui_tests = len(re.findall(r"^\s*test\(", "".join(
-        p.read_text() for p in (REPO / "tools" / "ui-tests").glob("*.test.mjs")), re.M))
+        (REPO / "tools" / "ui-tests" / name).read_text()
+        for name in ("ui.test.mjs", "motion.test.mjs")), re.M))
     assert f"{ui_tests} jsdom tests" in DEVPOST
 
 

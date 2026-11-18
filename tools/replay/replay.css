@@ -1,1 +1,36 @@
-/* Replay styles placeholder: replaced by replay TASK-02. The build copies this file as is. */
+/* Replay additions to the real UI's stylesheet (replay REQ-RM-05, REQ-TL, REQ-DD). The
+   variables come from style.css. */
+
+.replay-banner {
+  position: sticky; top: 0; z-index: 10;
+  padding: 0.55rem 1.5rem; text-align: center; font-size: 0.85rem; font-weight: 700;
+  background: #3a1d00; color: #ffd7a8; border-bottom: 2px solid var(--pumpkin);
+}
+
+.replay-bar {
+  margin: 0.75rem 1.5rem 0; padding: 0.75rem 1rem; font-size: 0.85rem;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+}
+.replay-bar p { margin: 0.25rem 0; }
+.replay-story { color: var(--bone); }
+
+.replay-stages {
+  display: flex; flex-wrap: wrap; gap: 0.4rem; list-style: none; margin: 0.5rem 0; padding: 0;
+}
+.replay-stages li {
+  padding: 0.2rem 0.7rem; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--panel-2); color: var(--muted); font-size: 0.75rem;
+}
+.replay-stages li.done { color: var(--ink); border-color: #3b2a5c; }
+.replay-stages li.now { background: #3b2a5c; color: #e2d4ff; border-color: var(--pumpkin); }
+
+.replay-controls { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.replay-controls button {
+  background: var(--panel-2); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 8px; padding: 0.35rem 0.8rem; font: inherit; cursor: pointer;
+}
+.replay-controls button:hover { border-color: var(--pumpkin); }
+
+/* The decision stays visible but cannot be used. */
+.replay-decision button:disabled { opacity: 0.45; cursor: not-allowed; }
+.replay-decision p { margin: 0.75rem 0 0.25rem; }

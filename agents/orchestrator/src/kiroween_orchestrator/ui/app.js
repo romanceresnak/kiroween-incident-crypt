@@ -4,6 +4,9 @@
 "use strict";
 
 const POLL_MS = 3000;
+// Set by tools/replay/replay.js in the public replay build (replay REQ-RM-01). It is absent
+// on the cluster, and then nothing below changes.
+const REPLAY = window.KIROWEEN_REPLAY || null;
 const ART = {
   "orchestrator": "art/necromancer.svg",
   "cpu-memory": "art/vampire.svg", "cpu_memory": "art/vampire.svg",
@@ -68,6 +71,7 @@ function badge(status) {
 }
 
 async function getJSON(path) {
+  if (REPLAY) return REPLAY.getJSON(path);
   const response = await fetch(path, { headers: { "Accept": "application/json" } });
   if (!response.ok) throw new Error(path + " returned " + response.status);
   return response.json();
@@ -102,11 +106,16 @@ function renderFeed(records) {
 
 function markBusy(records) {
   const busy = new Set();
-  for (const r of records) {
-    if (r.status !== "processing" && r.status !== "accepted") continue;
-    busy.add("orchestrator").add("incident-memory");
-    const category = r.classification && r.classification.category;
-    if (SPECIALIST_AGENT[category]) busy.add(SPECIALIST_AGENT[category]);
+  if (REPLAY) {
+    // The replay says which agents did the work at the stage it is playing.
+    for (const agent of REPLAY.busyAgents()) busy.add(agent);
+  } else {
+    for (const r of records) {
+      if (r.status !== "processing" && r.status !== "accepted") continue;
+      busy.add("orchestrator").add("incident-memory");
+      const category = r.classification && r.classification.category;
+      if (SPECIALIST_AGENT[category]) busy.add(SPECIALIST_AGENT[category]);
+    }
   }
   for (const fig of document.querySelectorAll(".crew figure")) {
     fig.classList.toggle("busy", busy.has(fig.dataset.agent));
@@ -230,6 +239,21 @@ function safeLink(url) {
   return typeof url === "string" && url.startsWith("https://github.com/") ? url : null;
 }
 
+// In the public replay the decision is shown but cannot be used (replay REQ-DD-01, DD-02):
+// the buttons are disabled and have no handler, nothing is stored, and nothing is sent.
+function replayDecision(record) {
+  const note = REPLAY.decisionNote(record);
+  const link = safeLink(note.link);
+  return [el("div", { class: "decision replay-decision" },
+    el("div", { class: "buttons" },
+      el("button", { class: "approve", type: "button", disabled: "disabled",
+                     text: "Approve: open the PR" }),
+      el("button", { class: "reject", type: "button", disabled: "disabled", text: "Reject" })),
+    el("p", { class: "muted", text: note.text }),
+    link ? el("p", {}, el("a", { href: link, target: "_blank", rel: "noopener noreferrer",
+                                  text: link })) : null)];
+}
+
 function approvalView(record) {
   const a = record.approval;
   if (a) {
@@ -251,6 +275,7 @@ function approvalView(record) {
     return out;
   }
   if (record.status !== "awaiting_approval") return [];
+  if (REPLAY) return replayDecision(record);
   const name = el("input", { id: "approver", name: "by", maxlength: 64, autocomplete: "name",
                              value: localStorage.getItem("kiroween.approver") || "" });
   const comment = el("textarea", { id: "comment", name: "comment", maxlength: 500, rows: 2 });
@@ -318,9 +343,9 @@ function renderDetail(record) {
 async function refreshFeed() {
   try {
     renderFeed(await getJSON("/incidents?limit=50"));
-    setLive(true, "live · " + new Date().toLocaleTimeString());
+    setLive(true, REPLAY ? "replay of saved records" : "live · " + new Date().toLocaleTimeString());
   } catch (err) {
-    setLive(false, "orchestrator unreachable");
+    setLive(false, REPLAY ? "replay data could not be loaded" : "orchestrator unreachable");
   }
 }
 
@@ -339,12 +364,22 @@ async function refreshDetail() {
 function select(id) {
   selected = id;
   history.replaceState(null, "", "#" + encodeURIComponent(id));
+  if (REPLAY) REPLAY.start(id);
   refreshDetail();
   refreshFeed();
 }
 
 const fromHash = decodeURIComponent(location.hash.slice(1));
-if (fromHash) select(fromHash);
+if (REPLAY) {
+  // Every stage change redraws the feed and the detail. The first incident plays on its own.
+  REPLAY.onChange = () => { refreshFeed(); refreshDetail(); };
+  REPLAY.ready.then(() => {
+    const first = REPLAY.has(fromHash) ? fromHash : REPLAY.firstId();
+    if (first) select(first);
+  });
+} else if (fromHash) {
+  select(fromHash);
+}
 refreshFeed();
 setInterval(refreshFeed, POLL_MS);
 setInterval(refreshDetail, POLL_MS);
