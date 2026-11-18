@@ -174,7 +174,8 @@ module "pod_identity" {
   cluster_arn  = module.eks.cluster_arn
   agent_names  = var.agent_names
 
-  knowledge_base_arn = module.bedrock_kb.knowledge_base_arn
+  knowledge_base_arn     = module.bedrock_kb.knowledge_base_arn
+  postmortem_bucket_name = module.bedrock_kb.postmortem_bucket_name
 }
 
 # TASK-10: Argo CD (bootstrap only; everything else is deployed from /gitops)

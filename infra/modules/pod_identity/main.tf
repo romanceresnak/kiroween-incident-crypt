@@ -9,6 +9,9 @@ locals {
   # plan time) keeps for_each plannable.
   kb_agents = toset([for a in var.agent_names : a if contains(var.knowledge_base_agents, a)])
 
+  # Agents that turn approved incidents into postmortems (polish REQ-IAM-01).
+  learning_agents = toset([for a in var.agent_names : a if contains(var.learning_agents, a)])
+
   service_accounts = { for a in var.agent_names : a => "${a}-sa" }
 }
 
@@ -103,6 +106,37 @@ resource "aws_iam_role_policy" "kb_retrieve" {
   name   = "knowledge-base-retrieve"
   role   = aws_iam_role.agent[each.key].id
   policy = data.aws_iam_policy_document.kb_retrieve.json
+}
+
+# ---------------------------------------------------------------------------
+# Self-learning memory (polish REQ-IAM-01): an approved incident becomes a postmortem
+# under learned/ and the Knowledge Base is re-indexed. Exactly two permissions: write new
+# objects under learned/, and start an ingestion job on this Knowledge Base. No read, no
+# delete, no list, no other prefix, no other Knowledge Base. The bucket uses S3-managed
+# encryption (AES256), so no KMS permission is needed.
+# ---------------------------------------------------------------------------
+data "aws_iam_policy_document" "learn" {
+  statement {
+    sid       = "WriteLearnedPostmortems"
+    effect    = "Allow"
+    actions   = ["s3:PutObject"]
+    resources = ["arn:aws:s3:::${var.postmortem_bucket_name}/learned/*"]
+  }
+
+  statement {
+    sid       = "StartKnowledgeBaseIngestion"
+    effect    = "Allow"
+    actions   = ["bedrock:StartIngestionJob"]
+    resources = [var.knowledge_base_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "learn" {
+  for_each = local.learning_agents
+
+  name   = "learn-postmortems"
+  role   = aws_iam_role.agent[each.key].id
+  policy = data.aws_iam_policy_document.learn.json
 }
 
 # ---------------------------------------------------------------------------

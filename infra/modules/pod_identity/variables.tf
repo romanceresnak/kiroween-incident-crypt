@@ -44,3 +44,14 @@ variable "knowledge_base_agents" {
   type        = list(string)
   default     = ["incident-memory"]
 }
+
+variable "postmortem_bucket_name" {
+  description = "Name of the S3 bucket holding the postmortems. Learning agents may write under learned/ in it."
+  type        = string
+}
+
+variable "learning_agents" {
+  description = "Agents that may write learned postmortems and start Knowledge Base ingestion jobs."
+  type        = list(string)
+  default     = ["orchestrator"]
+}
