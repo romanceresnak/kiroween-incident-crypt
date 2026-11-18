@@ -504,15 +504,19 @@ def test_min_score_is_a_value_and_is_always_a_string_the_pod_can_parse() -> None
     assert 0.0 <= float(env["MIN_SCORE"]) <= 1.0
 
 
-def test_the_orchestrator_gets_the_learning_settings_and_is_off_until_a_data_source_is_set(
-    docs: list[dict],
-) -> None:
+def test_the_orchestrator_gets_the_learning_settings(docs: list[dict]) -> None:
     env = {e["name"]: e.get("value") for e in container_of(docs, "orchestrator")["env"]}
     assert env["LEARNING_BUCKET"] == "kiroween-prod-postmortems-255834079310"
     assert env["LEARNING_PREFIX"] == "learned/"
     assert env["KNOWLEDGE_BASE_ID"] == "VIBAT27SDH"
-    # Empty by default: the app reports "not configured" instead of guessing an ID.
-    assert env["KNOWLEDGE_BASE_DATA_SOURCE_ID"] == ""
+    assert env["KNOWLEDGE_BASE_DATA_SOURCE_ID"] == "UCADW10RQV"
+
+
+def test_an_empty_data_source_turns_learning_off() -> None:
+    docs = render(*(f"images.{key}.tag={SHA}" for key in IMAGE_KEYS),
+                  "orchestrator.learning.dataSourceId=")
+    env = {e["name"]: e.get("value") for e in container_of(docs, "orchestrator")["env"]}
+    assert env["KNOWLEDGE_BASE_DATA_SOURCE_ID"] == ""   # the app then reports "not configured"
 
 
 def test_setting_the_data_source_turns_learning_on_for_the_orchestrator_only() -> None:
