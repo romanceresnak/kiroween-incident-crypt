@@ -20,7 +20,7 @@ The repository's history runs from 17 Nov 2026 (first commit) to the time of wri
 | Agent hooks | Yes, five, added at the end | `.kiro/hooks/` |
 | Kiro Crew | Yes, per the author's sessions (not recorded in git) | see [Which Kiro](#which-kiro-ide-cli-web-crew) |
 | Kiro IDE, CLI, Web | Not recorded in the history | see [Which Kiro](#which-kiro-ide-cli-web-crew) |
-| Custom agents | **No.** `.kiro/agents/` is empty. | |
+| Custom agents | **No.** No custom agent files exist under `.kiro`. | |
 | Property-based testing | **No.** No PBT library is a dependency. | see [Testing](#testing-without-property-based-tests) |
 | Powers | **No.** | |
 
