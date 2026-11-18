@@ -125,7 +125,11 @@ storage:
 incidentMemory:
   knowledgeBaseId: VIBAT27SDH
   topK: 3
-  minScore: "0.3"
+  # Hits scoring below this are dropped (0 to 1; the pod refuses to start otherwise). Scores
+  # cannot separate a right and a wrong postmortem (0.71 against 0.70 on 17 Nov): that is the
+  # category filter's job. This only removes weak matches. 0.5 is provisional until it is
+  # checked against live scores (polish tasks.md, TASK-02); lower it if good hits vanish.
+  minScore: "0.5"
   resources:
     requests: {cpu: 20m, memory: 128Mi}
     limits: {cpu: 200m, memory: 256Mi}

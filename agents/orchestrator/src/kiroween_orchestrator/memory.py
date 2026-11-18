@@ -25,11 +25,14 @@ class MemoryClient:
         self.timeout_s = timeout_s
         self._transport = transport
 
-    async def similar(self, incident: Incident) -> list[SimilarIncident]:
+    async def similar(self, incident: Incident,
+                      category: str | None = None) -> list[SimilarIncident]:
+        # "unknown" selects no filter in incident-memory, so it is not sent.
+        params = {"category": category} if category and category != "unknown" else None
         try:
             async with httpx.AsyncClient(timeout=self.timeout_s,
                                          transport=self._transport) as client:
-                response = await client.post(f"{self.base_url}/similar",
+                response = await client.post(f"{self.base_url}/similar", params=params,
                                              json=incident.model_dump(mode="json"))
                 response.raise_for_status()
                 return _RESULTS.validate_python(response.json())[:5]

@@ -418,7 +418,7 @@ def test_incident_memory_deployment(docs: list[dict]) -> None:
     container = container_of(docs, "incident-memory")
     assert container["args"] == ["-m", "kiroween_incident_memory"]
     env = {e["name"]: e.get("value") for e in container["env"]}
-    assert (env["KNOWLEDGE_BASE_ID"], env["TOP_K"], env["MIN_SCORE"]) == ("VIBAT27SDH", "3", "0.3")
+    assert (env["KNOWLEDGE_BASE_ID"], env["TOP_K"], env["MIN_SCORE"]) == ("VIBAT27SDH", "3", "0.5")
     assert "MODEL_ID" not in env
     assert container["image"].endswith(f"kiroween/incident-memory:{SHA}")
 
@@ -491,3 +491,14 @@ def test_agents_application_retries_until_the_crd_exists() -> None:
     app = yaml.safe_load((REPO / "gitops" / "apps" / "agents.yaml").read_text())
     retry = app["spec"]["syncPolicy"]["retry"]
     assert retry["limit"] >= 5 and retry["backoff"]["maxDuration"] == "5m"
+
+
+# --- polish (REQ-RET-05, REQ-IAM-03) ----------------------------------------------------------
+
+
+def test_min_score_is_a_value_and_is_always_a_string_the_pod_can_parse() -> None:
+    docs = render(*(f"images.{key}.tag={SHA}" for key in IMAGE_KEYS),
+                  "incidentMemory.minScore=0.65")
+    env = {e["name"]: e.get("value") for e in container_of(docs, "incident-memory")["env"]}
+    assert env["MIN_SCORE"] == "0.65"
+    assert 0.0 <= float(env["MIN_SCORE"]) <= 1.0

@@ -40,18 +40,18 @@ class Fakes:
         self.fail = fail
         self.delegated: list[Incident] = []
         self.memory_calls: list[str] = []
-        self.overlap = False
-        self._in_classify = False
+        self.memory_categories: list[str | None] = []
+        self.classified = False
 
     async def classify(self, i: Incident):  # type: ignore[no-untyped-def]
-        self._in_classify = True
         await asyncio.sleep(0.05)
-        self._in_classify = False
+        self.classified = True
         return Classification(category=self.category, rationale="r"), Usage(input_tokens=1)
 
-    async def similar(self, i: Incident) -> list[SimilarIncident]:
+    async def similar(self, i: Incident, category: str | None = None) -> list[SimilarIncident]:
         self.memory_calls.append(i.incident_id)
-        self.overlap = self.overlap or self._in_classify
+        self.memory_categories.append(category)
+        self.finished_classifying_first = self.classified
         if self.fail:
             raise RuntimeError("boom")
         return [HIT]
@@ -93,10 +93,41 @@ async def test_similar_incidents_are_recorded_and_passed_to_the_specialist() -> 
     assert record.incident.similar_incidents == []  # the submitted incident is unchanged
 
 
-async def test_memory_runs_while_the_incident_is_classified() -> None:
-    f = Fakes()
+async def test_memory_runs_after_classification_with_its_category() -> None:
+    # polish REQ-RET-01: the lookup needs the category, so it follows the classification.
+    f = Fakes(category="storage")
     await process(service(f), incident())
-    assert f.overlap
+    assert f.finished_classifying_first is True
+    assert f.memory_categories == ["storage"]
+
+
+async def test_the_classification_is_on_the_record_before_the_lookup_finishes() -> None:
+    gate = asyncio.Event()
+    seen: dict = {}
+    f = Fakes()
+
+    async def slow_similar(i: Incident, category: str | None = None) -> list[SimilarIncident]:
+        seen["classification"] = svc.store.get(i.incident_id).classification
+        await gate.wait()
+        return [HIT]
+
+    svc = IncidentService(classify=f.classify, delegate=f.delegate, similar=slow_similar,
+                          specialists=frozenset({"cpu_memory"}))
+    await svc.start()
+    try:
+        svc.submit(incident())
+        await asyncio.sleep(0.2)
+        assert seen["classification"].category == "cpu_memory"   # the UI can show it already
+        gate.set()
+        await asyncio.wait_for(svc.drain(), timeout=5)
+    finally:
+        await svc.stop()
+
+
+async def test_an_unknown_category_is_passed_on_for_incident_memory_to_ignore() -> None:
+    f = Fakes(category="unknown")
+    await process(service(f), incident())
+    assert f.memory_categories == ["unknown"]
 
 
 async def test_memory_failure_never_fails_the_incident() -> None:

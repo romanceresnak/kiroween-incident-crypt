@@ -61,7 +61,7 @@ class IncidentService:
         specialists: frozenset[str] = frozenset({"cpu_memory"}),
         correlation_window_s: float = 300.0,
         now: Callable[[], datetime] = utcnow,
-        similar: Callable[[Incident], Awaitable[list[SimilarIncident]]] | None = None,
+        similar: Callable[[Incident, str | None], Awaitable[list[SimilarIncident]]] | None = None,
         approver: Approver | None = None,
     ) -> None:
         # Categories with a configured specialist. Everything else ends as no_specialist.
@@ -149,15 +149,16 @@ class IncidentService:
             self.store.update(incident_id, status="processing")
             try:
                 async with asyncio.timeout(self._timeout):
-                    # Memory and classification are independent: run them together.
-                    (classification, own_usage), similar = await asyncio.gather(
-                        self._classify(incident), self._similar(incident))
+                    # The similar-incident lookup needs the category, so it follows the
+                    # classification (polish REQ-RET-01): one Retrieve call after the model.
+                    classification, own_usage = await self._classify(incident)
+                    category = classification.category
                     self.store.update(
                         incident_id, classification=classification,
                         usage_by_agent={"orchestrator": own_usage},
-                        similar_incidents=similar,
                     )
-                    category = classification.category
+                    similar = await self._similar(incident, category)
+                    self.store.update(incident_id, similar_incidents=similar)
                     if category not in self.specialists:
                         self.store.update(incident_id, status="no_specialist")
                         record_incident(category, "no_specialist", None)
@@ -195,11 +196,11 @@ class IncidentService:
                 logger.exception("incident %s failed", incident_id)
                 self._fail(incident_id, f"{type(exc).__name__}: {exc}", category)
 
-    async def _similar(self, incident: Incident) -> list[SimilarIncident]:
+    async def _similar(self, incident: Incident, category: str | None) -> list[SimilarIncident]:
         if self._memory is None:
             return []
         try:
-            return await self._memory(incident)
+            return await self._memory(incident, category)
         except Exception:  # memory is context, never a reason to fail the incident
             logger.exception("similar-incident lookup failed")
             return []
