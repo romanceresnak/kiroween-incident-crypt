@@ -645,3 +645,30 @@ def test_devpost_links_exist() -> None:
     assert "https://github.com/romanceresnak/kiroween-incident-crypt" in DEVPOST
     assert "docs/KIRO-WRITEUP.md" in DEVPOST and "#kiro-caught-it" in DEVPOST
     assert "## Kiro caught it" in WRITEUP
+
+
+# ------------------------------------------------------------- placeholders
+
+EXPECTED_TODOS = {
+    "README.md": 0,
+    "docs/KIRO-WRITEUP.md": 2,
+    "docs/DEMO-SCRIPT.md": 1,
+    "docs/BLOG-DRAFT.md": 0,
+    "docs/SOCIAL-POST.md": 2,
+    "docs/DEVPOST.md": 4,
+}
+
+
+def test_only_the_known_placeholders_remain() -> None:
+    """Every TODO(user) is a thing only the author can supply; the list is in tasks.md."""
+    found = {name: (REPO / name).read_text().count("TODO(user)") for name in EXPECTED_TODOS}
+    assert found == EXPECTED_TODOS
+    status = (REPO / ".kiro" / "specs" / "submission" / "tasks.md").read_text()
+    assert f"{sum(EXPECTED_TODOS.values())} placeholders" in status
+
+
+def test_no_document_leaves_a_stray_marker() -> None:
+    for name in EXPECTED_TODOS:
+        stripped = (REPO / name).read_text().replace("TODO(user)", "")
+        for marker in ("TODO", "FIXME", "XXX", "TBD", "lorem"):
+            assert marker not in stripped, (name, marker)
