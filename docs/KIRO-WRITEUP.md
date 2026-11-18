@@ -218,7 +218,7 @@ request. The agent had not seen that commit; its evidence is the live pod, which
 old limits. It proposed a single change and mentioned the sidecars outside the proposal; the
 committed fix raised the sidecars to 192Mi.
 
-## Pull request #2: the loop closed once
+## Pull requests #2 and #3: the loop closed, then it remembered
 
 Incident `2e4fd60547e332f6` came from the `chaos/netpol` scenario. The Spider agent found
 that the NetworkPolicy `allow-trusted` allowed `app: netpol-trusted` while the blocked client
@@ -242,9 +242,29 @@ was labelled `app: netpol-client`. The proposal was a change of
    postmortem bucket and started a Knowledge Base ingestion job. The job completed: nine
    documents scanned, one new document indexed.
 
-**Not verified:** that a second, similar incident retrieves this learned postmortem as
-`source: learned`. The learned document says "Approved change, not yet confirmed to work",
-because an approval is not proof that the fix worked.
+The learned document says "Approved change, not yet confirmed to work", because an approval
+is not proof that the fix worked.
+
+**Run 2, 14 minutes later.** The scenario was run again (incident `009de3634d72afbc`). The
+Archivist returned three similar incidents. In run 1 it had returned two, both seeded:
+
+| Run | Similar incidents returned (origin, score) |
+|---|---|
+| 1 (`2e4fd60547e332f6`) | seeded 0.708 (PM-2026-058), seeded 0.683 (PM-2026-066) |
+| 2 (`009de3634d72afbc`) | **learned 0.846 (LRN-2e4fd60547e332f6)**, seeded 0.708, seeded 0.683 |
+
+So the postmortem the crew wrote after run 1 was the top hit in run 2, above the seeded
+postmortems. Run 2 was approved by the same person, opened
+[pull request #3](https://github.com/romanceresnak/kiroween-incident-crypt/pull/3), wrote
+`learned/009de3634d72afbc.md` and started ingestion job `013WGNC1LA`. Both records are saved:
+[`netpol-first-run-real.json`](demo-results/netpol-first-run-real.json) and
+[`netpol-second-run-real.json`](demo-results/netpol-second-run-real.json). The cost of the
+three real incidents is $0.1104 (Grafana), $0.0790 (run 1) and $0.1052 (run 2).
+
+**Still not verified:** that the learned hit generalises. It was one observation, for the same
+scenario both times, so it shows that retrieval works, not that a different incident would
+find a useful postmortem. The 0.5 threshold is a first guess. Pull request #3 had not been
+merged when this was written, and neither pull request was applied to the cluster.
 
 ## What Kiro got wrong, and limits
 
@@ -257,6 +277,5 @@ because an approval is not proof that the fix worked.
   checked the served files, not what `app.js` does; the fix added jsdom tests that run it.
 - The retrieval result looked fine in unit tests with mocked responses and had duplicates on
   the real service (10).
-- Open items, stated in the README: the second learning run; `badimage` and `pvc` after the
-  latest watcher changes; the untuned similarity threshold (0.5); model prices entered by
+- Open items, stated in the README: `badimage` and `pvc` after the latest watcher changes; the untuned similarity threshold (0.5); model prices entered by
   hand; the hooks inside a Kiro app.

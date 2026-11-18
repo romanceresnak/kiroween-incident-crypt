@@ -1,0 +1,155 @@
+{
+  "incident": {
+    "incident_id": "009de3634d72afbc",
+    "source": "watcher",
+    "reason": "Unhealthy",
+    "namespace": "chaos-netpol",
+    "workload": {
+      "kind": "Deployment",
+      "name": "netpol-client"
+    },
+    "pod": "netpol-client-66f84c6b55-z9kx7",
+    "container": "client",
+    "message": "Unhealthy: Readiness probe failed: wget: download timed out\n",
+    "observed_at": "2026-11-18T08:07:03.751341Z",
+    "depends_on": [],
+    "similar_incidents": []
+  },
+  "status": "approved",
+  "classification": {
+    "category": "network",
+    "rationale": "Readiness probe timeout on wget download indicates a network connectivity or service reachability problem between the client pod and its dependency.",
+    "confidence": "high"
+  },
+  "investigation": {
+    "outcome": "action_required",
+    "diagnosis": {
+      "root_cause": "The NetworkPolicy 'allow-trusted' in namespace 'chaos-netpol' selects pods with label app=netpol-server as the target and only permits ingress from pods matching app=netpol-trusted. The client pod (netpol-client-66f84c6b55-z9kx7) carries label app=netpol-client, which does not match that podSelector. All TCP traffic from the client to netpol-server on port 8080 is silently dropped by the CNI network policy agent, causing the readiness probe's wget to time out.",
+      "confidence": "high",
+      "evidence": [
+        {
+          "tool": "list_network_policies",
+          "field": "ingress[0].from[0].podSelector.matchLabels.app",
+          "value": "netpol-trusted"
+        },
+        {
+          "tool": "list_network_policies",
+          "field": "podSelector.matchLabels.app",
+          "value": "netpol-server"
+        },
+        {
+          "tool": "get_pod",
+          "field": "labels.app",
+          "value": "netpol-client"
+        },
+        {
+          "tool": "list_events",
+          "field": "message (count=8)",
+          "value": "Readiness probe failed: wget: download timed out"
+        },
+        {
+          "tool": "get_endpoints",
+          "field": "endpoints[0].ready",
+          "value": "true"
+        },
+        {
+          "tool": "get_pod",
+          "field": "containerStatuses[0].ready (netpol-server-568c86dd49-d9czj)",
+          "value": "true"
+        }
+      ]
+    },
+    "proposal": {
+      "action": "set_field",
+      "target": {
+        "namespace": "chaos-netpol",
+        "kind": "NetworkPolicy",
+        "name": "allow-trusted",
+        "container": null
+      },
+      "field": "spec.ingress[0].from[0].podSelector.matchLabels.app",
+      "current": "netpol-trusted",
+      "proposed": "netpol-client",
+      "rationale": "The NetworkPolicy's ingress rule currently admits only pods labelled app=netpol-trusted. The actual client pod carries app=netpol-client. Updating the matchLabels value to netpol-client will allow the client's traffic to reach netpol-server on port 8080, resolving the probe timeout. The server endpoint is already ready; this is the sole blocker.",
+      "risk": "Low. The change narrows the allow-list to the actual client workload. No other pod in the namespace carries app=netpol-client, so the blast radius is limited to allowing only the intended client access.",
+      "requires_approval": true,
+      "delivery": "Apply as a pull request against /gitops after a human approves it. The agent does not change the cluster."
+    },
+    "usage": {
+      "input_tokens": 22706,
+      "output_tokens": 1407,
+      "cost_usd": 0.0981453
+    },
+    "validation_notes": []
+  },
+  "delegation": "tool",
+  "usage_by_agent": {
+    "orchestrator": {
+      "input_tokens": 4734,
+      "output_tokens": 331,
+      "cost_usd": 0.007027900000000001
+    },
+    "network": {
+      "input_tokens": 22706,
+      "output_tokens": 1407,
+      "cost_usd": 0.0981453
+    }
+  },
+  "error": null,
+  "related_incidents": [],
+  "related_to": null,
+  "similar_incidents": [
+    {
+      "title": "LRN-2e4fd60547e332f6: Unhealthy on Deployment netpol-client",
+      "category": "network",
+      "score": 0.8455390334129333,
+      "fix": "Approved fix (not yet confirmed): set spec.ingress[0].from[0].podSelector.matchLabels.app on NetworkPolicy/allow-trusted from netpol-trusted to netpol-client.",
+      "source": "s3://kiroween-prod-postmortems-255834079310/learned/2e4fd60547e332f6.md",
+      "excerpt": "Message seen: Unhealthy: Readiness probe failed: wget: download timed out ## Impact Not recorded. This postmortem was written automatically when the incident was approved; no impact was measured. ## Root cause The NetworkPolicy 'allow-trusted' in namespace 'chaos-netpol' restricts ingress to pods with label app=netpol-server, permitting traffic only from pods matching app=netpol-trusted. The clien",
+      "origin": "learned"
+    },
+    {
+      "title": "PM-2026-058: NetworkPolicy blocked the billing worker from the ledger service",
+      "category": "network",
+      "score": 0.7078257501125336,
+      "fix": "Changed spec.ingress[0].from[0].podSelector.matchLabels.app of the server's NetworkPolicy from the old client label to the client's current label, via a GitOps pull request. Clue: client probe timeouts while the server's endpoints are all ready=true.",
+      "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/03-networkpolicy-blocks-invoice-worker.md",
+      "excerpt": "The label rename on the worker's pod template was reviewed as a cosmetic change; nobody checked which NetworkPolicies selected the old label. With the VPC CNI network policy agent enforcing policies, the packets were dropped silently, so the client saw timeouts, not connection refused. ## Evidence - Client pod events: `Readiness probe failed: wget: download timed out` every 10 s. - `ledger` Endpoi",
+      "origin": "seeded"
+    },
+    {
+      "title": "PM-2026-066: CoreDNS forwarding loop broke name resolution cluster-wide",
+      "category": "network",
+      "score": 0.6832879185676575,
+      "fix": "Reverted the forward block in the kube-system/coredns ConfigMap that created a resolver loop (plugin/loop: Loop detected) and restarted CoreDNS. Clue: many unrelated workloads fail at once with 'no such host'.",
+      "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/04-coredns-forwarding-loop.md",
+      "excerpt": ".\"`. - `kubectl -n kube-system get pods -l k8s-app=kube-dns`: CrashLoopBackOff on both replicas. - Application events across namespaces: `Readiness probe failed: dial tcp: lookup orders on 172.20.0.10:53: no such host`. - `kube-dns` EndpointSlice had zero ready endpoints. ## Fix Reverted the `forward corp.internal 10.40.0.2` block in the `coredns` ConfigMap through the GitOps repo and restarted th",
+      "origin": "seeded"
+    }
+  ],
+  "approval": {
+    "decision": "approved",
+    "by": "Roman Ceresnak",
+    "at": "2026-11-18T08:07:41.071878Z",
+    "comment": "Agreed",
+    "pull_request": {
+      "mode": "github",
+      "title": "fix(chaos-netpol): spec.ingress[0].from[0].podSelector.matchLabels.app on NetworkPolicy/allow-trusted (incident 009de3634d72afbc)",
+      "branch": "remediation/009de3634d72afbc",
+      "path": "gitops/remediations/chaos-netpol/networkpolicy-allow-trusted.yaml",
+      "content": "# Approved remediation for incident 009de3634d72afbc (Unhealthy).\n# Approved by Roman Ceresnak at 2026-11-18T08:07:41.071878+00:00.\n# NetworkPolicy/allow-trusted spec.ingress[0].from[0].podSelector.matchLabels.app: 'netpol-trusted' -> 'netpol-client'\n# Kustomize patch entry (RFC 6902 JSON patch).\ntarget:\n  group: networking.k8s.io\n  version: v1\n  kind: NetworkPolicy\n  name: allow-trusted\n  namespace: chaos-netpol\npatch: \"- op: test\\n  path: /spec/ingress/0/from/0/podSelector/matchLabels/app\\n \\\n  \\ value: netpol-trusted\\n- op: replace\\n  path: /spec/ingress/0/from/0/podSelector/matchLabels/app\\n\\\n  \\  value: netpol-client\\n\"\n",
+      "body": "Approved remediation for incident `009de3634d72afbc`, approved by **Roman Ceresnak** at 2026-11-18T08:07:41.071878+00:00.\n\n## Incident\n- Signal: `Unhealthy` on Deployment `chaos-netpol/netpol-client`\n- Category: `network`\n- Message: Unhealthy: Readiness probe failed: wget: download timed out\n\n\n## Diagnosis\nThe NetworkPolicy 'allow-trusted' in namespace 'chaos-netpol' selects pods with label app=netpol-server as the target and only permits ingress from pods matching app=netpol-trusted. The client pod (netpol-client-66f84c6b55-z9kx7) carries label app=netpol-client, which does not match that podSelector. All TCP traffic from the client to netpol-server on port 8080 is silently dropped by the CNI network policy agent, causing the readiness probe's wget to time out.\n\nConfidence: high\n\n## Evidence\n- `list_network_policies` ingress[0].from[0].podSelector.matchLabels.app: `netpol-trusted`\n- `list_network_policies` podSelector.matchLabels.app: `netpol-server`\n- `get_pod` labels.app: `netpol-client`\n- `list_events` message (count=8): `Readiness probe failed: wget: download timed out`\n- `get_endpoints` endpoints[0].ready: `true`\n- `get_pod` containerStatuses[0].ready (netpol-server-568c86dd49-d9czj): `true`\n\n## Change\n- `NetworkPolicy/allow-trusted` in `chaos-netpol`\n- `spec.ingress[0].from[0].podSelector.matchLabels.app`: `netpol-trusted` -> `netpol-client`\n- File: `gitops/remediations/chaos-netpol/networkpolicy-allow-trusted.yaml`\n\n## Rationale\nThe NetworkPolicy's ingress rule currently admits only pods labelled app=netpol-trusted. The actual client pod carries app=netpol-client. Updating the matchLabels value to netpol-client will allow the client's traffic to reach netpol-server on port 8080, resolving the probe timeout. The server endpoint is already ready; this is the sole blocker.\n\n## Risk\nLow. The change narrows the allow-list to the actual client workload. No other pod in the namespace carries app=netpol-client, so the blast radius is limited to allowing only the intended client access.\n\n## Similar past incidents\n- LRN-2e4fd60547e332f6: Unhealthy on Deployment netpol-client (score 0.85): Approved fix (not yet confirmed): set spec.ingress[0].from[0].podSelector.matchLabels.app on NetworkPolicy/allow-trusted from netpol-trusted to netpol-client.\n- PM-2026-058: NetworkPolicy blocked the billing worker from the ledger service (score 0.71): Changed spec.ingress[0].from[0].podSelector.matchLabels.app of the server's NetworkPolicy from the old client label to the client's current label, via a GitOps pull request. Clue: client probe timeouts while the server's endpoints are all ready=true.\n- PM-2026-066: CoreDNS forwarding loop broke name resolution cluster-wide (score 0.68): Reverted the forward block in the kube-system/coredns ConfigMap that created a resolver loop (plugin/loop: Loop detected) and restarted CoreDNS. Clue: many unrelated workloads fail at once with 'no such host'.\n\nGenerated by the Kiroween orchestrator. The agents have read-only access; this change takes effect only after this PR is reviewed and merged.\n\nApprover comment: Agreed",
+      "url": "https://github.com/romanceresnak/kiroween-incident-crypt/pull/3",
+      "error": null
+    },
+    "learning": {
+      "status": "written",
+      "key": "learned/009de3634d72afbc.md",
+      "ingestion": "started",
+      "ingestion_job_id": "013WGNC1LA",
+      "error": null
+    }
+  },
+  "created_at": "2026-11-18T08:07:03.755139Z",
+  "updated_at": "2026-11-18T08:07:45.780020Z"
+}

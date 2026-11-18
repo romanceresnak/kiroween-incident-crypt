@@ -166,9 +166,53 @@ def test_every_path_the_readme_cites_exists() -> None:
     assert missing_paths(README) == []
 
 
-def test_readme_states_the_learning_loop_is_not_fully_verified() -> None:
-    assert "has not yet been *found* by a second incident" in README
-    assert "A second incident that finds the **learned** postmortem" in README
+def demo_result(name: str) -> dict:
+    return json.loads((REPO / "docs" / "demo-results" / name).read_text())
+
+
+def totals(record: dict) -> tuple[int, int, float]:
+    usage = record["usage_by_agent"].values()
+    return (sum(u["input_tokens"] for u in usage), sum(u["output_tokens"] for u in usage),
+            sum(u["cost_usd"] for u in usage))
+
+
+def test_readme_cost_table_covers_all_three_saved_incidents() -> None:
+    for name in ("grafana-oom-real.json", "netpol-first-run-real.json",
+                 "netpol-second-run-real.json"):
+        tin, tout, cost = totals(demo_result(name))
+        row = f"| {tin:,} | {tout:,} | ${cost:.4f} |"
+        assert row in README, name
+
+
+def test_readme_learning_loop_claims_match_the_saved_runs() -> None:
+    first = demo_result("netpol-first-run-real.json")
+    second = demo_result("netpol-second-run-real.json")
+    # Run 1 had nothing learned to find; run 2 found run 1's postmortem first.
+    assert {s["origin"] for s in first["similar_incidents"]} == {"seeded"}
+    top = second["similar_incidents"][0]
+    assert top["origin"] == "learned"
+    assert top["source"].endswith(f"learned/{first['incident']['incident_id']}.md")
+    assert top["score"] == max(s["score"] for s in second["similar_incidents"])
+    assert f"score {top['score']:.3f}" in README
+    others = [s for s in second["similar_incidents"] if s["origin"] == "seeded"]
+    for hit in others:
+        assert f"{hit['score']:.3f}" in README
+    # Each run wrote a learned postmortem and started an ingestion.
+    for run in (first, second):
+        learning = run["approval"]["learning"]
+        assert learning["status"] == "written" and learning["ingestion"] == "started"
+        assert run["approval"]["pull_request"]["mode"] == "github"
+    for number, run in ((2, first), (3, second)):
+        url = run["approval"]["pull_request"]["url"]
+        assert url.endswith(f"/pull/{number}") and url in README
+    from datetime import datetime
+    gap = (datetime.fromisoformat(second["created_at"].replace("Z", "+00:00"))
+           - datetime.fromisoformat(first["created_at"].replace("Z", "+00:00")))
+    assert round(gap.total_seconds() / 60) == 14 and "14 minutes later" in README
+
+
+def test_readme_says_what_the_single_observation_does_not_show() -> None:
+    assert "That the learned hit generalises" in README
     assert "pull/2" in README
     assert (REPO / "gitops" / "remediations" / "chaos-netpol"
             / "networkpolicy-allow-trusted.yaml").is_file()
@@ -181,7 +225,7 @@ def test_readme_does_not_claim_remediations_are_applied() -> None:
     assert "Approved changes are not applied" in README
     assert "no Argo CD Application applies `gitops/remediations/`" in README
     assert "that Argo CD applies" not in README
-    assert "Merging that pull request did not" in README
+    assert "Merging a pull request did not change the cluster" in README
 
 
 def test_readme_hook_claim_is_true() -> None:
@@ -325,4 +369,23 @@ def test_writeup_grafana_and_pull_request_facts_match_the_evidence() -> None:
 def test_writeup_paths_and_links_exist_and_placeholders_are_marked() -> None:
     assert missing_paths(WRITEUP, WRITEUP_PATH.parent) == []
     assert WRITEUP.count("TODO(user)") == 2
-    assert "Not verified" in WRITEUP or "**Not verified:**" in WRITEUP
+    assert "not verified" in WRITEUP.lower()
+
+
+@needs_writeup
+def test_writeup_second_run_facts_match_the_saved_records() -> None:
+    first = demo_result("netpol-first-run-real.json")
+    second = demo_result("netpol-second-run-real.json")
+    top = second["similar_incidents"][0]
+    assert f"**learned {top['score']:.3f} (LRN-{first['incident']['incident_id']})**" in WRITEUP
+    for hit in first["similar_incidents"]:
+        assert f"seeded {hit['score']:.3f}" in WRITEUP
+    job = second["approval"]["learning"]["ingestion_job_id"]
+    assert f"`{job}`" in WRITEUP
+    assert f"`learned/{second['incident']['incident_id']}.md`" in WRITEUP
+    assert second["approval"]["pull_request"]["url"] in WRITEUP
+    for name in ("grafana-oom-real.json", "netpol-first-run-real.json",
+                 "netpol-second-run-real.json"):
+        assert f"${totals(demo_result(name))[2]:.4f}" in WRITEUP, name
+    assert "Still not verified" in WRITEUP
+    assert "Not verified:** that a second" not in WRITEUP
