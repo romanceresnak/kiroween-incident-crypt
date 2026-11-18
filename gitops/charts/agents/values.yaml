@@ -184,6 +184,32 @@ auth:
   publicHosts:
     - d3uh8kq3w5msy5.cloudfront.net
 
+# The Scenario Lab (scenario-lab): 14 namespaces lab-01..lab-14 and the lab-runner that is the
+# only workload allowed to create and delete things in them. One scenario at a time, ten runs
+# an hour, cleaned up after fifteen minutes. The quota bounds everything a run can create.
+lab:
+  enabled: true
+  maxRunsPerHour: 10
+  cleanupSeconds: 900
+  quota:
+    requests.cpu: 500m
+    requests.memory: 512Mi
+    limits.cpu: "1"
+    limits.memory: 1Gi
+    pods: "10"
+    persistentvolumeclaims: "2"
+    requests.storage: 2Gi
+    services: "4"
+    configmaps: "6"
+  limitRange:
+    default: {cpu: 50m, memory: 64Mi}
+    defaultRequest: {cpu: 5m, memory: 16Mi}
+    max: {cpu: 200m, memory: 128Mi}
+  runner:
+    resources:
+      requests: {cpu: 20m, memory: 96Mi}
+      limits: {cpu: 200m, memory: 192Mi}
+
 # Public HTTPS access for judging (scenario-lab). CloudFront reaches an internal ALB through a
 # VPC origin; the ALB's target group is bound to the orchestrator by a TargetGroupBinding.
 # Values come from the infra outputs target_group_arn and private_subnet_cidrs. With no

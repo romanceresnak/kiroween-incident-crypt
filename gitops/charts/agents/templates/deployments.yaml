@@ -62,6 +62,9 @@ spec:
             - {name: AUTH_LAB_ONLY, value: {{ .Values.auth.labOnly | quote }}}
             - {name: TRUSTED_PROXY_HOPS, value: {{ .Values.auth.trustedProxyHops | quote }}}
             - {name: PUBLIC_HOSTS, value: {{ join "," .Values.auth.publicHosts | quote }}}
+            {{- if .Values.lab.enabled }}
+            - {name: LAB_RUNNER_URL, value: "http://lab-runner:{{ .Values.ports.api }}"}
+            {{- end }}
             - name: AUTH_USERNAME
               valueFrom:
                 secretKeyRef: {name: {{ .Values.auth.secretName }}, key: username, optional: true}

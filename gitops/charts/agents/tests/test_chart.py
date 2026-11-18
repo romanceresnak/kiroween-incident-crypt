@@ -21,6 +21,9 @@ REPO = CHART.parents[2]
 NAMESPACE = "agents"
 SHA = "0123456789abcdef0123456789abcdef01234567"
 READ_VERBS = {"get", "list", "watch"}
+# The one role that writes, bound in the 14 lab namespaces only (scenario-lab). It is tested
+# on its own terms in the lab section at the end of this file.
+LAB_RUNNER_ROLE = "kiroween-lab-runner"
 IMAGE_KEYS = ["orchestrator", "cpuMemory", "network", "deployRollout", "storage", "incidentMemory"]
 SPECIALISTS = ["cpu-memory", "network", "deploy-rollout", "storage"]
 # Everything the orchestrator calls. incident-memory has no Kubernetes RBAC.
@@ -52,8 +55,10 @@ def of_kind(docs: list[dict], kind: str) -> dict[str, dict]:
 
 
 def test_rbac_is_read_only_and_never_touches_secrets(docs: list[dict]) -> None:
-    roles = [d for d in docs if d["kind"] in ("Role", "ClusterRole")]
+    roles = [d for d in docs if d["kind"] in ("Role", "ClusterRole")
+             and d["metadata"]["name"] != LAB_RUNNER_ROLE]
     assert roles
+    assert [d for d in docs if d["metadata"]["name"] == LAB_RUNNER_ROLE], "the one exception"
     for role in roles:
         for rule in role.get("rules", []):
             assert set(rule["verbs"]) <= READ_VERBS, (role["metadata"]["name"], rule)
@@ -70,6 +75,8 @@ def test_role_bindings(docs: list[dict]) -> None:
     assert subjects == {
         "kiroween-agents-watcher": [("orchestrator-watcher-sa", NAMESPACE)],
         **{f"kiroween-agents-{name}": [(f"{name}-sa", NAMESPACE)] for name in SPECIALISTS},
+        # Reads the 14 lab namespaces by name (a cluster-scoped object needs a cluster binding).
+        "kiroween-lab-runner-namespaces": [("lab-runner-sa", NAMESPACE)],
     }
 
 
@@ -112,17 +119,19 @@ def test_latest_tag_is_refused() -> None:
     assert "not latest" in info.value.stderr
 
 
-def test_seven_deployments_with_expected_service_accounts(docs: list[dict]) -> None:
+def test_eight_deployments_with_expected_service_accounts(docs: list[dict]) -> None:
     deployments = of_kind(docs, "Deployment")
     assert {n: d["spec"]["template"]["spec"]["serviceAccountName"]
             for n, d in deployments.items()} == {
+        "lab-runner": "lab-runner-sa",
         "orchestrator": "orchestrator-sa",
         "orchestrator-watcher": "orchestrator-watcher-sa",
         **{name: f"{name}-sa" for name in BACKENDS},
     }
 
 
-@pytest.mark.parametrize("name", ["orchestrator", "orchestrator-watcher", *BACKENDS])
+@pytest.mark.parametrize("name", ["orchestrator", "orchestrator-watcher", "lab-runner",
+                                  *BACKENDS])
 def test_pod_hardening(docs: list[dict], name: str) -> None:
     pod = of_kind(docs, "Deployment")[name]["spec"]["template"]["spec"]
     psc = pod["securityContext"]
@@ -197,7 +206,7 @@ def test_ingress_sources_are_only_the_allowed_ones(docs: list[dict]) -> None:
         "allow-watcher-to-orchestrator": [{"podSelector": {"matchLabels": {
             "app.kubernetes.io/name": "orchestrator-watcher"}}}],
         **{f"allow-orchestrator-to-{name}": [{"podSelector": {"matchLabels": {
-            "app.kubernetes.io/name": "orchestrator"}}}] for name in BACKENDS},
+            "app.kubernetes.io/name": "orchestrator"}}}] for name in [*BACKENDS, "lab-runner"]},
         "allow-metrics-scrape": [{"namespaceSelector": {"matchLabels": {
             "kubernetes.io/metadata.name": "monitoring"}}}],
     }
@@ -219,7 +228,8 @@ def test_pod_to_pod_egress_is_only_watcher_and_orchestrator(docs: list[dict]) ->
                 pod_egress.setdefault(name, []).append(
                     peer["podSelector"]["matchLabels"]["app.kubernetes.io/name"])
     assert pod_egress == {"allow-watcher-egress": ["orchestrator"],
-                          "allow-orchestrator-egress": BACKENDS}
+                          "allow-orchestrator-egress": BACKENDS,
+                          "allow-orchestrator-egress-lab-runner": ["lab-runner"]}
 
 
 def test_dns_https_and_pod_identity_egress(docs: list[dict]) -> None:
@@ -363,7 +373,8 @@ def test_namespaced_roles_are_narrow(docs: list[dict]) -> None:
          "verbs": ["get", "list", "watch"]}]
     bindings = {(d["metadata"]["namespace"], d["roleRef"]["name"]):
                 [(s["name"], s["namespace"]) for s in d["subjects"]]
-                for d in of_kind(docs, "RoleBinding").values()}
+                for d in of_kind(docs, "RoleBinding").values()
+                if not d["metadata"]["namespace"].startswith("lab-")}
     assert bindings == {
         ("kube-system", "kiroween-agents-network-coredns"): [("network-sa", NAMESPACE)],
         ("argocd", "kiroween-agents-deploy-rollout-argocd"): [("deploy-rollout-sa", NAMESPACE)],
@@ -375,7 +386,7 @@ def test_specialists_have_no_access_to_argo_or_coredns_outside_their_roles(
 ) -> None:
     for role in of_kind(docs, "ClusterRole").values():
         assert "argoproj.io" not in grants(role)
-        if role["metadata"]["name"] != "kiroween-agents-deploy-rollout":
+        if role["metadata"]["name"] not in ("kiroween-agents-deploy-rollout", LAB_RUNNER_ROLE):
             assert "configmaps" not in grants(role).get("", set())
 
 
@@ -407,6 +418,7 @@ def test_orchestrator_gets_a_url_per_specialist(docs: list[dict]) -> None:
         "DEPLOY_ROLLOUT_URL": "http://deploy-rollout:8080",
         "STORAGE_URL": "http://storage:8080",
         "INCIDENT_MEMORY_URL": "http://incident-memory:8080",
+        "LAB_RUNNER_URL": "http://lab-runner:8080",
     }
 
 
@@ -416,7 +428,7 @@ def test_undeployed_specialist_has_no_deployment_and_no_url() -> None:
                   "images.network.tag=unset", "images.deployRollout.tag=unset",
                   "images.storage.tag=unset", "images.incidentMemory.tag=unset")
     assert set(of_kind(docs, "Deployment")) == {"orchestrator", "orchestrator-watcher",
-                                                "cpu-memory"}
+                                                "cpu-memory", "lab-runner"}
     env = orchestrator_env(docs)
     assert "CPU_MEMORY_URL" in env
     assert not {"NETWORK_URL", "DEPLOY_ROLLOUT_URL", "STORAGE_URL",

@@ -1,0 +1,222 @@
+{{- /*
+The Scenario Lab (scenario-lab REQ-RN-01 to RN-04, RN-08, REQ-WT-02): 14 namespaces, a
+quota and a limit range in each, and the lab-runner, the only workload that may write to
+them. The orchestrator and the agents gain no permission.
+
+The runner's Role is a ClusterRole bound by one RoleBinding in each lab namespace, so it can
+change nothing anywhere else. Its rules are exactly the calls in lab/kube.py (a test compares
+them). It has no access to Secrets, RBAC, Namespaces (beyond reading its own 14 by name),
+nodes, exec, attach or port-forward.
+*/ -}}
+{{- if .Values.lab.enabled }}
+{{- $orch := .Values.images.orchestrator -}}
+{{- $namespaces := list }}
+{{- range $i := untilStep 1 15 1 }}
+{{- $namespaces = append $namespaces (printf "lab-%02d" (int $i)) }}
+{{- end }}
+{{- range $ns := $namespaces }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels:
+    {{- include "agents.labels" $ | nindent 4 }}
+    kiroween.io/lab: "true"
+    # Pods are admitted under the Pod Security baseline level (REQ-RN-08).
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: latest
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: lab
+  namespace: {{ $ns }}
+  labels:
+    {{- include "agents.labels" $ | nindent 4 }}
+spec:
+  hard:
+    {{- range $key, $value := $.Values.lab.quota }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: lab
+  namespace: {{ $ns }}
+  labels:
+    {{- include "agents.labels" $ | nindent 4 }}
+spec:
+  limits:
+    - type: Container
+      default: {{ toYaml $.Values.lab.limitRange.default | nindent 8 }}
+      defaultRequest: {{ toYaml $.Values.lab.limitRange.defaultRequest | nindent 8 }}
+      max: {{ toYaml $.Values.lab.limitRange.max | nindent 8 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kiroween-lab-runner
+  namespace: {{ $ns }}
+  labels:
+    {{- include "agents.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kiroween-lab-runner
+subjects:
+  - kind: ServiceAccount
+    name: lab-runner-sa
+    namespace: {{ $.Release.Namespace }}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kiroween-lab-runner
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["apps"]
+    resources: [deployments]
+    verbs: [create, get, list, patch, deletecollection]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [list, deletecollection]
+  - apiGroups: [""]
+    resources: [services]
+    verbs: [create, list, delete]
+  - apiGroups: [""]
+    resources: [configmaps, persistentvolumeclaims]
+    verbs: [create, list, deletecollection]
+  - apiGroups: ["networking.k8s.io"]
+    resources: [networkpolicies]
+    verbs: [create, list, deletecollection]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kiroween-lab-runner-namespaces
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+rules:
+  # Read the 14 lab namespaces, by name, to check that each is a lab namespace.
+  - apiGroups: [""]
+    resources: [namespaces]
+    resourceNames: {{ toJson $namespaces }}
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kiroween-lab-runner-namespaces
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kiroween-lab-runner-namespaces
+subjects:
+  - kind: ServiceAccount
+    name: lab-runner-sa
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lab-runner
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+    app.kubernetes.io/name: lab-runner
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: lab-runner
+  ports:
+    - {name: api, port: {{ .Values.ports.api }}, targetPort: api}
+{{- if ne (toString $orch.tag) "unset" }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lab-runner
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+    app.kubernetes.io/name: lab-runner
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # one runner at a time: it holds the only copy of the run state
+  selector:
+    matchLabels: {app.kubernetes.io/name: lab-runner}
+  template:
+    metadata:
+      labels:
+        {{- include "agents.labels" . | nindent 8 }}
+        app.kubernetes.io/name: lab-runner
+    spec:
+      serviceAccountName: lab-runner-sa
+      securityContext:
+        {{- include "agents.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: lab-runner
+          # The orchestrator image with another entrypoint, as the watcher is.
+          image: {{ include "agents.image" (dict "root" . "image" $orch) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["-m", "kiroween_orchestrator.lab"]
+          ports:
+            - {name: api, containerPort: {{ .Values.ports.api }}}
+          env:
+            - {name: HOME, value: /tmp}
+            - {name: LOG_LEVEL, value: {{ .Values.logLevel | quote }}}
+            - {name: API_PORT, value: {{ .Values.ports.api | quote }}}
+            - {name: LAB_MAX_RUNS_PER_HOUR, value: {{ .Values.lab.maxRunsPerHour | quote }}}
+            - {name: LAB_CLEANUP_SECONDS, value: {{ .Values.lab.cleanupSeconds | quote }}}
+          securityContext:
+            {{- include "agents.containerSecurityContext" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.lab.runner.resources | nindent 12 }}
+          {{- include "agents.probes" . | nindent 10 }}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        {{- include "agents.tmpVolume" . | nindent 8 }}
+{{- end }}
+{{- if .Values.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-orchestrator-to-lab-runner
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: lab-runner}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: orchestrator}
+      ports:
+        - {protocol: TCP, port: {{ .Values.ports.api }}}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-orchestrator-egress-lab-runner
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: orchestrator}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: lab-runner}
+      ports:
+        - {protocol: TCP, port: {{ .Values.ports.api }}}
+{{- end }}
+{{- end }}
