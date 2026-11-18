@@ -55,6 +55,7 @@ spec:
               value: {{ .Values.orchestrator.correlationWindowSeconds | quote }}
             - {name: GITHUB_REPOSITORY, value: {{ .Values.orchestrator.github.repository | quote }}}
             - {name: GITHUB_BASE_BRANCH, value: {{ .Values.orchestrator.github.baseBranch | quote }}}
+            - {name: LAB_GITHUB_BRANCH, value: {{ .Values.orchestrator.github.labBranch | quote }}}
             # Login (scenario-lab REQ-AU). The Secret is created by the operator and is optional
             # here: without it the orchestrator answers 503 to everything but the health probes,
             # it never falls back to open access.

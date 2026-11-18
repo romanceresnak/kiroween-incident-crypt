@@ -72,6 +72,9 @@ orchestrator:
   github:
     repository: romanceresnak/kiroween-incident-crypt
     baseBranch: main
+    # Pull requests for lab incidents (lab-01..lab-14) go here and never to baseBranch. The
+    # branch is created from baseBranch on the first one (scenario-lab REQ-SB).
+    labBranch: lab-remediations
     tokenSecret: orchestrator-github
   # Approved incidents are written as postmortems under <prefix> in the postmortem bucket
   # and the Knowledge Base is re-indexed (polish REQ-LRN). Learning is off, and approvals

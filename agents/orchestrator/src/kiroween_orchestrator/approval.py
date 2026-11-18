@@ -17,6 +17,8 @@ import yaml
 from kiroween_shared.models import Approval, IncidentRecord, Proposal, PullRequest
 from kiroween_shared.proposals import PathError, parse_path
 
+from .auth import is_lab_namespace
+
 logger = logging.getLogger(__name__)
 
 API_VERSIONS = {
@@ -26,6 +28,10 @@ API_VERSIONS = {
 }
 POD_TEMPLATE_KINDS = frozenset({"Deployment", "StatefulSet", "DaemonSet"})
 _REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+# A branch a lab pull request may target: plain, never starting with "-" or "/", no "..".
+_BRANCH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$")
+DEFAULT_LAB_BRANCH = "lab-remediations"
+PROTECTED_BRANCHES = frozenset({"main", "master", "trunk", "develop", "production", "release"})
 
 
 class RenderError(ValueError):
@@ -171,7 +177,8 @@ class GitHubClient:
 
     def __init__(self, token: str, repository: str, *, base: str = "main",
                  api: str = "https://api.github.com",
-                 transport: httpx.AsyncBaseTransport | None = None) -> None:
+                 transport: httpx.AsyncBaseTransport | None = None,
+                 create_base_from: str | None = None) -> None:
         if not token:
             raise ValueError("a GitHub token is required")
         if not _REPO.match(repository) or {".", ".."} & set(repository.split("/")):
@@ -181,6 +188,8 @@ class GitHubClient:
                          "X-GitHub-Api-Version": "2022-11-28"}
         self.repository = repository
         self.base = base
+        # The branch to create ``base`` from when it does not exist yet (the lab sandbox).
+        self.create_base_from = create_base_from
         self.api = api.rstrip("/")
         self._transport = transport
 
@@ -201,7 +210,14 @@ class GitHubClient:
                                       f"{response.status_code} {message}".strip())
                 return response
 
-            base = await call("GET", f"{repo}/git/ref/heads/{self.base}")
+            ok_base = (200, 404) if self.create_base_from else (200,)
+            base = await call("GET", f"{repo}/git/ref/heads/{self.base}", ok=ok_base)
+            if base.status_code == 404:
+                # The sandbox branch is created once, from the main branch's head.
+                source = await call("GET", f"{repo}/git/ref/heads/{self.create_base_from}")
+                await call("POST", f"{repo}/git/refs", ok=(201, 422), json={
+                    "ref": f"refs/heads/{self.base}", "sha": source.json()["object"]["sha"]})
+                base = await call("GET", f"{repo}/git/ref/heads/{self.base}")
             sha = base.json()["object"]["sha"]
             # 422: the branch already exists (an earlier attempt); reuse it.
             await call("POST", f"{repo}/git/refs", ok=(201, 422),
@@ -219,22 +235,50 @@ class GitHubClient:
             return str(created.json()["html_url"])
 
 
-class Approver:
-    """Renders the PR and, with a GitHub client, opens it (REQ-APR-04)."""
+def build_lab_client(token: str, repository: str, main_base: str, branch: str,
+                     transport: httpx.AsyncBaseTransport | None = None) -> GitHubClient | None:
+    """The client lab approvals use: pull requests against a sandbox branch, never the main
+    one (scenario-lab REQ-SB-01, SB-02). Raises ValueError if the branch could be main."""
+    branch = branch or DEFAULT_LAB_BRANCH
+    if (branch.lower() in PROTECTED_BRANCHES or branch == main_base or not _BRANCH.match(branch)
+            or ".." in branch or branch.endswith(("/", ".lock"))):
+        raise ValueError(f"{branch!r} is not an acceptable lab branch")
+    if not token:
+        return None
+    return GitHubClient(token, repository, base=branch, transport=transport,
+                        create_base_from=main_base)
 
-    def __init__(self, github: GitHubClient | None = None) -> None:
+
+class Approver:
+    """Renders the PR and, with a GitHub client, opens it (REQ-APR-04).
+
+    A lab incident (namespace lab-01 to lab-14) only ever uses ``lab_github``, and without one
+    it is a dry run. It never falls back to the main-branch client (scenario-lab REQ-SB-03).
+    """
+
+    def __init__(self, github: GitHubClient | None = None,
+                 lab_github: GitHubClient | None = None) -> None:
         self.github = github
+        self.lab_github = lab_github
 
     async def pull_request(self, record: IncidentRecord, approval: Approval) -> PullRequest:
+        lab = is_lab_namespace(record.incident.namespace)
+        client = self.lab_github if lab else self.github
         try:
             pr = render_pr(record, approval)
         except RenderError as exc:
             return PullRequest(mode="dry_run", title="", branch="", path="", content="",
                                body="", error=f"could not render the change: {exc}")
-        if self.github is None:
+        if lab:
+            pr = pr.model_copy(update={
+                "title": f"[lab] {pr.title}",
+                "body": ("**Lab incident.** This pull request targets a sandbox branch, never "
+                         "the main branch, and nothing in it is applied to the cluster.\n\n"
+                         + pr.body)})
+        if client is None:
             return pr
         try:
-            url = await self.github.open_pr(pr)
+            url = await client.open_pr(pr)
         except Exception as exc:
             logger.error("opening the remediation PR failed: %s", exc)
             return pr.model_copy(update={"mode": "github", "error": str(exc)[:300]})

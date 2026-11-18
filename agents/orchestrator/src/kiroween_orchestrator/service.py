@@ -25,6 +25,7 @@ from kiroween_shared.models import (
 )
 
 from .approval import Approver
+from .auth import is_lab_namespace
 from .correlation import correlate
 from .learning import Learner, can_learn, error_name
 from .metrics import APPROVALS, INVESTIGATION_SECONDS, LEARNED, record_incident
@@ -32,6 +33,9 @@ from .specialists import SPECIALIST_AGENTS
 from .store import IncidentStore
 
 logger = logging.getLogger(__name__)
+
+# The text the UI shows for an approval whose incident was a lab incident.
+LAB_NOT_LEARNED = "lab incident"
 
 Classify = Callable[[Incident], Awaitable[tuple[Classification, Usage]]]
 Delegate = Callable[
@@ -250,7 +254,15 @@ class IncidentService:
             record = self.store.update(incident_id, approval=approval)
         if (decision == "approved" and self._learner is not None and record is not None
                 and can_learn(record)):
-            approval, record = await self._learn(incident_id, record, approval)
+            if is_lab_namespace(record.incident.namespace):
+                # A lab incident was broken on purpose by a judge: it is never memory
+                # (scenario-lab REQ-SB-04). No object is written and no ingestion starts.
+                approval = approval.model_copy(update={"learning": Learning(
+                    status="disabled", error=LAB_NOT_LEARNED)})
+                record = self.store.update(incident_id, approval=approval) or record
+                LEARNED.labels(result="skipped_lab").inc()
+            else:
+                approval, record = await self._learn(incident_id, record, approval)
         delivery = "none"
         if approval.pull_request is not None:
             pr = approval.pull_request

@@ -330,3 +330,20 @@ def test_the_limits_are_values() -> None:
     env = {e["name"]: e["value"] for e in runner(docs)["spec"]["template"]["spec"][
         "containers"][0]["env"]}
     assert (env["LAB_MAX_RUNS_PER_HOUR"], env["LAB_CLEANUP_SECONDS"]) == ("3", "60")
+
+
+def test_lab_pull_requests_target_a_sandbox_branch_that_is_not_the_main_branch(docs) -> None:
+    values = yaml.safe_load((CHART / "values.yaml").read_text())["orchestrator"]["github"]
+    assert values["labBranch"] == "lab-remediations"
+    assert values["labBranch"] != values["baseBranch"]
+    assert values["labBranch"] not in {"main", "master", "trunk", "develop", "production"}
+    env = {e["name"]: e.get("value") for e in
+           named(docs, "Deployment", "orchestrator")["spec"]["template"]["spec"][
+               "containers"][0]["env"]}
+    assert env["LAB_GITHUB_BRANCH"] == "lab-remediations"
+    assert env["GITHUB_BASE_BRANCH"] == "main"
+    # The runner and the watcher never see a GitHub setting at all.
+    for name in ("lab-runner", "orchestrator-watcher"):
+        names = {e["name"] for e in named(docs, "Deployment", name)["spec"]["template"][
+            "spec"]["containers"][0]["env"]}
+        assert not [n for n in names if n.startswith(("GITHUB", "LAB_GITHUB"))], name

@@ -26,7 +26,8 @@ logger = logging.getLogger(__name__)
 CLASSIFY_PROMPT = """\
 You classify Kubernetes incidents for an incident response system. Choose exactly one
 category:
-- cpu_memory: OOMKilled containers, memory pressure, CPU throttling, resource limits
+- cpu_memory: OOMKilled containers, memory pressure, CPU throttling, resource limits, a
+  server whose own health probe times out because its CPU limit is far below what it needs
 - network: DNS failures, connection errors, NetworkPolicy blocks, Service or endpoint
   problems, ingress errors, readiness probes that time out reaching another service
 - deploy_rollout: image pull errors, crash loops or config errors after a deploy, failed or
@@ -56,7 +57,9 @@ SIGNAL_CATEGORIES: dict[str, frozenset[str]] = {
     "ProvisioningFailed": frozenset({"storage"}),
     "FailedMount": frozenset({"storage"}),
     "FailedAttachVolume": frozenset({"storage"}),
-    "Unhealthy": frozenset({"network", "deploy_rollout"}),
+    # A probe that times out can be a network problem, a bad rollout, or a server starved of
+    # CPU by its limit (scenario-lab REQ-WT-03). Never storage.
+    "Unhealthy": frozenset({"network", "deploy_rollout", "cpu_memory"}),
 }
 
 

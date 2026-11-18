@@ -21,7 +21,7 @@ from kiroween_shared.server import configure_logging, create_app, serve
 
 from . import auth as auth_module
 from .agent import Orchestrator
-from .approval import Approver, GitHubClient
+from .approval import Approver, GitHubClient, build_lab_client
 from .auth import Auth, AuthConfig, is_lab_namespace
 from .lab import routes as lab_routes
 from .lab.client import LabClient
@@ -182,6 +182,14 @@ def main() -> None:
     token = env.get("GITHUB_TOKEN", "")
     github = GitHubClient(token, env.get("GITHUB_REPOSITORY", ""),
                           base=env.get("GITHUB_BASE_BRANCH", "main")) if token else None
+    lab_github = None
+    try:
+        lab_github = build_lab_client(
+            token, env.get("GITHUB_REPOSITORY", ""), env.get("GITHUB_BASE_BRANCH", "main"),
+            env.get("LAB_GITHUB_BRANCH", ""))
+    except ValueError as exc:
+        # A lab branch that could be main is refused: lab approvals become dry runs.
+        logger.error("lab pull requests are disabled: %s", exc)
     service = IncidentService(
         classify=orchestrator.classify,
         delegate=orchestrator.delegate,
@@ -192,7 +200,7 @@ def main() -> None:
         specialists=frozenset(specialists),
         correlation_window_s=env_int(env, "CORRELATION_WINDOW_SECONDS", 300),
         similar=memory.similar if memory else None,
-        approver=Approver(github),
+        approver=Approver(github, lab_github),
         # Off unless LEARNING_BUCKET, KNOWLEDGE_BASE_ID and KNOWLEDGE_BASE_DATA_SOURCE_ID are
         # all set (polish REQ-LRN-07).
         learner=build_learner(env),
