@@ -37,10 +37,11 @@ CHUNK = ("# PM-2026-085: analytics-cache stuck Pending\n\n## Summary\n\nThe clai
          "\n## Prevention\n\nPolicy check.\n")
 
 
-def result(score: float, metadata: dict | None = None, text: str = CHUNK) -> dict:
+def result(score: float, metadata: dict | None = None, text: str = CHUNK,
+           doc: str = "07") -> dict:
     out: dict = {"content": {"text": text}, "score": score,
                  "location": {"type": "S3", "s3Location": {
-                     "uri": "s3://kiroween-prod-postmortems-255834079310/postmortems/07.md"}}}
+                     "uri": f"s3://kiroween-prod-postmortems-255834079310/postmortems/{doc}.md"}}}
     if metadata is not None:
         out["metadata"] = metadata
     return out
@@ -85,7 +86,7 @@ def test_query_does_not_include_namespace_or_workload_names() -> None:
 
 
 def test_retrieve_request_and_metadata_mapping() -> None:
-    client, stub = stubbed([result(0.62, META), result(0.81, META)])
+    client, stub = stubbed([result(0.62, META, doc="a"), result(0.81, META)])
     hits = Memory(client, KB).similar(incident())
     stub.assert_no_pending_responses()
     assert [h.score for h in hits] == [0.81, 0.62]  # best first
@@ -109,7 +110,8 @@ def test_chunk_without_heading_or_fix() -> None:
 
 
 def test_low_scores_are_dropped_and_top_k_respected() -> None:
-    client, stub = stubbed([result(0.9, META), result(0.29, META), result(0.5, META)])
+    client, stub = stubbed([result(0.9, META, doc="a"), result(0.29, META, doc="b"),
+                            result(0.5, META, doc="c")])
     hits = Memory(client, KB, top_k=2, min_score=0.3).similar(incident())
     assert [h.score for h in hits] == [0.9, 0.5]
 

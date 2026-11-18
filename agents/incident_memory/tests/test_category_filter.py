@@ -111,7 +111,7 @@ def test_only_the_incidents_category_and_general_survive() -> None:
 
 
 def test_without_a_category_every_category_is_kept() -> None:
-    results = [hit(0.7, "network"), hit(0.6, "storage"), hit(0.55, None)]
+    results = [hit(0.7, "network", "a"), hit(0.6, "storage", "b"), hit(0.55, None, "c")]
     client, _ = client_with(("ok", search(POOL), results))
     assert len(Memory(client, KB, min_score=0.5).similar(incident())) == 3
 

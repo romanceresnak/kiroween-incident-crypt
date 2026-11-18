@@ -41,6 +41,7 @@ SPECIALIST_CATEGORIES = frozenset({"cpu_memory", "network", "deploy_rollout", "s
 POOL = 10
 FALLBACK_POOL = 25
 DEFAULT_MIN_SCORE = 0.5
+UNTITLED = "Untitled postmortem"
 
 _HEADING = re.compile(r"^# (.+)$", re.M)
 _FIX = re.compile(r"^## Fix\s*\n(.+?)(?=^## |\Z)", re.M | re.S)
@@ -100,7 +101,7 @@ def to_similar(result: dict[str, Any]) -> SimilarIncident:
         _LEARNED_KEY.match(uri))
     return SimilarIncident(
         title=_text(metadata.get("title") or (heading.group(1) if heading else "")
-                    or "Untitled postmortem", 200),
+                    or UNTITLED, 200),
         category=_text(metadata.get("category"), 40) or None,
         score=float(result.get("score") or 0.0),
         fix=_text(metadata.get("fix") or (fix.group(1) if fix else ""), 1000),
@@ -108,6 +109,17 @@ def to_similar(result: dict[str, Any]) -> SimilarIncident:
         excerpt=_text(content, 400),
         origin="learned" if learned else "seeded",
     )
+
+
+def document_key(hit: SimilarIncident, index: int) -> str:
+    """Which document a chunk belongs to: its source URI, else its title. A chunk with
+    neither (an untitled chunk of unknown origin) is its own document, so unrelated chunks
+    are never merged."""
+    if hit.source:
+        return hit.source
+    if hit.title and hit.title != UNTITLED:
+        return f"title:{hit.title}"
+    return f"chunk:{index}"
 
 
 class Memory:
@@ -154,23 +166,33 @@ class Memory:
     def similar(self, incident: Incident, category: str | None = None) -> list[SimilarIncident]:
         allowed = allowed_categories(category)
         hits = [to_similar(r) for r in self._retrieve(incident, allowed)]
-        kept: list[SimilarIncident] = []
-        wrong_category = weak = 0
-        for hit in hits:
+        # One hit per source document: Retrieve returns chunks, and a document can have
+        # several that score well (PM-2026-058 came back three times on 18 Nov).
+        best: dict[str, SimilarIncident] = {}
+        wrong_category = weak = duplicates = 0
+        for index, hit in enumerate(hits):
             if allowed is not None and hit.category not in allowed:
                 wrong_category += 1
             elif hit.score < self.min_score:
                 weak += 1
             else:
-                kept.append(hit)
-        kept = sorted(kept, key=lambda h: h.score, reverse=True)[: self.top_k]
+                key = document_key(hit, index)
+                if key in best:
+                    duplicates += 1
+                    if hit.score > best[key].score:
+                        best[key] = hit
+                else:
+                    best[key] = hit
+        kept = sorted(best.values(), key=lambda h: h.score, reverse=True)[: self.top_k]
         REQUESTS.labels(result="ok").inc()
         RESULTS.inc(len(kept))
         DROPPED.labels(reason="category").inc(wrong_category)
         DROPPED.labels(reason="score").inc(weak)
-        logger.info("incident %s (category %s): kept %d of %d (dropped %d other category, "
-                    "%d below %.2f)", incident.incident_id, category or "any", len(kept),
-                    len(hits), wrong_category, weak, self.min_score)
+        DROPPED.labels(reason="duplicate").inc(duplicates)
+        logger.info("incident %s (category %s): kept %d of %d chunks (dropped %d other "
+                    "category, %d below %.2f, %d more chunks of a document already kept)",
+                    incident.incident_id, category or "any", len(kept), len(hits),
+                    wrong_category, weak, self.min_score, duplicates)
         return kept
 
 
