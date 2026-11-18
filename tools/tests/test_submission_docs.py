@@ -50,6 +50,11 @@ def missing_paths(text: str, base: Path = REPO) -> list[str]:
     return [p for p in sorted(cited_paths(text, base) - PENDING) if not (REPO / p).exists()]
 
 
+SHALLOW = git("rev-parse", "--is-shallow-repository").strip() == "true"
+# CI checks out one commit, so older hashes are not there. The history checks run locally.
+needs_history = pytest.mark.skipif(SHALLOW, reason="shallow clone: older commits are absent")
+
+
 def commit_exists(rev: str) -> bool:
     return subprocess.run(  # noqa: S603
         ["git", "-C", str(REPO), "cat-file", "-e", f"{rev}^{{commit}}"],  # noqa: S607
@@ -278,10 +283,19 @@ def test_writeup_spec_counts_match_the_spec_files(name: str) -> None:
 
 
 @needs_writeup
+def test_the_writeup_cites_enough_commits() -> None:
+    assert len(set(re.findall(r"`([0-9a-f]{7})`", WRITEUP))) >= 15
+
+
+@needs_writeup
+@needs_history
 def test_every_commit_the_writeup_cites_exists() -> None:
     hashes = set(re.findall(r"`([0-9a-f]{7})`", WRITEUP))
-    assert len(hashes) >= 15
     assert [h for h in sorted(hashes) if not commit_exists(h)] == []
+    for _, commit in CAUGHT.values():
+        assert commit_exists(commit)
+    for rev in ("0c4d20b", "c2ba64d"):
+        assert commit_exists(rev)
 
 
 CAUGHT = {
@@ -306,7 +320,6 @@ def test_kiro_caught_it_lists_each_problem_with_its_commit() -> None:
     for number, (phrase, commit) in CAUGHT.items():
         assert phrase in rows[number], number
         assert f"`{commit}`" in rows[number], number
-        assert commit_exists(commit)
 
 
 @needs_writeup
@@ -360,8 +373,6 @@ def test_writeup_grafana_and_pull_request_facts_match_the_evidence() -> None:
     stamp = "Approved by Roman Ceresnak at 2026-11-18T07:53:38.681317+00:00"
     assert stamp in patch and stamp in " ".join(WRITEUP.split())
     assert "netpol-trusted" in patch and "netpol-client" in patch
-    for rev in ("0c4d20b", "c2ba64d"):
-        assert commit_exists(rev)
     assert "pull/2" in WRITEUP
 
 
