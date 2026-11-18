@@ -1,0 +1,155 @@
+{
+  "summary": {
+    "scenario": "netpol-blocks-client",
+    "namespace": "lab-04",
+    "run": "82fd94",
+    "agent_expected": "network",
+    "category_expected": "network",
+    "signals_expected": [
+      "Unhealthy"
+    ],
+    "signals_observed": [
+      "Unhealthy"
+    ],
+    "incidents": 1,
+    "correlated": 0,
+    "category_observed": "network",
+    "status": "awaiting_approval",
+    "outcome": "action_required",
+    "proposal_field": "spec.ingress[0].from[0].podSelector.matchLabels.app",
+    "proposal_proposed": "client",
+    "seconds_to_decision": 26.1,
+    "seconds_to_detect": 70.9,
+    "cost_usd": 0.0769,
+    "verdict": "as described",
+    "incident_id": "857253abb4b28749"
+  },
+  "record": {
+    "incident": {
+      "incident_id": "857253abb4b28749",
+      "source": "watcher",
+      "reason": "Unhealthy",
+      "namespace": "lab-04",
+      "workload": {
+        "kind": "Deployment",
+        "name": "client-82fd94"
+      },
+      "pod": "client-82fd94-55d68fd4c9-kqn56",
+      "container": "client",
+      "message": "Unhealthy: Readiness probe failed: wget: download timed out\n",
+      "observed_at": "2026-11-18T17:59:52.802386Z",
+      "depends_on": [],
+      "similar_incidents": []
+    },
+    "status": "awaiting_approval",
+    "classification": {
+      "category": "network",
+      "rationale": "Readiness probe timeout with wget indicates a network connectivity or DNS issue preventing the container from reaching another service.",
+      "confidence": "high"
+    },
+    "investigation": {
+      "outcome": "action_required",
+      "diagnosis": {
+        "root_cause": "The NetworkPolicy 'allow-trusted' in namespace 'lab-04' selects pods with label app=server as the ingress target and permits traffic only from pods matching app=trusted. The client pod carries the label app=client, so no ingress rule matches it and all its traffic to the server is silently dropped, causing the wget readiness probe to time out.",
+        "confidence": "high",
+        "evidence": [
+          {
+            "tool": "list_network_policies",
+            "field": "ingress[0].from[0].podSelector.matchLabels.app",
+            "value": "trusted"
+          },
+          {
+            "tool": "list_network_policies",
+            "field": "podSelector.matchLabels.app",
+            "value": "server"
+          },
+          {
+            "tool": "get_pod",
+            "field": "labels.app",
+            "value": "client"
+          },
+          {
+            "tool": "get_endpoints",
+            "field": "endpoints[0].ready",
+            "value": "true"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containerStatuses[0].ready",
+            "value": "false"
+          }
+        ]
+      },
+      "proposal": {
+        "action": "set_field",
+        "target": {
+          "namespace": "lab-04",
+          "kind": "NetworkPolicy",
+          "name": "allow-trusted",
+          "container": null
+        },
+        "field": "spec.ingress[0].from[0].podSelector.matchLabels.app",
+        "current": "trusted",
+        "proposed": "client",
+        "rationale": "The NetworkPolicy 'allow-trusted' currently whitelists ingress to the server only from pods with app=trusted. The client pod's actual label is app=client. Changing the matchLabels value from 'trusted' to 'client' will allow the client pod's traffic through to the server on port 8080, restoring readiness probe success.",
+        "risk": "Any pod currently relying on the label app=trusted to reach the server will lose access. Verify no other workloads in lab-04 use that label to reach the server before applying.",
+        "requires_approval": true,
+        "delivery": "Apply as a pull request against /gitops after a human approves it. The agent does not change the cluster."
+      },
+      "usage": {
+        "input_tokens": 15919,
+        "output_tokens": 1101,
+        "cost_usd": 0.0706992
+      },
+      "validation_notes": []
+    },
+    "delegation": "tool",
+    "usage_by_agent": {
+      "orchestrator": {
+        "input_tokens": 4624,
+        "output_tokens": 199,
+        "cost_usd": 0.0061809000000000005
+      },
+      "network": {
+        "input_tokens": 15919,
+        "output_tokens": 1101,
+        "cost_usd": 0.0706992
+      }
+    },
+    "error": null,
+    "related_incidents": [],
+    "related_to": null,
+    "similar_incidents": [
+      {
+        "title": "LRN-2e4fd60547e332f6: Unhealthy on Deployment netpol-client",
+        "category": "network",
+        "score": 0.8455390334129333,
+        "fix": "Approved fix (not yet confirmed): set spec.ingress[0].from[0].podSelector.matchLabels.app on NetworkPolicy/allow-trusted from netpol-trusted to netpol-client.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/learned/2e4fd60547e332f6.md",
+        "excerpt": "Message seen: Unhealthy: Readiness probe failed: wget: download timed out ## Impact Not recorded. This postmortem was written automatically when the incident was approved; no impact was measured. ## Root cause The NetworkPolicy 'allow-trusted' in namespace 'chaos-netpol' restricts ingress to pods with label app=netpol-server, permitting traffic only from pods matching app=netpol-trusted. The clien",
+        "origin": "learned"
+      },
+      {
+        "title": "LRN-009de3634d72afbc: Unhealthy on Deployment netpol-client",
+        "category": "network",
+        "score": 0.7730306684970856,
+        "fix": "Approved fix (not yet confirmed): set spec.ingress[0].from[0].podSelector.matchLabels.app on NetworkPolicy/allow-trusted from netpol-trusted to netpol-client.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/learned/009de3634d72afbc.md",
+        "excerpt": "# LRN-009de3634d72afbc: Unhealthy on Deployment netpol-client - **Date:** 2026-11-18 - **Source:** learned from an approved incident, not a reviewed postmortem - **Signal:** Unhealthy - **Namespace / workload:** chaos-netpol / Deployment netpol-client, container client ## Summary The NetworkPolicy 'allow-trusted' in namespace 'chaos-netpol' selects pods with label app=netpol-server as the target a",
+        "origin": "learned"
+      },
+      {
+        "title": "PM-2026-058: NetworkPolicy blocked the billing worker from the ledger service",
+        "category": "network",
+        "score": 0.7078257501125336,
+        "fix": "Changed spec.ingress[0].from[0].podSelector.matchLabels.app of the server's NetworkPolicy from the old client label to the client's current label, via a GitOps pull request. Clue: client probe timeouts while the server's endpoints are all ready=true.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/03-networkpolicy-blocks-invoice-worker.md",
+        "excerpt": "The label rename on the worker's pod template was reviewed as a cosmetic change; nobody checked which NetworkPolicies selected the old label. With the VPC CNI network policy agent enforcing policies, the packets were dropped silently, so the client saw timeouts, not connection refused. ## Evidence - Client pod events: `Readiness probe failed: wget: download timed out` every 10 s. - `ledger` Endpoi",
+        "origin": "seeded"
+      }
+    ],
+    "approval": null,
+    "created_at": "2026-11-18T17:59:52.851589Z",
+    "updated_at": "2026-11-18T18:00:18.907198Z"
+  }
+}

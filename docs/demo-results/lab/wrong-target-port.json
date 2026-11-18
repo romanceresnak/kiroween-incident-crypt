@@ -1,0 +1,160 @@
+{
+  "summary": {
+    "scenario": "wrong-target-port",
+    "namespace": "lab-06",
+    "run": "b4d8b8",
+    "agent_expected": "network",
+    "category_expected": "network",
+    "signals_expected": [
+      "Unhealthy"
+    ],
+    "signals_observed": [
+      "Unhealthy"
+    ],
+    "incidents": 1,
+    "correlated": 0,
+    "category_observed": "network",
+    "status": "awaiting_approval",
+    "outcome": "action_required",
+    "proposal_field": "spec.ports[0].targetPort",
+    "proposal_proposed": "8080",
+    "seconds_to_decision": 17.3,
+    "seconds_to_detect": 67.9,
+    "cost_usd": 0.1089,
+    "verdict": "as described",
+    "incident_id": "2de6da0b429900ca"
+  },
+  "record": {
+    "incident": {
+      "incident_id": "2de6da0b429900ca",
+      "source": "watcher",
+      "reason": "Unhealthy",
+      "namespace": "lab-06",
+      "workload": {
+        "kind": "Deployment",
+        "name": "client-b4d8b8"
+      },
+      "pod": "client-b4d8b8-5f95bdd56f-k8ktm",
+      "container": "client",
+      "message": "Unhealthy: Readiness probe failed: wget: can't connect to remote host (172.20.229.170): Connection refused\n",
+      "observed_at": "2026-11-18T18:02:22.907409Z",
+      "depends_on": [],
+      "similar_incidents": []
+    },
+    "status": "awaiting_approval",
+    "classification": {
+      "category": "network",
+      "rationale": "Readiness probe failed with connection refused error when attempting to reach remote host 172.20.229.170, indicating a network connectivity or service availability problem.",
+      "confidence": "high"
+    },
+    "investigation": {
+      "outcome": "action_required",
+      "diagnosis": {
+        "root_cause": "The Service 'web' in namespace 'lab-06' has spec.ports[0].targetPort set to 9090, but the server container (web-b4d8b8-5cb54c974b-lm6gx) is not listening on port 9090. Kubernetes routes Service traffic to the pod on the targetPort, so all connections are refused. The correct targetPort should be 8080, which is the port the busybox httpd server listens on.",
+        "confidence": "high",
+        "evidence": [
+          {
+            "tool": "list_services",
+            "field": "ports[0].targetPort",
+            "value": "9090"
+          },
+          {
+            "tool": "list_services",
+            "field": "ports[0].port",
+            "value": "8080"
+          },
+          {
+            "tool": "get_endpoints",
+            "field": "ports[0].port",
+            "value": "9090"
+          },
+          {
+            "tool": "get_endpoints",
+            "field": "ready",
+            "value": "1"
+          },
+          {
+            "tool": "list_pods",
+            "field": "labels.kiroween.io/lab-scenario",
+            "value": "wrong-target-port"
+          },
+          {
+            "tool": "list_events",
+            "field": "message",
+            "value": "Readiness probe failed: wget: can't connect to remote host (172.20.229.170): Connection refused"
+          }
+        ]
+      },
+      "proposal": {
+        "action": "set_field",
+        "target": {
+          "namespace": "lab-06",
+          "kind": "Service",
+          "name": "web",
+          "container": null
+        },
+        "field": "spec.ports[0].targetPort",
+        "current": "9090",
+        "proposed": "8080",
+        "rationale": "The Service is forwarding traffic to port 9090 on the server pod, but the server is not listening on that port \u2014 causing 'Connection refused'. Changing targetPort to 8080 will route traffic to the port where the busybox httpd server actually listens, restoring connectivity and fixing the client's readiness probe.",
+        "risk": "Low. The server pod is already ready and listening; only the Service's targetPort is wrong. Changing it will immediately restore connectivity with no restart required.",
+        "requires_approval": true,
+        "delivery": "Apply as a pull request against /gitops after a human approves it. The agent does not change the cluster."
+      },
+      "usage": {
+        "input_tokens": 23469,
+        "output_tokens": 1468,
+        "cost_usd": 0.1016697
+      },
+      "validation_notes": []
+    },
+    "delegation": "tool",
+    "usage_by_agent": {
+      "orchestrator": {
+        "input_tokens": 4779,
+        "output_tokens": 366,
+        "cost_usd": 0.007269900000000001
+      },
+      "network": {
+        "input_tokens": 23469,
+        "output_tokens": 1468,
+        "cost_usd": 0.1016697
+      }
+    },
+    "error": null,
+    "related_incidents": [],
+    "related_to": null,
+    "similar_incidents": [
+      {
+        "title": "LRN-2e4fd60547e332f6: Unhealthy on Deployment netpol-client",
+        "category": "network",
+        "score": 0.7897471785545349,
+        "fix": "Approved fix (not yet confirmed): set spec.ingress[0].from[0].podSelector.matchLabels.app on NetworkPolicy/allow-trusted from netpol-trusted to netpol-client.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/learned/2e4fd60547e332f6.md",
+        "excerpt": "Message seen: Unhealthy: Readiness probe failed: wget: download timed out ## Impact Not recorded. This postmortem was written automatically when the incident was approved; no impact was measured. ## Root cause The NetworkPolicy 'allow-trusted' in namespace 'chaos-netpol' restricts ingress to pods with label app=netpol-server, permitting traffic only from pods matching app=netpol-trusted. The clien",
+        "origin": "learned"
+      },
+      {
+        "title": "LRN-009de3634d72afbc: Unhealthy on Deployment netpol-client",
+        "category": "network",
+        "score": 0.750091016292572,
+        "fix": "Approved fix (not yet confirmed): set spec.ingress[0].from[0].podSelector.matchLabels.app on NetworkPolicy/allow-trusted from netpol-trusted to netpol-client.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/learned/009de3634d72afbc.md",
+        "excerpt": "# LRN-009de3634d72afbc: Unhealthy on Deployment netpol-client - **Date:** 2026-11-18 - **Source:** learned from an approved incident, not a reviewed postmortem - **Signal:** Unhealthy - **Namespace / workload:** chaos-netpol / Deployment netpol-client, container client ## Summary The NetworkPolicy 'allow-trusted' in namespace 'chaos-netpol' selects pods with label app=netpol-server as the target a",
+        "origin": "learned"
+      },
+      {
+        "title": "PM-2026-066: CoreDNS forwarding loop broke name resolution cluster-wide",
+        "category": "network",
+        "score": 0.7250892519950867,
+        "fix": "Reverted the forward block in the kube-system/coredns ConfigMap that created a resolver loop (plugin/loop: Loop detected) and restarted CoreDNS. Clue: many unrelated workloads fail at once with 'no such host'.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/04-coredns-forwarding-loop.md",
+        "excerpt": ".\"`. - `kubectl -n kube-system get pods -l k8s-app=kube-dns`: CrashLoopBackOff on both replicas. - Application events across namespaces: `Readiness probe failed: dial tcp: lookup orders on 172.20.0.10:53: no such host`. - `kube-dns` EndpointSlice had zero ready endpoints. ## Fix Reverted the `forward corp.internal 10.40.0.2` block in the `coredns` ConfigMap through the GitOps repo and restarted th",
+        "origin": "seeded"
+      }
+    ],
+    "approval": null,
+    "created_at": "2026-11-18T18:02:22.912061Z",
+    "updated_at": "2026-11-18T18:02:40.178892Z"
+  }
+}

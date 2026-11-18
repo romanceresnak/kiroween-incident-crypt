@@ -11,7 +11,6 @@ from typing import Any
 import pytest
 import yaml
 
-from kiroween_orchestrator import agent as agent_module
 from kiroween_orchestrator.agent import SIGNAL_CATEGORIES, apply_guards
 from kiroween_orchestrator.correlation import correlate
 from kiroween_orchestrator.lab.scenarios import SCENARIOS
@@ -265,9 +264,3 @@ def test_every_scenario_signal_has_a_route_to_its_agent() -> None:
     for scenario in SCENARIOS:
         reachable = set().union(*(SIGNAL_CATEGORIES[s] for s in scenario.signals))
         assert scenario.category in reachable, (scenario.id, scenario.signals)
-
-
-def test_the_classifier_prompt_tells_a_starved_server_from_a_blocked_client() -> None:
-    prompt = agent_module.CLASSIFY_PROMPT
-    assert "server whose own health probe times out because its CPU limit" in prompt
-    assert "readiness probes that time out reaching another service" in prompt

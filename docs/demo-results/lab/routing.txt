@@ -1,0 +1,62 @@
+Routing measurement, 18 Nov 2026. The 14 saved lab incidents replayed through the real
+orchestrator classifier (Claude Haiku 4.5 on Bedrock), 3 runs each, by
+tools/lab/measure_routing.py. The incident text is all the classifier sees.
+Prompts: old = the prompt on the cluster; current = old plus one line about a CPU-starved
+probe; candidate = current plus wording about HTTP errors and refused probes.
+== prompt: old (3 runs each)
+scenario                      expected          hit  chosen
+bad-image-tag                 deploy_rollout  3/3   {'deploy_rollout': 3}
+cpu-throttling                cpu_memory      0/3   {'network': 3}
+crashloop-missing-config-key  deploy_rollout  3/3   {'deploy_rollout': 3}
+dns-missing-service           network         3/3   {'network': 3}
+memory-leak                   cpu_memory      3/3   {'cpu_memory': 3}
+missing-configmap-mount       storage         3/3   {'storage': 3}
+missing-secret                deploy_rollout  3/3   {'deploy_rollout': 3}
+netpol-blocks-client          network         3/3   {'network': 3}
+oom-killed                    cpu_memory      3/3   {'cpu_memory': 3}
+pvc-missing-storageclass      storage         3/3   {'storage': 3}
+rollout-stuck-readiness       deploy_rollout  0/3   {'network': 3}
+rwx-on-ebs                    storage         3/3   {'storage': 3}
+service-selector-mismatch     network         3/3   {'network': 3}
+wrong-target-port             network         3/3   {'network': 3}
+TOTAL                                         36/42
+
+== prompt: current (3 runs each)
+scenario                      expected          hit  chosen
+bad-image-tag                 deploy_rollout  3/3   {'deploy_rollout': 3}
+cpu-throttling                cpu_memory      0/3   {'network': 3}
+crashloop-missing-config-key  deploy_rollout  3/3   {'deploy_rollout': 3}
+dns-missing-service           network         3/3   {'network': 3}
+memory-leak                   cpu_memory      3/3   {'cpu_memory': 3}
+missing-configmap-mount       storage         3/3   {'storage': 3}
+missing-secret                deploy_rollout  3/3   {'deploy_rollout': 3}
+netpol-blocks-client          network         3/3   {'network': 3}
+oom-killed                    cpu_memory      3/3   {'cpu_memory': 3}
+pvc-missing-storageclass      storage         3/3   {'storage': 3}
+rollout-stuck-readiness       deploy_rollout  0/3   {'network': 3}
+rwx-on-ebs                    storage         3/3   {'storage': 3}
+service-selector-mismatch     network         3/3   {'network': 3}
+wrong-target-port             network         3/3   {'network': 3}
+TOTAL                                         36/42
+
+== prompt: candidate (3 runs each)
+scenario                      expected          hit  chosen
+bad-image-tag                 deploy_rollout  3/3   {'deploy_rollout': 3}
+cpu-throttling                cpu_memory      0/3   {'deploy_rollout': 2, 'network': 1}
+crashloop-missing-config-key  deploy_rollout  3/3   {'deploy_rollout': 3}
+dns-missing-service           network         3/3   {'network': 3}
+memory-leak                   cpu_memory      3/3   {'cpu_memory': 3}
+missing-configmap-mount       storage         3/3   {'storage': 3}
+missing-secret                deploy_rollout  3/3   {'deploy_rollout': 3}
+netpol-blocks-client          network         3/3   {'network': 3}
+oom-killed                    cpu_memory      3/3   {'cpu_memory': 3}
+pvc-missing-storageclass      storage         3/3   {'storage': 3}
+rollout-stuck-readiness       deploy_rollout  0/3   {'network': 3}
+rwx-on-ebs                    storage         3/3   {'storage': 3}
+service-selector-mismatch     network         3/3   {'network': 3}
+wrong-target-port             network         3/3   {'network': 3}
+TOTAL                                         36/42
+
+Result: every prompt gets 36 of 42. cpu-throttling and rollout-stuck-readiness are sent to
+network every time (candidate: cpu-throttling went to deploy_rollout in 2 of 3). The prompt
+changes were not kept.

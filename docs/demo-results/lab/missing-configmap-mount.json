@@ -1,0 +1,146 @@
+{
+  "summary": {
+    "scenario": "missing-configmap-mount",
+    "namespace": "lab-14",
+    "run": "7050e9",
+    "agent_expected": "storage",
+    "category_expected": "storage",
+    "signals_expected": [
+      "FailedMount"
+    ],
+    "signals_observed": [
+      "FailedMount"
+    ],
+    "incidents": 1,
+    "correlated": 0,
+    "category_observed": "storage",
+    "status": "completed",
+    "outcome": "action_required",
+    "proposal_field": null,
+    "proposal_proposed": null,
+    "seconds_to_decision": 23.5,
+    "seconds_to_detect": 2.7,
+    "cost_usd": 0.1007,
+    "verdict": "as described",
+    "incident_id": "26e8b24a7193df6a"
+  },
+  "record": {
+    "incident": {
+      "incident_id": "26e8b24a7193df6a",
+      "source": "watcher",
+      "reason": "FailedMount",
+      "namespace": "lab-14",
+      "workload": {
+        "kind": "Deployment",
+        "name": "viewer-7050e9"
+      },
+      "pod": "viewer-7050e9-577885774-42g4f",
+      "container": null,
+      "message": "FailedMount: MountVolume.SetUp failed for volume \"settings\" : configmap \"app-settings\" not found",
+      "observed_at": "2026-11-18T18:04:16.685129Z",
+      "depends_on": [],
+      "similar_incidents": []
+    },
+    "status": "completed",
+    "classification": {
+      "category": "storage",
+      "rationale": "The pod failed to mount a volume because the referenced ConfigMap \"app-settings\" does not exist, indicating a storage or configuration resource availability issue.",
+      "confidence": "medium"
+    },
+    "investigation": {
+      "outcome": "action_required",
+      "diagnosis": {
+        "root_cause": "The Deployment's pod spec mounts a volume named 'settings' sourced from ConfigMap 'app-settings', but that ConfigMap does not exist in namespace 'lab-14'. Kubernetes cannot set up the volume, so the container is permanently stuck in ContainerCreating and will never start until the ConfigMap is created.",
+        "confidence": "high",
+        "evidence": [
+          {
+            "tool": "list_events",
+            "field": "message (reason=FailedMount)",
+            "value": "MountVolume.SetUp failed for volume \"settings\" : configmap \"app-settings\" not found"
+          },
+          {
+            "tool": "list_events",
+            "field": "count (reason=FailedMount)",
+            "value": "5"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containerStatuses[0].state.reason",
+            "value": "ContainerCreating"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containerStatuses[0].ready",
+            "value": "false"
+          },
+          {
+            "tool": "get_pod",
+            "field": "phase",
+            "value": "Pending"
+          },
+          {
+            "tool": "get_pod",
+            "field": "labels[kiroween.io/lab-scenario]",
+            "value": "missing-configmap-mount"
+          }
+        ]
+      },
+      "proposal": {
+        "action": "investigate_further",
+        "target": null,
+        "field": null,
+        "current": null,
+        "proposed": null,
+        "rationale": "The ConfigMap 'app-settings' referenced by the 'settings' volume in Deployment 'viewer-7050e9' (namespace 'lab-14') does not exist. This is not a PVC/StorageClass issue \u2014 it is a missing ConfigMap. The fix is outside the scope of storage field changes: a human (or GitOps pipeline) must create the 'app-settings' ConfigMap in namespace 'lab-14' with the correct keys and values expected by the application. Check: (1) Git history / Helm chart values for the expected contents of 'app-settings'; (2) Whether the ConfigMap exists in other environments/namespaces as a reference; (3) Whether the Deployment's volumeMount spec references the right name.",
+        "risk": "No automated fix available. The pod will remain stuck indefinitely until the ConfigMap is created with the correct content.",
+        "requires_approval": true,
+        "delivery": "Apply as a pull request against /gitops after a human approves it. The agent does not change the cluster."
+      },
+      "usage": {
+        "input_tokens": 20328,
+        "output_tokens": 1684,
+        "cost_usd": 0.09486839999999999
+      },
+      "validation_notes": []
+    },
+    "delegation": "tool",
+    "usage_by_agent": {
+      "orchestrator": {
+        "input_tokens": 4222,
+        "output_tokens": 214,
+        "cost_usd": 0.0058212
+      },
+      "storage": {
+        "input_tokens": 20328,
+        "output_tokens": 1684,
+        "cost_usd": 0.09486839999999999
+      }
+    },
+    "error": null,
+    "related_incidents": [],
+    "related_to": null,
+    "similar_incidents": [
+      {
+        "title": "PM-2026-085: analytics-cache stuck Pending on a StorageClass that did not exist",
+        "category": "storage",
+        "score": 0.6438308656215668,
+        "fix": "Changed spec.storageClassName of the PVC to a StorageClass that exists in the cluster and recreated the claim (the field is immutable; the claim had never bound, so no data was lost). The pod's FailedScheduling had the same cause.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/07-pvc-missing-storageclass.md",
+        "excerpt": "This cluster's StorageClasses were `gp2` (in-tree) and `gp3` (EBS CSI); there was no `fast-ssd` and no default class. `storageClassName` cannot be changed on an existing claim, so the claim had to be recreated with the right class. ## Evidence - PVC events: `ProvisioningFailed: storageclass.storage.k8s.io \"fast-ssd\" not found`. - PVC `status.phase: Pending`, no `volumeName`. - Pod events: `0/3 nod",
+        "origin": "seeded"
+      },
+      {
+        "title": "PM-2026-091: node disk pressure evicted pods after container logs filled the root volume",
+        "category": "storage",
+        "score": 0.6061344146728516,
+        "fix": "Turned off the debug logging, set resources.limits.ephemeral-storage 2Gi and an emptyDir sizeLimit of 1Gi on the noisy container, and replaced the affected node. Clue: evictions of unrelated pods on one node with DiskPressure=True.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/08-node-disk-pressure.md",
+        "excerpt": "# PM-2026-091: node disk pressure evicted pods after container logs filled the root volume - **Date:** 2026-10-28 - **Severity:** SEV-2 - **Signal:** Evicted pods, node condition DiskPressure, FailedScheduling (untolerated taint) - **Namespace / workload:** node `ip-10-0-2-47`; noisy workload `media` / Deployment `thumbnailer` ## Summary A debug flag left on in `thumbnailer` made it log every requ",
+        "origin": "seeded"
+      }
+    ],
+    "approval": null,
+    "created_at": "2026-11-18T18:04:16.691003Z",
+    "updated_at": "2026-11-18T18:04:40.178049Z"
+  }
+}

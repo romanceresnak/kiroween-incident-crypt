@@ -1,0 +1,160 @@
+{
+  "summary": {
+    "scenario": "service-selector-mismatch",
+    "namespace": "lab-05",
+    "run": "ad16fb",
+    "agent_expected": "network",
+    "category_expected": "network",
+    "signals_expected": [
+      "Unhealthy"
+    ],
+    "signals_observed": [
+      "Unhealthy"
+    ],
+    "incidents": 1,
+    "correlated": 0,
+    "category_observed": "network",
+    "status": "awaiting_approval",
+    "outcome": "action_required",
+    "proposal_field": "spec.selector.app",
+    "proposal_proposed": "web-v2",
+    "seconds_to_decision": 12.8,
+    "seconds_to_detect": 68.8,
+    "cost_usd": 0.0795,
+    "verdict": "as described",
+    "incident_id": "7769cbf3e9a87f93"
+  },
+  "record": {
+    "incident": {
+      "incident_id": "7769cbf3e9a87f93",
+      "source": "watcher",
+      "reason": "Unhealthy",
+      "namespace": "lab-05",
+      "workload": {
+        "kind": "Deployment",
+        "name": "client-ad16fb"
+      },
+      "pod": "client-ad16fb-869f87c99d-2l4qf",
+      "container": "client",
+      "message": "Unhealthy: Readiness probe failed: wget: can't connect to remote host (172.20.124.21): Connection refused\n",
+      "observed_at": "2026-11-18T17:59:52.769586Z",
+      "depends_on": [],
+      "similar_incidents": []
+    },
+    "status": "awaiting_approval",
+    "classification": {
+      "category": "network",
+      "rationale": "The readiness probe failed with a connection refused error when trying to reach a remote host, indicating a network connectivity issue between the client pod and its dependency.",
+      "confidence": "high"
+    },
+    "investigation": {
+      "outcome": "action_required",
+      "diagnosis": {
+        "root_cause": "The Service 'web' in namespace 'lab-05' has selector app=web, but the only server pod ('web-v2-ad16fb-78df65dd8d-mmw8d') carries the label app=web-v2. Because no pod matches the selector, the Service has zero ready endpoints. The client's readiness probe connects through the Service ClusterIP and receives 'Connection refused' because there is no backing pod to route traffic to.",
+        "confidence": "high",
+        "evidence": [
+          {
+            "tool": "list_services",
+            "field": "selector",
+            "value": "{\"app\": \"web\"}"
+          },
+          {
+            "tool": "list_pods",
+            "field": "labels.app (server pod web-v2-ad16fb-78df65dd8d-mmw8d)",
+            "value": "web-v2"
+          },
+          {
+            "tool": "get_endpoints",
+            "field": "ready",
+            "value": "0"
+          },
+          {
+            "tool": "get_endpoints",
+            "field": "endpoints",
+            "value": "[]"
+          },
+          {
+            "tool": "list_events",
+            "field": "message (count=9)",
+            "value": "Readiness probe failed: wget: can't connect to remote host (172.20.124.21): Connection refused"
+          },
+          {
+            "tool": "get_pod",
+            "field": "labels.kiroween.io/lab-scenario",
+            "value": "service-selector-mismatch"
+          }
+        ]
+      },
+      "proposal": {
+        "action": "set_field",
+        "target": {
+          "namespace": "lab-05",
+          "kind": "Service",
+          "name": "web",
+          "container": null
+        },
+        "field": "spec.selector.app",
+        "current": "web",
+        "proposed": "web-v2",
+        "rationale": "Changing the Service selector from 'web' to 'web-v2' will match the actual label carried by the server pod, populating the endpoint slice and restoring connectivity for the client's readiness probe.",
+        "risk": "Low. The only pod in the namespace whose 'app' label could match is 'web-v2-ad16fb-78df65dd8d-mmw8d', which is already Ready. Traffic will route to it immediately after the selector is updated.",
+        "requires_approval": true,
+        "delivery": "Apply as a pull request against /gitops after a human approves it. The agent does not change the cluster."
+      },
+      "usage": {
+        "input_tokens": 16451,
+        "output_tokens": 1132,
+        "cost_usd": 0.07296629999999998
+      },
+      "validation_notes": []
+    },
+    "delegation": "tool",
+    "usage_by_agent": {
+      "orchestrator": {
+        "input_tokens": 4762,
+        "output_tokens": 229,
+        "cost_usd": 0.0064977
+      },
+      "network": {
+        "input_tokens": 16451,
+        "output_tokens": 1132,
+        "cost_usd": 0.07296629999999998
+      }
+    },
+    "error": null,
+    "related_incidents": [],
+    "related_to": null,
+    "similar_incidents": [
+      {
+        "title": "LRN-2e4fd60547e332f6: Unhealthy on Deployment netpol-client",
+        "category": "network",
+        "score": 0.7905261814594269,
+        "fix": "Approved fix (not yet confirmed): set spec.ingress[0].from[0].podSelector.matchLabels.app on NetworkPolicy/allow-trusted from netpol-trusted to netpol-client.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/learned/2e4fd60547e332f6.md",
+        "excerpt": "Message seen: Unhealthy: Readiness probe failed: wget: download timed out ## Impact Not recorded. This postmortem was written automatically when the incident was approved; no impact was measured. ## Root cause The NetworkPolicy 'allow-trusted' in namespace 'chaos-netpol' restricts ingress to pods with label app=netpol-server, permitting traffic only from pods matching app=netpol-trusted. The clien",
+        "origin": "learned"
+      },
+      {
+        "title": "LRN-009de3634d72afbc: Unhealthy on Deployment netpol-client",
+        "category": "network",
+        "score": 0.7505105137825012,
+        "fix": "Approved fix (not yet confirmed): set spec.ingress[0].from[0].podSelector.matchLabels.app on NetworkPolicy/allow-trusted from netpol-trusted to netpol-client.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/learned/009de3634d72afbc.md",
+        "excerpt": "# LRN-009de3634d72afbc: Unhealthy on Deployment netpol-client - **Date:** 2026-11-18 - **Source:** learned from an approved incident, not a reviewed postmortem - **Signal:** Unhealthy - **Namespace / workload:** chaos-netpol / Deployment netpol-client, container client ## Summary The NetworkPolicy 'allow-trusted' in namespace 'chaos-netpol' selects pods with label app=netpol-server as the target a",
+        "origin": "learned"
+      },
+      {
+        "title": "PM-2026-066: CoreDNS forwarding loop broke name resolution cluster-wide",
+        "category": "network",
+        "score": 0.7250473499298096,
+        "fix": "Reverted the forward block in the kube-system/coredns ConfigMap that created a resolver loop (plugin/loop: Loop detected) and restarted CoreDNS. Clue: many unrelated workloads fail at once with 'no such host'.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/04-coredns-forwarding-loop.md",
+        "excerpt": ".\"`. - `kubectl -n kube-system get pods -l k8s-app=kube-dns`: CrashLoopBackOff on both replicas. - Application events across namespaces: `Readiness probe failed: dial tcp: lookup orders on 172.20.0.10:53: no such host`. - `kube-dns` EndpointSlice had zero ready endpoints. ## Fix Reverted the `forward corp.internal 10.40.0.2` block in the `coredns` ConfigMap through the GitOps repo and restarted th",
+        "origin": "seeded"
+      }
+    ],
+    "approval": null,
+    "created_at": "2026-11-18T17:59:52.771989Z",
+    "updated_at": "2026-11-18T18:00:05.552213Z"
+  }
+}

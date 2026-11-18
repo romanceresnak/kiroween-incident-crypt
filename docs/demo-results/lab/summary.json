@@ -1,0 +1,359 @@
+{
+  "cluster": "kiroween-prod",
+  "scenarios": [
+    {
+      "scenario": "oom-killed",
+      "namespace": "lab-01",
+      "run": "f925cc",
+      "agent_expected": "cpu-memory",
+      "category_expected": "cpu_memory",
+      "signals_expected": [
+        "OOMKilled"
+      ],
+      "signals_observed": [
+        "OOMKilled"
+      ],
+      "incidents": 1,
+      "correlated": 0,
+      "category_observed": "cpu_memory",
+      "status": "awaiting_approval",
+      "outcome": "action_required",
+      "proposal_field": "resources.limits.memory",
+      "proposal_proposed": "128Mi",
+      "seconds_to_decision": 18.3,
+      "seconds_to_detect": 10.9,
+      "cost_usd": 0.0805,
+      "verdict": "as described",
+      "incident_id": "e7a9f4b715660c16"
+    },
+    {
+      "scenario": "cpu-throttling",
+      "namespace": "lab-02",
+      "run": "7c061e",
+      "agent_expected": "cpu-memory",
+      "category_expected": "cpu_memory",
+      "signals_expected": [
+        "Unhealthy"
+      ],
+      "signals_observed": [
+        "Unhealthy"
+      ],
+      "incidents": 1,
+      "correlated": 0,
+      "category_observed": "network",
+      "status": "completed",
+      "outcome": "action_required",
+      "proposal_field": null,
+      "proposal_proposed": null,
+      "seconds_to_decision": 18.9,
+      "seconds_to_detect": 73.7,
+      "cost_usd": 0.0876,
+      "verdict": "different agent",
+      "incident_id": "5849dd7112cf2984"
+    },
+    {
+      "scenario": "memory-leak",
+      "namespace": "lab-03",
+      "run": "4ed82a",
+      "agent_expected": "cpu-memory",
+      "category_expected": "cpu_memory",
+      "signals_expected": [
+        "OOMKilled"
+      ],
+      "signals_observed": [
+        "OOMKilled"
+      ],
+      "incidents": 1,
+      "correlated": 0,
+      "category_observed": "cpu_memory",
+      "status": "awaiting_approval",
+      "outcome": "action_required",
+      "proposal_field": "resources.limits.memory",
+      "proposal_proposed": "128Mi",
+      "seconds_to_decision": 17.9,
+      "seconds_to_detect": 51.2,
+      "cost_usd": 0.083,
+      "verdict": "as described",
+      "incident_id": "8f6621af14435348"
+    },
+    {
+      "scenario": "netpol-blocks-client",
+      "namespace": "lab-04",
+      "run": "82fd94",
+      "agent_expected": "network",
+      "category_expected": "network",
+      "signals_expected": [
+        "Unhealthy"
+      ],
+      "signals_observed": [
+        "Unhealthy"
+      ],
+      "incidents": 1,
+      "correlated": 0,
+      "category_observed": "network",
+      "status": "awaiting_approval",
+      "outcome": "action_required",
+      "proposal_field": "spec.ingress[0].from[0].podSelector.matchLabels.app",
+      "proposal_proposed": "client",
+      "seconds_to_decision": 26.1,
+      "seconds_to_detect": 70.9,
+      "cost_usd": 0.0769,
+      "verdict": "as described",
+      "incident_id": "857253abb4b28749"
+    },
+    {
+      "scenario": "service-selector-mismatch",
+      "namespace": "lab-05",
+      "run": "ad16fb",
+      "agent_expected": "network",
+      "category_expected": "network",
+      "signals_expected": [
+        "Unhealthy"
+      ],
+      "signals_observed": [
+        "Unhealthy"
+      ],
+      "incidents": 1,
+      "correlated": 0,
+      "category_observed": "network",
+      "status": "awaiting_approval",
+      "outcome": "action_required",
+      "proposal_field": "spec.selector.app",
+      "proposal_proposed": "web-v2",
+      "seconds_to_decision": 12.8,
+      "seconds_to_detect": 68.8,
+      "cost_usd": 0.0795,
+      "verdict": "as described",
+      "incident_id": "7769cbf3e9a87f93"
+    },
+    {
+      "scenario": "wrong-target-port",
+      "namespace": "lab-06",
+      "run": "b4d8b8",
+      "agent_expected": "network",
+      "category_expected": "network",
+      "signals_expected": [
+        "Unhealthy"
+      ],
+      "signals_observed": [
+        "Unhealthy"
+      ],
+      "incidents": 1,
+      "correlated": 0,
+      "category_observed": "network",
+      "status": "awaiting_approval",
+      "outcome": "action_required",
+      "proposal_field": "spec.ports[0].targetPort",
+      "proposal_proposed": "8080",
+      "seconds_to_decision": 17.3,
+      "seconds_to_detect": 67.9,
+      "cost_usd": 0.1089,
+      "verdict": "as described",
+      "incident_id": "2de6da0b429900ca"
+    },
+    {
+      "scenario": "dns-missing-service",
+      "namespace": "lab-07",
+      "run": "bb8a4c",
+      "agent_expected": "network",
+      "category_expected": "network",
+      "signals_expected": [
+        "Unhealthy"
+      ],
+      "signals_observed": [
+        "Unhealthy"
+      ],
+      "incidents": 1,
+      "correlated": 0,
+      "category_observed": "network",
+      "status": "completed",
+      "outcome": "action_required",
+      "proposal_field": null,
+      "proposal_proposed": null,
+      "seconds_to_decision": 20.3,
+      "seconds_to_detect": 70.0,
+      "cost_usd": 0.0978,
+      "verdict": "as described",
+      "incident_id": "b11f6cb53a0d3b14"
+    },
+    {
+      "scenario": "bad-image-tag",
+      "namespace": "lab-08",
+      "run": "f36262",
+      "agent_expected": "deploy-rollout",
+      "category_expected": "deploy_rollout",
+      "signals_expected": [
+        "ErrImagePull",
+        "ImagePullBackOff"
+      ],
+      "signals_observed": [
+        "ErrImagePull",
+        "ImagePullBackOff"
+      ],
+      "incidents": 2,
+      "correlated": 1,
+      "category_observed": "deploy_rollout",
+      "status": "awaiting_approval",
+      "outcome": "action_required",
+      "proposal_field": "spec.template.spec.containers[name=web].image",
+      "proposal_proposed": "public.ecr.aws/docker/library/python:3.12-slim",
+      "seconds_to_decision": 16.2,
+      "seconds_to_detect": 21.0,
+      "cost_usd": 0.0604,
+      "verdict": "as described",
+      "incident_id": "2bbc5374cbaba678"
+    },
+    {
+      "scenario": "crashloop-missing-config-key",
+      "namespace": "lab-09",
+      "run": "e7c794",
+      "agent_expected": "deploy-rollout",
+      "category_expected": "deploy_rollout",
+      "signals_expected": [
+        "CrashLoopBackOff"
+      ],
+      "signals_observed": [
+        "CrashLoopBackOff"
+      ],
+      "incidents": 1,
+      "correlated": 0,
+      "category_observed": "deploy_rollout",
+      "status": "completed",
+      "outcome": "action_required",
+      "proposal_field": null,
+      "proposal_proposed": null,
+      "seconds_to_decision": 26.5,
+      "seconds_to_detect": 11.1,
+      "cost_usd": 0.1622,
+      "verdict": "as described",
+      "incident_id": "9b2c60a1b593ad16"
+    },
+    {
+      "scenario": "missing-secret",
+      "namespace": "lab-10",
+      "run": "054b7b",
+      "agent_expected": "deploy-rollout",
+      "category_expected": "deploy_rollout",
+      "signals_expected": [
+        "CreateContainerConfigError"
+      ],
+      "signals_observed": [
+        "CreateContainerConfigError"
+      ],
+      "incidents": 1,
+      "correlated": 0,
+      "category_observed": "deploy_rollout",
+      "status": "completed",
+      "outcome": "action_required",
+      "proposal_field": null,
+      "proposal_proposed": null,
+      "seconds_to_decision": 19.5,
+      "seconds_to_detect": 6.1,
+      "cost_usd": 0.0917,
+      "verdict": "as described",
+      "incident_id": "c36b04748722e16b"
+    },
+    {
+      "scenario": "rollout-stuck-readiness",
+      "namespace": "lab-11",
+      "run": "3b87bd",
+      "agent_expected": "deploy-rollout",
+      "category_expected": "deploy_rollout",
+      "signals_expected": [
+        "Unhealthy"
+      ],
+      "signals_observed": [
+        "Unhealthy"
+      ],
+      "incidents": 1,
+      "correlated": 0,
+      "category_observed": "network",
+      "status": "completed",
+      "outcome": "action_required",
+      "proposal_field": null,
+      "proposal_proposed": null,
+      "seconds_to_decision": 18.2,
+      "seconds_to_detect": 86.0,
+      "cost_usd": 0.0902,
+      "verdict": "different agent",
+      "incident_id": "c20dc8d02e8137c2"
+    },
+    {
+      "scenario": "pvc-missing-storageclass",
+      "namespace": "lab-12",
+      "run": "00491f",
+      "agent_expected": "storage",
+      "category_expected": "storage",
+      "signals_expected": [
+        "ProvisioningFailed"
+      ],
+      "signals_observed": [
+        "FailedScheduling",
+        "ProvisioningFailed"
+      ],
+      "incidents": 2,
+      "correlated": 1,
+      "category_observed": "storage",
+      "status": "awaiting_approval",
+      "outcome": "action_required",
+      "proposal_field": "spec.storageClassName",
+      "proposal_proposed": "gp2",
+      "seconds_to_decision": 11.4,
+      "seconds_to_detect": 2.6,
+      "cost_usd": 0.0517,
+      "verdict": "as described",
+      "incident_id": "d821637d591806ab"
+    },
+    {
+      "scenario": "rwx-on-ebs",
+      "namespace": "lab-13",
+      "run": "45892c",
+      "agent_expected": "storage",
+      "category_expected": "storage",
+      "signals_expected": [
+        "ProvisioningFailed"
+      ],
+      "signals_observed": [
+        "ProvisioningFailed"
+      ],
+      "incidents": 1,
+      "correlated": 0,
+      "category_observed": "storage",
+      "status": "completed",
+      "outcome": "action_required",
+      "proposal_field": null,
+      "proposal_proposed": null,
+      "seconds_to_decision": 17.7,
+      "seconds_to_detect": 2.7,
+      "cost_usd": 0.0855,
+      "verdict": "as described",
+      "incident_id": "dd6f463a84fadace"
+    },
+    {
+      "scenario": "missing-configmap-mount",
+      "namespace": "lab-14",
+      "run": "7050e9",
+      "agent_expected": "storage",
+      "category_expected": "storage",
+      "signals_expected": [
+        "FailedMount"
+      ],
+      "signals_observed": [
+        "FailedMount"
+      ],
+      "incidents": 1,
+      "correlated": 0,
+      "category_observed": "storage",
+      "status": "completed",
+      "outcome": "action_required",
+      "proposal_field": null,
+      "proposal_proposed": null,
+      "seconds_to_decision": 23.5,
+      "seconds_to_detect": 2.7,
+      "cost_usd": 0.1007,
+      "verdict": "as described",
+      "incident_id": "26e8b24a7193df6a"
+    }
+  ],
+  "total_cost_usd": 1.2566
+}

@@ -31,9 +31,14 @@
           namespace on the live cluster.</li>
         <li>The watcher notices, and the crew investigates. Follow the link to the incident to
           read the evidence.</li>
-        <li>If you press <strong>Approve</strong> on the incident, it opens a pull request on a
-          sandbox branch. Nothing is applied to the cluster, and nothing is saved as memory.</li>
+        <li>If the crew proposes a fix, you can press <strong>Approve</strong> on the incident. It
+          opens a pull request on a sandbox branch. Nothing is applied to the cluster, and nothing
+          is saved as memory. Some failures the crew can explain but not fix by itself, such as a
+          Secret or ConfigMap that does not exist: those end as a diagnosis, with nothing to
+          approve.</li>
       </ol>
+      <p class="muted">Each card names the crew member who <em>should</em> answer. A failed health
+        check looks much the same whatever caused it, so the incident shows who actually did.</p>
       <p class="muted">One scenario at a time. It is cleaned up by itself after 15 minutes, or when
         you press Reset.</p>
     </section>

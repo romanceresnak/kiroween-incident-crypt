@@ -1,0 +1,151 @@
+{
+  "summary": {
+    "scenario": "crashloop-missing-config-key",
+    "namespace": "lab-09",
+    "run": "e7c794",
+    "agent_expected": "deploy-rollout",
+    "category_expected": "deploy_rollout",
+    "signals_expected": [
+      "CrashLoopBackOff"
+    ],
+    "signals_observed": [
+      "CrashLoopBackOff"
+    ],
+    "incidents": 1,
+    "correlated": 0,
+    "category_observed": "deploy_rollout",
+    "status": "completed",
+    "outcome": "action_required",
+    "proposal_field": null,
+    "proposal_proposed": null,
+    "seconds_to_decision": 26.5,
+    "seconds_to_detect": 11.1,
+    "cost_usd": 0.1622,
+    "verdict": "as described",
+    "incident_id": "9b2c60a1b593ad16"
+  },
+  "record": {
+    "incident": {
+      "incident_id": "9b2c60a1b593ad16",
+      "source": "watcher",
+      "reason": "CrashLoopBackOff",
+      "namespace": "lab-09",
+      "workload": {
+        "kind": "Deployment",
+        "name": "reporter-e7c794"
+      },
+      "pod": "reporter-e7c794-6b74b9d549-ljrsl",
+      "container": "app",
+      "message": "CrashLoopBackOff: back-off 10s restarting failed container=app pod=reporter-e7c794-6b74b9d549-ljrsl_lab-09(31923c8c-51a4-47c5-889c-f66634a57d80)",
+      "observed_at": "2026-11-18T18:01:48.093927Z",
+      "depends_on": [],
+      "similar_incidents": []
+    },
+    "status": "completed",
+    "classification": {
+      "category": "deploy_rollout",
+      "rationale": "Container is in CrashLoopBackOff state, indicating the application is crashing repeatedly after deployment, which is a typical deploy/rollout failure pattern.",
+      "confidence": "high"
+    },
+    "investigation": {
+      "outcome": "action_required",
+      "diagnosis": {
+        "root_cause": "The container crashes at startup with exit code 1 because it cannot find its required config file at /config/app.conf. The ConfigMap mounted at /config contains only the key 'application.conf', not 'app.conf'. This is a ConfigMap key mismatch \u2014 the key was renamed (from app.conf to application.conf) without updating what the container expects, or vice versa.",
+        "confidence": "high",
+        "evidence": [
+          {
+            "tool": "get_pod_logs",
+            "field": "stdout (previous container)",
+            "value": "FATAL: /config/app.conf not found. /config holds: application.conf"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containerStatuses[0].lastState.exitCode",
+            "value": "1"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containerStatuses[0].lastState.reason",
+            "value": "Error"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containerStatuses[0].state.reason",
+            "value": "CrashLoopBackOff"
+          },
+          {
+            "tool": "list_configmap_keys",
+            "field": "keys (ConfigMap app-config)",
+            "value": "[\"application.conf\"]"
+          },
+          {
+            "tool": "get_workload_status",
+            "field": "conditions[type=Available].message",
+            "value": "Deployment does not have minimum availability."
+          },
+          {
+            "tool": "get_workload_status",
+            "field": "status.unavailableReplicas",
+            "value": "1"
+          }
+        ]
+      },
+      "proposal": {
+        "action": "investigate_further",
+        "target": null,
+        "field": null,
+        "current": null,
+        "proposed": null,
+        "rationale": "The container in Deployment reporter-e7c794 (container: app) expects a config file mounted at /config/app.conf, but the ConfigMap app-config in namespace lab-09 only contains the key 'application.conf'. A human must choose one of two fixes:\n1. **Rename the key in ConfigMap app-config** from 'application.conf' to 'app.conf' (or add 'app.conf' alongside the existing key), so the volume mount delivers the file under the name the container looks for.\n2. **Alternatively**, if the ConfigMap volume mount uses a 'items' mapping (key\u2192path), update the path mapping in the Deployment's pod spec volume definition to map 'application.conf' \u2192 'app.conf'.\nA CI/CD validation step (e.g. using configMapKeyRef for required keys) should be added to catch this class of breakage before rollout.",
+        "risk": "Low \u2014 this is a configuration-only change. No data loss risk. Updating the ConfigMap key will trigger a rolling restart of the pod.",
+        "requires_approval": true,
+        "delivery": "Apply as a pull request against /gitops after a human approves it. The agent does not change the cluster."
+      },
+      "usage": {
+        "input_tokens": 37711,
+        "output_tokens": 1920,
+        "cost_usd": 0.1561263
+      },
+      "validation_notes": []
+    },
+    "delegation": "tool",
+    "usage_by_agent": {
+      "orchestrator": {
+        "input_tokens": 4329,
+        "output_tokens": 247,
+        "cost_usd": 0.0061204
+      },
+      "deploy-rollout": {
+        "input_tokens": 37711,
+        "output_tokens": 1920,
+        "cost_usd": 0.1561263
+      }
+    },
+    "error": null,
+    "related_incidents": [],
+    "related_to": null,
+    "similar_incidents": [
+      {
+        "title": "PM-2026-079: notification-gateway crash loop after a ConfigMap key rename",
+        "category": "deploy_rollout",
+        "score": 0.6853133141994476,
+        "fix": "Restored the required key SMTP_HOST in the ConfigMap the Deployment loads with envFrom (keeping the new key too) and restarted the Deployment. Clue: exit code 1 with a config error in the previous container log, normal memory and CPU.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/06-crashloop-bad-configmap.md",
+        "excerpt": "All pods were Ready within two minutes. ## Prevention - Each service lists its required config keys; CI validates the ConfigMap against that list. - Use `configMapKeyRef` for required keys so a missing key fails as `CreateContainerConfigError` before the process starts. - Triage hint: CrashLoopBackOff with exit code 1 and a config error in the previous log points to config, not resources.",
+        "origin": "seeded"
+      },
+      {
+        "title": "PM-2026-072: search-indexer rollout stuck on a tag that was never pushed",
+        "category": "deploy_rollout",
+        "score": 0.6477853655815125,
+        "fix": "Rolled the container image back to the image of the last ReplicaSet revision that was Ready (indexer:2.13.2, revision 41) via a GitOps pull request, then rebuilt and pushed the missing tag before releasing again.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/05-imagepullbackoff-search-indexer.md",
+        "excerpt": "The registry returned `manifest unknown` for the new tag. Kubernetes behaved as designed: `maxUnavailable: 0` kept the old pod running. ## Evidence - Pod events: `Failed to pull image \"...indexer:2.14.0\": not found`, then `Back-off pulling image`. - Container state: `waiting.reason: ImagePullBackOff`. - ReplicaSet history: revision 41 image `indexer:2.13.2`, ready 1/1; revision 42 image `indexer:2",
+        "origin": "seeded"
+      }
+    ],
+    "approval": null,
+    "created_at": "2026-11-18T18:01:48.098164Z",
+    "updated_at": "2026-11-18T18:02:14.629104Z"
+  }
+}

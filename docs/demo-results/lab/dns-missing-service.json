@@ -1,0 +1,170 @@
+{
+  "summary": {
+    "scenario": "dns-missing-service",
+    "namespace": "lab-07",
+    "run": "bb8a4c",
+    "agent_expected": "network",
+    "category_expected": "network",
+    "signals_expected": [
+      "Unhealthy"
+    ],
+    "signals_observed": [
+      "Unhealthy"
+    ],
+    "incidents": 1,
+    "correlated": 0,
+    "category_observed": "network",
+    "status": "completed",
+    "outcome": "action_required",
+    "proposal_field": null,
+    "proposal_proposed": null,
+    "seconds_to_decision": 20.3,
+    "seconds_to_detect": 70.0,
+    "cost_usd": 0.0978,
+    "verdict": "as described",
+    "incident_id": "b11f6cb53a0d3b14"
+  },
+  "record": {
+    "incident": {
+      "incident_id": "b11f6cb53a0d3b14",
+      "source": "watcher",
+      "reason": "Unhealthy",
+      "namespace": "lab-07",
+      "workload": {
+        "kind": "Deployment",
+        "name": "client-bb8a4c"
+      },
+      "pod": "client-bb8a4c-68cc55df4d-7v4mz",
+      "container": "client",
+      "message": "Unhealthy: Readiness probe failed: wget: bad address 'payments-api:8080'\n",
+      "observed_at": "2026-11-18T18:02:27.960699Z",
+      "depends_on": [],
+      "similar_incidents": []
+    },
+    "status": "completed",
+    "classification": {
+      "category": "network",
+      "rationale": "Readiness probe failed due to DNS resolution error when attempting to reach payments-api:8080, indicating a network/DNS connectivity issue between services.",
+      "confidence": "high"
+    },
+    "investigation": {
+      "outcome": "action_required",
+      "diagnosis": {
+        "root_cause": "The client pod's readiness probe attempts to resolve the hostname 'payments-api' (port 8080), but no Service with that name exists in namespace lab-07. The only Service present is named 'payments'. CoreDNS is healthy and returns NXDOMAIN for 'payments-api', causing wget to report 'bad address'. The payments Service itself is correctly configured \u2014 its selector matches the ready payments pod and its endpoint is ready on port 8080 \u2014 so the fault is purely a name mismatch between what the client probe expects and the actual Service name.",
+        "confidence": "high",
+        "evidence": [
+          {
+            "tool": "list_events",
+            "field": "message (reason=Unhealthy, count=8)",
+            "value": "Readiness probe failed: wget: bad address 'payments-api:8080'"
+          },
+          {
+            "tool": "list_services",
+            "field": "name",
+            "value": "payments"
+          },
+          {
+            "tool": "list_services",
+            "field": "ports[0].port",
+            "value": "8080"
+          },
+          {
+            "tool": "list_services",
+            "field": "selector",
+            "value": "{\"app\": \"payments\"}"
+          },
+          {
+            "tool": "get_endpoints",
+            "field": "endpoints[0].ready",
+            "value": "true"
+          },
+          {
+            "tool": "get_endpoints",
+            "field": "endpoints[0].pod",
+            "value": "payments-bb8a4c-5cfc86c968-t9ldv"
+          },
+          {
+            "tool": "get_pod",
+            "field": "labels[kiroween.io/lab-scenario]",
+            "value": "dns-missing-service"
+          },
+          {
+            "tool": "list_network_policies",
+            "field": "(list)",
+            "value": "[] \u2014 no NetworkPolicies in namespace"
+          },
+          {
+            "tool": "get_coredns_status",
+            "field": "pods[*].containerStatuses[0].ready",
+            "value": "true (both CoreDNS replicas)"
+          }
+        ]
+      },
+      "proposal": {
+        "action": "investigate_further",
+        "target": null,
+        "field": null,
+        "current": null,
+        "proposed": null,
+        "rationale": "The root cause is that the client readiness probe addresses 'payments-api' but the Service is named 'payments'. Fixing this requires either: (a) creating a new Service named 'payments-api' in lab-07, or (b) patching the client Deployment's readiness probe to use 'payments' instead of 'payments-api'. Neither action is within the permitted set_field changes (Service spec.selector.<key>, Service spec.ports[<index>].targetPort, or NetworkPolicy spec.ingress rules). A human or a GitOps PR must rename/recreate the Service or update the probe hostname in the Deployment spec.",
+        "risk": "Until corrected, the client pod will remain unready and fail all readiness checks.",
+        "requires_approval": true,
+        "delivery": "Apply as a pull request against /gitops after a human approves it. The agent does not change the cluster."
+      },
+      "usage": {
+        "input_tokens": 18700,
+        "output_tokens": 1763,
+        "cost_usd": 0.0907995
+      },
+      "validation_notes": []
+    },
+    "delegation": "tool",
+    "usage_by_agent": {
+      "orchestrator": {
+        "input_tokens": 4841,
+        "output_tokens": 300,
+        "cost_usd": 0.0069751
+      },
+      "network": {
+        "input_tokens": 18700,
+        "output_tokens": 1763,
+        "cost_usd": 0.0907995
+      }
+    },
+    "error": null,
+    "related_incidents": [],
+    "related_to": null,
+    "similar_incidents": [
+      {
+        "title": "LRN-2e4fd60547e332f6: Unhealthy on Deployment netpol-client",
+        "category": "network",
+        "score": 0.7511900067329407,
+        "fix": "Approved fix (not yet confirmed): set spec.ingress[0].from[0].podSelector.matchLabels.app on NetworkPolicy/allow-trusted from netpol-trusted to netpol-client.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/learned/2e4fd60547e332f6.md",
+        "excerpt": "# LRN-2e4fd60547e332f6: Unhealthy on Deployment netpol-client - **Date:** 2026-11-18 - **Source:** learned from an approved incident, not a reviewed postmortem - **Signal:** Unhealthy - **Namespace / workload:** chaos-netpol / Deployment netpol-client, container client ## Summary The NetworkPolicy 'allow-trusted' in namespace 'chaos-netpol' restricts ingress to pods with label app=netpol-server, p",
+        "origin": "learned"
+      },
+      {
+        "title": "LRN-009de3634d72afbc: Unhealthy on Deployment netpol-client",
+        "category": "network",
+        "score": 0.7326004803180695,
+        "fix": "Approved fix (not yet confirmed): set spec.ingress[0].from[0].podSelector.matchLabels.app on NetworkPolicy/allow-trusted from netpol-trusted to netpol-client.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/learned/009de3634d72afbc.md",
+        "excerpt": "# LRN-009de3634d72afbc: Unhealthy on Deployment netpol-client - **Date:** 2026-11-18 - **Source:** learned from an approved incident, not a reviewed postmortem - **Signal:** Unhealthy - **Namespace / workload:** chaos-netpol / Deployment netpol-client, container client ## Summary The NetworkPolicy 'allow-trusted' in namespace 'chaos-netpol' selects pods with label app=netpol-server as the target a",
+        "origin": "learned"
+      },
+      {
+        "title": "PM-2026-066: CoreDNS forwarding loop broke name resolution cluster-wide",
+        "category": "network",
+        "score": 0.7052414417266846,
+        "fix": "Reverted the forward block in the kube-system/coredns ConfigMap that created a resolver loop (plugin/loop: Loop detected) and restarted CoreDNS. Clue: many unrelated workloads fail at once with 'no such host'.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/04-coredns-forwarding-loop.md",
+        "excerpt": ".\"`. - `kubectl -n kube-system get pods -l k8s-app=kube-dns`: CrashLoopBackOff on both replicas. - Application events across namespaces: `Readiness probe failed: dial tcp: lookup orders on 172.20.0.10:53: no such host`. - `kube-dns` EndpointSlice had zero ready endpoints. ## Fix Reverted the `forward corp.internal 10.40.0.2` block in the `coredns` ConfigMap through the GitOps repo and restarted th",
+        "origin": "seeded"
+      }
+    ],
+    "approval": null,
+    "created_at": "2026-11-18T18:02:27.964981Z",
+    "updated_at": "2026-11-18T18:02:48.219263Z"
+  }
+}

@@ -115,9 +115,13 @@ test("one card per scenario shows the title, the crew member, what breaks and th
 test("the page says what the lab does and does not do", async () => {
   const ui = await open();
   try {
-    const text = ui.document.querySelector(".lab-intro").textContent;
+    const text = ui.document.querySelector(".lab-intro").textContent.replace(/\s+/g, " ");
     assert.match(text, /sandbox branch/);
     assert.match(text, /Nothing is applied to the cluster, and nothing is saved as memory/);
+    assert.match(text, /If the crew proposes a fix/);
+    assert.match(text, /those end as a diagnosis, with nothing to approve/);
+    assert.match(text, /names the crew member who should answer/);
+    assert.match(text, /the incident shows who actually did/);
     assert.match(text, /One scenario at a time/);
     assert.match(text, /15 minutes/);
   } finally { ui.close(); }

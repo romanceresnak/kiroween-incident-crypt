@@ -1,0 +1,176 @@
+{
+  "summary": {
+    "scenario": "memory-leak",
+    "namespace": "lab-03",
+    "run": "4ed82a",
+    "agent_expected": "cpu-memory",
+    "category_expected": "cpu_memory",
+    "signals_expected": [
+      "OOMKilled"
+    ],
+    "signals_observed": [
+      "OOMKilled"
+    ],
+    "incidents": 1,
+    "correlated": 0,
+    "category_observed": "cpu_memory",
+    "status": "awaiting_approval",
+    "outcome": "action_required",
+    "proposal_field": "resources.limits.memory",
+    "proposal_proposed": "128Mi",
+    "seconds_to_decision": 17.9,
+    "seconds_to_detect": 51.2,
+    "cost_usd": 0.083,
+    "verdict": "as described",
+    "incident_id": "8f6621af14435348"
+  },
+  "record": {
+    "incident": {
+      "incident_id": "8f6621af14435348",
+      "source": "watcher",
+      "reason": "OOMKilled",
+      "namespace": "lab-03",
+      "workload": {
+        "kind": "Deployment",
+        "name": "grower-4ed82a"
+      },
+      "pod": "grower-4ed82a-64dd9d995d-dh6f5",
+      "container": "app",
+      "message": "Container app terminated: OOMKilled (exit code 137)",
+      "observed_at": "2026-11-18T17:59:32.157379Z",
+      "depends_on": [],
+      "similar_incidents": []
+    },
+    "status": "awaiting_approval",
+    "classification": {
+      "category": "cpu_memory",
+      "rationale": "Container app in deployment grower-4ed82a was OOMKilled (exit code 137), indicating the container exceeded its memory limit.",
+      "confidence": "high"
+    },
+    "investigation": {
+      "outcome": "action_required",
+      "diagnosis": {
+        "root_cause": "The `app` container has an unbounded memory leak: its request cache grows continuously and is never trimmed. The container hit its 48Mi memory limit at approximately 43\u201348 MiB of cache growth and was OOMKilled by the kernel (exit code 137). The limit of 48Mi is far too small for the workload's actual memory footprint, and the underlying cache leak will continue to trigger OOMKills on every restart unless both the limit is raised and the leak is fixed.",
+        "confidence": "high",
+        "evidence": [
+          {
+            "tool": "get_pod",
+            "field": "containerStatuses[0].lastState.reason",
+            "value": "OOMKilled"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containerStatuses[0].lastState.exitCode",
+            "value": "137"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containerStatuses[0].restartCount",
+            "value": "1"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containers[0].resources.limits.memory",
+            "value": "48Mi"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containers[0].resources.requests.memory",
+            "value": "16Mi"
+          },
+          {
+            "tool": "get_pod_logs",
+            "field": "last log line before kill",
+            "value": "request cache holds 43 MiB and is never trimmed"
+          },
+          {
+            "tool": "get_pod_logs",
+            "field": "log pattern",
+            "value": "Cache grows linearly from 1 MiB to 43 MiB with no eviction, indicating an unbounded memory leak in the application"
+          },
+          {
+            "tool": "get_pod",
+            "field": "labels[kiroween.io/lab-scenario]",
+            "value": "memory-leak"
+          },
+          {
+            "tool": "get_quota_and_limits",
+            "field": "limitRanges[0].spec.limits[0].max.memory",
+            "value": "128Mi"
+          },
+          {
+            "tool": "get_quota_and_limits",
+            "field": "resourceQuotas[0].status.hard.limits.memory",
+            "value": "1Gi"
+          },
+          {
+            "tool": "get_quota_and_limits",
+            "field": "resourceQuotas[0].status.used.limits.memory",
+            "value": "48Mi"
+          }
+        ]
+      },
+      "proposal": {
+        "action": "adjust_resources",
+        "target": {
+          "namespace": "lab-03",
+          "kind": "Deployment",
+          "name": "grower-4ed82a",
+          "container": "app"
+        },
+        "field": "resources.limits.memory",
+        "current": "48Mi",
+        "proposed": "128Mi",
+        "rationale": "The container's log shows the cache reached at least 43 MiB before the kill, meaning the 48Mi limit was effectively exhausted. The namespace LimitRange caps container memory at 128Mi. Raising the limit to 128Mi (~3\u00d7 current) gives the container enough headroom to survive longer cycles and allows operators to observe the true peak before the cache is trimmed or the leak is fixed. The memory request should also be raised from 16Mi to 64Mi to improve scheduling quality for a workload known to consume far more than 16Mi. Critically, the application-level cache leak (\"never trimmed\") must be resolved by the development team; raising the limit is a short-term mitigation only.",
+        "risk": "The namespace quota has 952Mi of limits.memory remaining (1Gi hard \u2212 48Mi used), so the increase is within quota. Because the leak is unbounded, the container will eventually OOMKill again even at 128Mi unless the cache eviction bug is fixed. Monitor restart count after the change.",
+        "requires_approval": true,
+        "delivery": "Apply as a pull request against /gitops after a human approves it. The agent does not change the cluster."
+      },
+      "usage": {
+        "input_tokens": 15083,
+        "output_tokens": 1648,
+        "cost_usd": 0.07696589999999999
+      },
+      "validation_notes": []
+    },
+    "delegation": "tool",
+    "usage_by_agent": {
+      "orchestrator": {
+        "input_tokens": 4181,
+        "output_tokens": 255,
+        "cost_usd": 0.006001599999999999
+      },
+      "cpu-memory": {
+        "input_tokens": 15083,
+        "output_tokens": 1648,
+        "cost_usd": 0.07696589999999999
+      }
+    },
+    "error": null,
+    "related_incidents": [],
+    "related_to": null,
+    "similar_incidents": [
+      {
+        "title": "PM-2026-031: report-renderer OOMKilled during month-end batch",
+        "category": "cpu_memory",
+        "score": 0.7918961942195892,
+        "fix": "Raised the container memory limit from 256Mi to 512Mi and the request from 128Mi to 384Mi, sized from the observed 410Mi peak plus 25% headroom, via a GitOps pull request. Long term: stream pages instead of holding the whole document in memory.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/01-oomkilled-report-renderer.md",
+        "excerpt": "Statement size grew with the customer, the limit did not. CPU and node memory were fine; the container hit its own cgroup limit. ## Evidence - `kubectl get pod` showed `lastState.terminated.reason: OOMKilled`, `exitCode: 137`, restart count 23. - The previous container's log ended with `rendering page 6120/9044` and no error line, which is typical for a SIGKILL. - `resources.limits.memory: 256Mi`,",
+        "origin": "seeded"
+      },
+      {
+        "title": "PM-2026-047: checkout-api latency from CPU throttling",
+        "category": "cpu_memory",
+        "score": 0.624163806438446,
+        "fix": "Raised the container CPU limit from 500m to 1500m and the request from 250m to 500m, and the HPA maxReplicas from 6 to 10. The throttling ratio (cfs_throttled_periods / cfs_periods) dropped from 0.78 to under 0.05.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/02-cpu-throttling-checkout-api.md",
+        "excerpt": "The limit, not the replica count, was the bottleneck. Readiness probes with a 1 s timeout then failed on throttled pods, which removed them from the Service and pushed more load onto the rest. ## Evidence - `container_cpu_cfs_throttled_periods_total / container_cpu_cfs_periods_total` was 0.78 for every `api` container. - `kubectl describe hpa checkout-api`: current 190% / target 70%, replicas 6 of",
+        "origin": "seeded"
+      }
+    ],
+    "approval": null,
+    "created_at": "2026-11-18T17:59:32.164506Z",
+    "updated_at": "2026-11-18T17:59:50.090675Z"
+  }
+}

@@ -1,0 +1,171 @@
+{
+  "summary": {
+    "scenario": "oom-killed",
+    "namespace": "lab-01",
+    "run": "f925cc",
+    "agent_expected": "cpu-memory",
+    "category_expected": "cpu_memory",
+    "signals_expected": [
+      "OOMKilled"
+    ],
+    "signals_observed": [
+      "OOMKilled"
+    ],
+    "incidents": 1,
+    "correlated": 0,
+    "category_observed": "cpu_memory",
+    "status": "awaiting_approval",
+    "outcome": "action_required",
+    "proposal_field": "resources.limits.memory",
+    "proposal_proposed": "128Mi",
+    "seconds_to_decision": 18.3,
+    "seconds_to_detect": 10.9,
+    "cost_usd": 0.0805,
+    "verdict": "as described",
+    "incident_id": "e7a9f4b715660c16"
+  },
+  "record": {
+    "incident": {
+      "incident_id": "e7a9f4b715660c16",
+      "source": "watcher",
+      "reason": "OOMKilled",
+      "namespace": "lab-01",
+      "workload": {
+        "kind": "Deployment",
+        "name": "leaker-f925cc"
+      },
+      "pod": "leaker-f925cc-55575f57f-bkx6j",
+      "container": "app",
+      "message": "Container app terminated: OOMKilled (exit code 137)",
+      "observed_at": "2026-11-18T17:58:47.896044Z",
+      "depends_on": [],
+      "similar_incidents": []
+    },
+    "status": "awaiting_approval",
+    "classification": {
+      "category": "cpu_memory",
+      "rationale": "Container app was OOMKilled (exit code 137), indicating it exceeded its memory limit and was terminated by the kernel for excessive memory usage.",
+      "confidence": "high"
+    },
+    "investigation": {
+      "outcome": "action_required",
+      "diagnosis": {
+        "root_cause": "The container 'app' in Deployment leaker-f925cc hit its cgroup memory limit of 64Mi and was OOMKilled by the kernel. The previous container log shows the process allocating memory in 8 MiB increments and the last line before termination was 'allocated 56 MiB' \u2014 just 8 MiB below the 64Mi limit \u2014 with no graceful shutdown. This is a deliberate memory-leaking workload whose limit is too low to allow it to complete its work. The container was killed with exit code 137 (SIGKILL from OOM) after only ~4 seconds of runtime, which explains restart count 1 so far. An important constraint is the namespace LimitRange which caps container memory limits at 128Mi, so any proposed limit cannot exceed that ceiling.",
+        "confidence": "high",
+        "evidence": [
+          {
+            "tool": "get_pod",
+            "field": "containerStatuses[0].lastState.reason",
+            "value": "OOMKilled"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containerStatuses[0].lastState.exitCode",
+            "value": "137"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containerStatuses[0].restartCount",
+            "value": "1"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containers[0].resources.limits.memory",
+            "value": "64Mi"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containers[0].resources.requests.memory",
+            "value": "16Mi"
+          },
+          {
+            "tool": "get_pod_logs",
+            "field": "last log line before kill",
+            "value": "allocated 56 MiB"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containerStatuses[0].lastState.startedAt / finishedAt",
+            "value": "2026-11-18T17:58:42+00:00 \u2192 2026-11-18T17:58:46+00:00 (4 seconds)"
+          },
+          {
+            "tool": "get_quota_and_limits",
+            "field": "limitRanges[0].spec.limits[0].max.memory",
+            "value": "128Mi"
+          },
+          {
+            "tool": "get_quota_and_limits",
+            "field": "resourceQuotas[0].status.hard.limits.memory",
+            "value": "1Gi"
+          },
+          {
+            "tool": "get_quota_and_limits",
+            "field": "resourceQuotas[0].status.used.limits.memory",
+            "value": "64Mi"
+          }
+        ]
+      },
+      "proposal": {
+        "action": "adjust_resources",
+        "target": {
+          "namespace": "lab-01",
+          "kind": "Deployment",
+          "name": "leaker-f925cc",
+          "container": "app"
+        },
+        "field": "resources.limits.memory",
+        "current": "64Mi",
+        "proposed": "128Mi",
+        "rationale": "The previous container log shows memory allocation reaching 56 MiB before the kill, meaning the process needs at least 64 MiB to progress further. Doubling the limit to 128 Mi (~2\u00d7 the observed peak at kill time) gives meaningful headroom for the workload to run to completion. 128 Mi is also exactly the namespace LimitRange maximum, so it is the highest permitted value \u2014 no further increase is possible without changing the LimitRange. The memory request should be raised proportionally (from 16 Mi to 64 Mi) to ensure the scheduler places the pod on a node with enough headroom, keeping the request:limit ratio at 1:2. Both values fit comfortably within the remaining namespace quota (limits.memory used: 64Mi of 1Gi hard cap).",
+        "risk": "The LimitRange hard ceiling is 128Mi, so if the workload's actual peak exceeds 128Mi the container will OOMKill again and a LimitRange change will also be required. The namespace quota has ample headroom (64Mi currently used of 1Gi) so quota is not a concern.",
+        "requires_approval": true,
+        "delivery": "Apply as a pull request against /gitops after a human approves it. The agent does not change the cluster."
+      },
+      "usage": {
+        "input_tokens": 14462,
+        "output_tokens": 1619,
+        "cost_usd": 0.07443810000000001
+      },
+      "validation_notes": []
+    },
+    "delegation": "tool",
+    "usage_by_agent": {
+      "orchestrator": {
+        "input_tokens": 4256,
+        "output_tokens": 250,
+        "cost_usd": 0.0060566
+      },
+      "cpu-memory": {
+        "input_tokens": 14462,
+        "output_tokens": 1619,
+        "cost_usd": 0.07443810000000001
+      }
+    },
+    "error": null,
+    "related_incidents": [],
+    "related_to": null,
+    "similar_incidents": [
+      {
+        "title": "PM-2026-031: report-renderer OOMKilled during month-end batch",
+        "category": "cpu_memory",
+        "score": 0.7918961942195892,
+        "fix": "Raised the container memory limit from 256Mi to 512Mi and the request from 128Mi to 384Mi, sized from the observed 410Mi peak plus 25% headroom, via a GitOps pull request. Long term: stream pages instead of holding the whole document in memory.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/01-oomkilled-report-renderer.md",
+        "excerpt": "Statement size grew with the customer, the limit did not. CPU and node memory were fine; the container hit its own cgroup limit. ## Evidence - `kubectl get pod` showed `lastState.terminated.reason: OOMKilled`, `exitCode: 137`, restart count 23. - The previous container's log ended with `rendering page 6120/9044` and no error line, which is typical for a SIGKILL. - `resources.limits.memory: 256Mi`,",
+        "origin": "seeded"
+      },
+      {
+        "title": "PM-2026-047: checkout-api latency from CPU throttling",
+        "category": "cpu_memory",
+        "score": 0.624163806438446,
+        "fix": "Raised the container CPU limit from 500m to 1500m and the request from 250m to 500m, and the HPA maxReplicas from 6 to 10. The throttling ratio (cfs_throttled_periods / cfs_periods) dropped from 0.78 to under 0.05.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/02-cpu-throttling-checkout-api.md",
+        "excerpt": "The limit, not the replica count, was the bottleneck. Readiness probes with a 1 s timeout then failed on throttled pods, which removed them from the Service and pushed more load onto the rest. ## Evidence - `container_cpu_cfs_throttled_periods_total / container_cpu_cfs_periods_total` was 0.78 for every `api` container. - `kubectl describe hpa checkout-api`: current 190% / target 70%, replicas 6 of",
+        "origin": "seeded"
+      }
+    ],
+    "approval": null,
+    "created_at": "2026-11-18T17:58:47.932812Z",
+    "updated_at": "2026-11-18T17:59:06.187086Z"
+  }
+}

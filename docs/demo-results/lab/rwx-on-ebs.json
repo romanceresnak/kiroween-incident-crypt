@@ -1,0 +1,151 @@
+{
+  "summary": {
+    "scenario": "rwx-on-ebs",
+    "namespace": "lab-13",
+    "run": "45892c",
+    "agent_expected": "storage",
+    "category_expected": "storage",
+    "signals_expected": [
+      "ProvisioningFailed"
+    ],
+    "signals_observed": [
+      "ProvisioningFailed"
+    ],
+    "incidents": 1,
+    "correlated": 0,
+    "category_observed": "storage",
+    "status": "completed",
+    "outcome": "action_required",
+    "proposal_field": null,
+    "proposal_proposed": null,
+    "seconds_to_decision": 17.7,
+    "seconds_to_detect": 2.7,
+    "cost_usd": 0.0855,
+    "verdict": "as described",
+    "incident_id": "dd6f463a84fadace"
+  },
+  "record": {
+    "incident": {
+      "incident_id": "dd6f463a84fadace",
+      "source": "watcher",
+      "reason": "ProvisioningFailed",
+      "namespace": "lab-13",
+      "workload": {
+        "kind": "PersistentVolumeClaim",
+        "name": "shared-45892c"
+      },
+      "pod": null,
+      "container": null,
+      "message": "ProvisioningFailed: Volume provisioning failed with infeasible error. Retries will be delayed. rpc error: code = InvalidArgument desc = Volume capabilities not supported",
+      "observed_at": "2026-11-18T18:04:14.696023Z",
+      "depends_on": [],
+      "similar_incidents": []
+    },
+    "status": "completed",
+    "classification": {
+      "category": "storage",
+      "rationale": "PersistentVolumeClaim provisioning failed due to unsupported volume capabilities, indicating a storage infrastructure issue preventing volume attachment.",
+      "confidence": "high"
+    },
+    "investigation": {
+      "outcome": "action_required",
+      "diagnosis": {
+        "root_cause": "The PVC 'shared-45892c' requests the ReadWriteMany (RWX) access mode but is bound to StorageClass 'gp2', whose provisioner is 'kubernetes.io/aws-ebs' (in-tree EBS). AWS EBS volumes are block devices that only support ReadWriteOnce; RWX is an unsupported volume capability, causing the EBS CSI driver to reject provisioning with 'Volume capabilities not supported'. The cluster has no StorageClass that natively supports RWX (e.g., EFS CSI), so this cannot be fixed by simply changing the StorageClass to one already present.",
+        "confidence": "high",
+        "evidence": [
+          {
+            "tool": "get_pvc",
+            "field": "accessModes",
+            "value": "[\"ReadWriteMany\"]"
+          },
+          {
+            "tool": "get_pvc",
+            "field": "storageClassName",
+            "value": "gp2"
+          },
+          {
+            "tool": "get_pvc",
+            "field": "phase",
+            "value": "Pending"
+          },
+          {
+            "tool": "get_pvc",
+            "field": "volumeName",
+            "value": "null"
+          },
+          {
+            "tool": "list_storage_classes",
+            "field": "name=gp2 / provisioner",
+            "value": "kubernetes.io/aws-ebs"
+          },
+          {
+            "tool": "list_storage_classes",
+            "field": "cluster StorageClasses (complete list)",
+            "value": "[{\"name\": \"gp2\", \"provisioner\": \"kubernetes.io/aws-ebs\"}] \u2014 no RWX-capable class (e.g. EFS) present"
+          },
+          {
+            "tool": "list_events",
+            "field": "ProvisioningFailed message",
+            "value": "Volume provisioning failed with infeasible error. Retries will be delayed. rpc error: code = InvalidArgument desc = Volume capabilities not supported"
+          }
+        ]
+      },
+      "proposal": {
+        "action": "investigate_further",
+        "target": null,
+        "field": null,
+        "current": null,
+        "proposed": null,
+        "rationale": "The PVC requests ReadWriteMany, which no existing StorageClass in this cluster supports \u2014 'gp2' (kubernetes.io/aws-ebs) is RWO-only, and there is no EFS or other RWX-capable StorageClass. Two decisions are needed before a fix can be applied: (1) Does this workload genuinely require RWX (shared access from multiple pods/nodes)? If not, the accessMode should be changed to ReadWriteOnce. (2) If RWX is truly needed, an appropriate StorageClass (e.g. Amazon EFS via efs.csi.aws.com) must be installed in the cluster first, then the PVC can be deleted and recreated (it has never bound, so no data is lost) with that StorageClass and the RWX accessMode. A human must confirm which path is correct and provision the required StorageClass if absent.",
+        "risk": "",
+        "requires_approval": true,
+        "delivery": "Apply as a pull request against /gitops after a human approves it. The agent does not change the cluster."
+      },
+      "usage": {
+        "input_tokens": 17017,
+        "output_tokens": 1419,
+        "cost_usd": 0.0795696
+      },
+      "validation_notes": []
+    },
+    "delegation": "tool",
+    "usage_by_agent": {
+      "orchestrator": {
+        "input_tokens": 4299,
+        "output_tokens": 226,
+        "cost_usd": 0.0059719000000000005
+      },
+      "storage": {
+        "input_tokens": 17017,
+        "output_tokens": 1419,
+        "cost_usd": 0.0795696
+      }
+    },
+    "error": null,
+    "related_incidents": [],
+    "related_to": null,
+    "similar_incidents": [
+      {
+        "title": "PM-2026-085: analytics-cache stuck Pending on a StorageClass that did not exist",
+        "category": "storage",
+        "score": 0.715039998292923,
+        "fix": "Changed spec.storageClassName of the PVC to a StorageClass that exists in the cluster and recreated the claim (the field is immutable; the claim had never bound, so no data was lost). The pod's FailedScheduling had the same cause.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/07-pvc-missing-storageclass.md",
+        "excerpt": "This cluster's StorageClasses were `gp2` (in-tree) and `gp3` (EBS CSI); there was no `fast-ssd` and no default class. `storageClassName` cannot be changed on an existing claim, so the claim had to be recreated with the right class. ## Evidence - PVC events: `ProvisioningFailed: storageclass.storage.k8s.io \"fast-ssd\" not found`. - PVC `status.phase: Pending`, no `volumeName`. - Pod events: `0/3 nod",
+        "origin": "seeded"
+      },
+      {
+        "title": "PM-2026-091: node disk pressure evicted pods after container logs filled the root volume",
+        "category": "storage",
+        "score": 0.6250135004520416,
+        "fix": "Turned off the debug logging, set resources.limits.ephemeral-storage 2Gi and an emptyDir sizeLimit of 1Gi on the noisy container, and replaced the affected node. Clue: evictions of unrelated pods on one node with DiskPressure=True.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/08-node-disk-pressure.md",
+        "excerpt": "`thumbnailer` had no `ephemeral-storage` limit and no `sizeLimit` on its scratch `emptyDir`, so nothing stopped one pod from filling the disk. ## Evidence - Node condition `DiskPressure=True`; taint `node.kubernetes.io/disk-pressure`. - Kubelet events: `The node was low on resource: ephemeral-storage`, `Evicted` pods. - `thumbnailer` scratch `emptyDir` at 11 GiB; its container log at 6 GiB. - Othe",
+        "origin": "seeded"
+      }
+    ],
+    "approval": null,
+    "created_at": "2026-11-18T18:04:14.700364Z",
+    "updated_at": "2026-11-18T18:04:32.375367Z"
+  }
+}

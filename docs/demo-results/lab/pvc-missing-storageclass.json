@@ -1,0 +1,169 @@
+{
+  "summary": {
+    "scenario": "pvc-missing-storageclass",
+    "namespace": "lab-12",
+    "run": "00491f",
+    "agent_expected": "storage",
+    "category_expected": "storage",
+    "signals_expected": [
+      "ProvisioningFailed"
+    ],
+    "signals_observed": [
+      "FailedScheduling",
+      "ProvisioningFailed"
+    ],
+    "incidents": 2,
+    "correlated": 1,
+    "category_observed": "storage",
+    "status": "awaiting_approval",
+    "outcome": "action_required",
+    "proposal_field": "spec.storageClassName",
+    "proposal_proposed": "gp2",
+    "seconds_to_decision": 11.4,
+    "seconds_to_detect": 2.6,
+    "cost_usd": 0.0517,
+    "verdict": "as described",
+    "incident_id": "d821637d591806ab"
+  },
+  "record": {
+    "incident": {
+      "incident_id": "d821637d591806ab",
+      "source": "watcher",
+      "reason": "ProvisioningFailed",
+      "namespace": "lab-12",
+      "workload": {
+        "kind": "PersistentVolumeClaim",
+        "name": "data-00491f"
+      },
+      "pod": null,
+      "container": null,
+      "message": "ProvisioningFailed: storageclass.storage.k8s.io \"does-not-exist\" not found",
+      "observed_at": "2026-11-18T18:04:12.597580Z",
+      "depends_on": [],
+      "similar_incidents": []
+    },
+    "status": "awaiting_approval",
+    "classification": {
+      "category": "storage",
+      "rationale": "PersistentVolumeClaim provisioning failed because the referenced storage class does not exist, which is a storage provisioning issue.",
+      "confidence": "high"
+    },
+    "investigation": {
+      "outcome": "action_required",
+      "diagnosis": {
+        "root_cause": "The PVC data-00491f specifies storageClassName 'does-not-exist', which does not exist in the cluster. The only available StorageClass is 'gp2'. Because no provisioner can satisfy the claim, it is permanently stuck in Pending. The field spec.storageClassName is immutable, so the PVC must be deleted and recreated with a valid StorageClass \u2014 no data is lost since the PVC has never bound.",
+        "confidence": "high",
+        "evidence": [
+          {
+            "tool": "get_pvc",
+            "field": "storageClassName",
+            "value": "does-not-exist"
+          },
+          {
+            "tool": "get_pvc",
+            "field": "phase",
+            "value": "Pending"
+          },
+          {
+            "tool": "get_pvc",
+            "field": "volumeName",
+            "value": "null"
+          },
+          {
+            "tool": "list_events",
+            "field": "message",
+            "value": "storageclass.storage.k8s.io \"does-not-exist\" not found"
+          },
+          {
+            "tool": "list_events",
+            "field": "reason",
+            "value": "ProvisioningFailed"
+          },
+          {
+            "tool": "list_storage_classes",
+            "field": "name",
+            "value": "gp2"
+          },
+          {
+            "tool": "list_storage_classes",
+            "field": "default",
+            "value": "false"
+          }
+        ]
+      },
+      "proposal": {
+        "action": "set_field",
+        "target": {
+          "namespace": "lab-12",
+          "kind": "PersistentVolumeClaim",
+          "name": "data-00491f",
+          "container": null
+        },
+        "field": "spec.storageClassName",
+        "current": "does-not-exist",
+        "proposed": "gp2",
+        "rationale": "The StorageClass 'does-not-exist' is not present in the cluster; the only available class is 'gp2'. Changing spec.storageClassName to 'gp2' will allow the EBS in-tree provisioner to satisfy the claim. Because spec.storageClassName is immutable, this fix requires the PVC to be deleted and recreated \u2014 which is safe since the PVC is still Pending and has never bound (volumeName is null, no data exists).",
+        "risk": "The PVC must be deleted and recreated (the field is immutable). No data is at risk because the claim has never bound to a volume. Any workload waiting on this PVC will remain Pending until the recreated PVC is Bound.",
+        "requires_approval": true,
+        "delivery": "Apply as a pull request against /gitops after a human approves it. The agent does not change the cluster."
+      },
+      "usage": {
+        "input_tokens": 8581,
+        "output_tokens": 1062,
+        "cost_usd": 0.0458403
+      },
+      "validation_notes": []
+    },
+    "delegation": "tool",
+    "usage_by_agent": {
+      "orchestrator": {
+        "input_tokens": 4219,
+        "output_tokens": 225,
+        "cost_usd": 0.005878400000000001
+      },
+      "storage": {
+        "input_tokens": 8581,
+        "output_tokens": 1062,
+        "cost_usd": 0.0458403
+      }
+    },
+    "error": null,
+    "related_incidents": [
+      {
+        "incident_id": "a9158e0130e7daa7",
+        "reason": "FailedScheduling",
+        "workload": {
+          "kind": "Deployment",
+          "name": "writer-00491f"
+        },
+        "pod": "writer-00491f-54597bbf75-xfskn",
+        "match": "depends_on",
+        "observed_at": "2026-11-18T18:04:12.786903Z"
+      }
+    ],
+    "related_to": null,
+    "similar_incidents": [
+      {
+        "title": "PM-2026-085: analytics-cache stuck Pending on a StorageClass that did not exist",
+        "category": "storage",
+        "score": 0.8374966084957123,
+        "fix": "Changed spec.storageClassName of the PVC to a StorageClass that exists in the cluster and recreated the claim (the field is immutable; the claim had never bound, so no data was lost). The pod's FailedScheduling had the same cause.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/07-pvc-missing-storageclass.md",
+        "excerpt": "This cluster's StorageClasses were `gp2` (in-tree) and `gp3` (EBS CSI); there was no `fast-ssd` and no default class. `storageClassName` cannot be changed on an existing claim, so the claim had to be recreated with the right class. ## Evidence - PVC events: `ProvisioningFailed: storageclass.storage.k8s.io \"fast-ssd\" not found`. - PVC `status.phase: Pending`, no `volumeName`. - Pod events: `0/3 nod",
+        "origin": "seeded"
+      },
+      {
+        "title": "PM-2026-091: node disk pressure evicted pods after container logs filled the root volume",
+        "category": "storage",
+        "score": 0.6271544694900513,
+        "fix": "Turned off the debug logging, set resources.limits.ephemeral-storage 2Gi and an emptyDir sizeLimit of 1Gi on the noisy container, and replaced the affected node. Clue: evictions of unrelated pods on one node with DiskPressure=True.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/08-node-disk-pressure.md",
+        "excerpt": "`thumbnailer` had no `ephemeral-storage` limit and no `sizeLimit` on its scratch `emptyDir`, so nothing stopped one pod from filling the disk. ## Evidence - Node condition `DiskPressure=True`; taint `node.kubernetes.io/disk-pressure`. - Kubelet events: `The node was low on resource: ephemeral-storage`, `Evicted` pods. - `thumbnailer` scratch `emptyDir` at 11 GiB; its container log at 6 GiB. - Othe",
+        "origin": "seeded"
+      }
+    ],
+    "approval": null,
+    "created_at": "2026-11-18T18:04:12.603103Z",
+    "updated_at": "2026-11-18T18:04:23.983003Z"
+  }
+}

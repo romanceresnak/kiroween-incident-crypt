@@ -1,0 +1,170 @@
+{
+  "summary": {
+    "scenario": "bad-image-tag",
+    "namespace": "lab-08",
+    "run": "f36262",
+    "agent_expected": "deploy-rollout",
+    "category_expected": "deploy_rollout",
+    "signals_expected": [
+      "ErrImagePull",
+      "ImagePullBackOff"
+    ],
+    "signals_observed": [
+      "ErrImagePull",
+      "ImagePullBackOff"
+    ],
+    "incidents": 2,
+    "correlated": 1,
+    "category_observed": "deploy_rollout",
+    "status": "awaiting_approval",
+    "outcome": "action_required",
+    "proposal_field": "spec.template.spec.containers[name=web].image",
+    "proposal_proposed": "public.ecr.aws/docker/library/python:3.12-slim",
+    "seconds_to_decision": 16.2,
+    "seconds_to_detect": 21.0,
+    "cost_usd": 0.0604,
+    "verdict": "as described",
+    "incident_id": "2bbc5374cbaba678"
+  },
+  "record": {
+    "incident": {
+      "incident_id": "2bbc5374cbaba678",
+      "source": "watcher",
+      "reason": "ErrImagePull",
+      "namespace": "lab-08",
+      "workload": {
+        "kind": "Deployment",
+        "name": "web-f36262"
+      },
+      "pod": "web-f36262-5d68cbf599-67p9b",
+      "container": "web",
+      "message": "ErrImagePull: rpc error: code = NotFound desc = failed to pull and unpack image \"public.ecr.aws/docker/library/python:3.12.99-gone\": failed to resolve reference \"public.ecr.aws/docker/library/python:3.12.99-gone\": public.ecr.aws/docker/library/python:3.12.99-gone: not found",
+      "observed_at": "2026-11-18T18:01:41.019077Z",
+      "depends_on": [],
+      "similar_incidents": []
+    },
+    "status": "awaiting_approval",
+    "classification": {
+      "category": "deploy_rollout",
+      "rationale": "The container failed to pull the image \"python:3.12.99-gone\" because the image reference was not found in the registry, which is a deployment configuration error preventing the pod from starting.",
+      "confidence": "high"
+    },
+    "investigation": {
+      "outcome": "action_required",
+      "diagnosis": {
+        "root_cause": "The Deployment web-f36262 was updated to use a non-existent image tag 'public.ecr.aws/docker/library/python:3.12.99-gone'. The registry returns NotFound (manifest unknown) because the tag was never pushed. The new ReplicaSet (revision 2) cannot pull the image, so its pod is stuck in ErrImagePull/ImagePullBackOff. The previous revision (revision 1) used 'public.ecr.aws/docker/library/python:3.12-slim', which was Ready (1/1).",
+        "confidence": "high",
+        "evidence": [
+          {
+            "tool": "get_pod",
+            "field": "containerStatuses[0].state.reason",
+            "value": "ErrImagePull"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containerStatuses[0].state.message",
+            "value": "rpc error: code = NotFound desc = failed to pull and unpack image \"public.ecr.aws/docker/library/python:3.12.99-gone\": failed to resolve reference \"public.ecr.aws/docker/library/python:3.12.99-gone\": public.ecr.aws/docker/library/python:3.12.99-gone: not found"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containers[name=web].image",
+            "value": "public.ecr.aws/docker/library/python:3.12.99-gone"
+          },
+          {
+            "tool": "list_events",
+            "field": "Failed event message",
+            "value": "Failed to pull image \"public.ecr.aws/docker/library/python:3.12.99-gone\": rpc error: code = NotFound"
+          },
+          {
+            "tool": "list_events",
+            "field": "BackOff event message",
+            "value": "Back-off pulling image \"public.ecr.aws/docker/library/python:3.12.99-gone\""
+          },
+          {
+            "tool": "get_rollout_history",
+            "field": "revision 2 images.web / ready",
+            "value": "public.ecr.aws/docker/library/python:3.12.99-gone / ready: 0"
+          },
+          {
+            "tool": "get_rollout_history",
+            "field": "revision 1 images.web / ready",
+            "value": "public.ecr.aws/docker/library/python:3.12-slim / ready: 1"
+          }
+        ]
+      },
+      "proposal": {
+        "action": "set_field",
+        "target": {
+          "namespace": "lab-08",
+          "kind": "Deployment",
+          "name": "web-f36262",
+          "container": "web"
+        },
+        "field": "spec.template.spec.containers[name=web].image",
+        "current": "public.ecr.aws/docker/library/python:3.12.99-gone",
+        "proposed": "public.ecr.aws/docker/library/python:3.12-slim",
+        "rationale": "Revision 1 ran image 'public.ecr.aws/docker/library/python:3.12-slim' and was Ready (1/1). Revision 2 introduced the non-existent tag '3.12.99-gone'. Rolling the image back to the revision 1 image will immediately restore availability. The missing tag '3.12.99-gone' should be built and pushed before the next release attempt.",
+        "risk": "Low. Rolling back to an image that was previously confirmed Ready (revision 1, 1/1). The old ReplicaSet and its pod template are still present in history, so Kubernetes will reuse the existing ReplicaSet without creating a new one.",
+        "requires_approval": true,
+        "delivery": "Apply as a pull request against /gitops after a human approves it. The agent does not change the cluster."
+      },
+      "usage": {
+        "input_tokens": 9705,
+        "output_tokens": 1331,
+        "cost_usd": 0.053988
+      },
+      "validation_notes": []
+    },
+    "delegation": "tool",
+    "usage_by_agent": {
+      "orchestrator": {
+        "input_tokens": 4414,
+        "output_tokens": 275,
+        "cost_usd": 0.006367900000000001
+      },
+      "deploy-rollout": {
+        "input_tokens": 9705,
+        "output_tokens": 1331,
+        "cost_usd": 0.053988
+      }
+    },
+    "error": null,
+    "related_incidents": [
+      {
+        "incident_id": "7429449dc54071f4",
+        "reason": "ImagePullBackOff",
+        "workload": {
+          "kind": "Deployment",
+          "name": "web-f36262"
+        },
+        "pod": "web-f36262-5d68cbf599-67p9b",
+        "match": "same_workload",
+        "observed_at": "2026-11-18T18:01:57.207798Z"
+      }
+    ],
+    "related_to": null,
+    "similar_incidents": [
+      {
+        "title": "PM-2026-072: search-indexer rollout stuck on a tag that was never pushed",
+        "category": "deploy_rollout",
+        "score": 0.726207971572876,
+        "fix": "Rolled the container image back to the image of the last ReplicaSet revision that was Ready (indexer:2.13.2, revision 41) via a GitOps pull request, then rebuilt and pushed the missing tag before releasing again.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/05-imagepullbackoff-search-indexer.md",
+        "excerpt": "The registry returned `manifest unknown` for the new tag. Kubernetes behaved as designed: `maxUnavailable: 0` kept the old pod running. ## Evidence - Pod events: `Failed to pull image \"...indexer:2.14.0\": not found`, then `Back-off pulling image`. - Container state: `waiting.reason: ImagePullBackOff`. - ReplicaSet history: revision 41 image `indexer:2.13.2`, ready 1/1; revision 42 image `indexer:2",
+        "origin": "seeded"
+      },
+      {
+        "title": "PM-2026-079: notification-gateway crash loop after a ConfigMap key rename",
+        "category": "deploy_rollout",
+        "score": 0.5941201448440552,
+        "fix": "Restored the required key SMTP_HOST in the ConfigMap the Deployment loads with envFrom (keeping the new key too) and restarted the Deployment. Clue: exit code 1 with a config error in the previous container log, normal memory and CPU.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/06-crashloop-bad-configmap.md",
+        "excerpt": "The rename was valid YAML and passed review, but nothing checked that the application still found the keys it requires. A second Deployment that used `valueFrom.configMapKeyRef` on the old key failed earlier and louder, with `CreateContainerConfigError: couldn't find key SMTP_HOST in ConfigMap notify/gateway-config`. ## Evidence - Previous container log: `FATAL config: SMTP_HOST is required` then ",
+        "origin": "seeded"
+      }
+    ],
+    "approval": null,
+    "created_at": "2026-11-18T18:01:41.023411Z",
+    "updated_at": "2026-11-18T18:01:57.213267Z"
+  }
+}

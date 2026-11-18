@@ -1,0 +1,177 @@
+{
+  "summary": {
+    "scenario": "cpu-throttling",
+    "namespace": "lab-02",
+    "run": "7c061e",
+    "agent_expected": "cpu-memory",
+    "category_expected": "cpu_memory",
+    "signals_expected": [
+      "Unhealthy"
+    ],
+    "signals_observed": [
+      "Unhealthy"
+    ],
+    "incidents": 1,
+    "correlated": 0,
+    "category_observed": "network",
+    "status": "completed",
+    "outcome": "action_required",
+    "proposal_field": null,
+    "proposal_proposed": null,
+    "seconds_to_decision": 18.9,
+    "seconds_to_detect": 73.7,
+    "cost_usd": 0.0876,
+    "verdict": "different agent",
+    "incident_id": "5849dd7112cf2984"
+  },
+  "record": {
+    "incident": {
+      "incident_id": "5849dd7112cf2984",
+      "source": "watcher",
+      "reason": "Unhealthy",
+      "namespace": "lab-02",
+      "workload": {
+        "kind": "Deployment",
+        "name": "crunch-7c061e"
+      },
+      "pod": "crunch-7c061e-668c56b8c8-88k4x",
+      "container": "server",
+      "message": "Unhealthy: Readiness probe failed: Get \"http://10.0.47.228:8080/\": dial tcp 10.0.47.228:8080: connect: connection refused",
+      "observed_at": "2026-11-18T17:59:52.738675Z",
+      "depends_on": [],
+      "similar_incidents": []
+    },
+    "status": "completed",
+    "classification": {
+      "category": "network",
+      "rationale": "The readiness probe failed with a connection refused error when attempting to reach the container's HTTP endpoint, indicating a network connectivity issue between the probe and the service port.",
+      "confidence": "medium"
+    },
+    "investigation": {
+      "outcome": "action_required",
+      "diagnosis": {
+        "root_cause": "The 'server' container in Deployment crunch-7c061e has a CPU limit of 20m (2% of a core), which is far too low for a Python 3.12 process to initialise and bind its HTTP server on port 8080 within the readiness probe window. The container starts successfully but is so heavily CPU-throttled that: (1) the port is not bound at all during the first probe attempts (connection refused), and (2) when the process does eventually progress it cannot respond within the probe timeout (context deadline exceeded). There are no services, network policies, or DNS issues involved.",
+        "confidence": "low",
+        "evidence": [
+          {
+            "tool": "get_pod",
+            "field": "containers[0].resources.limits.cpu",
+            "value": "20m"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containers[0].resources.requests.cpu",
+            "value": "10m"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containerStatuses[0].ready",
+            "value": "false"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containerStatuses[0].restartCount",
+            "value": "0"
+          },
+          {
+            "tool": "get_pod",
+            "field": "labels.kiroween.io/lab-scenario",
+            "value": "cpu-throttling"
+          },
+          {
+            "tool": "get_pod_logs",
+            "field": "(entire log)",
+            "value": "(empty \u2014 no output produced by the process)"
+          },
+          {
+            "tool": "list_events",
+            "field": "events[4].message",
+            "value": "Readiness probe failed: Get \"http://10.0.47.228:8080/\": dial tcp 10.0.47.228:8080: connect: connection refused"
+          },
+          {
+            "tool": "list_events",
+            "field": "events[5].message",
+            "value": "Readiness probe failed: Get \"http://10.0.47.228:8080/\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)"
+          },
+          {
+            "tool": "list_services",
+            "field": "(entire list)",
+            "value": "[] \u2014 no Services in namespace"
+          },
+          {
+            "tool": "list_network_policies",
+            "field": "(entire list)",
+            "value": "[] \u2014 no NetworkPolicies in namespace"
+          }
+        ]
+      },
+      "proposal": {
+        "action": "investigate_further",
+        "target": null,
+        "field": null,
+        "current": null,
+        "proposed": null,
+        "rationale": "The model's proposal failed validation: action 'adjust_resources' is not allowed for this specialist",
+        "risk": "",
+        "requires_approval": true,
+        "delivery": "Apply as a pull request against /gitops after a human approves it. The agent does not change the cluster."
+      },
+      "usage": {
+        "input_tokens": 15945,
+        "output_tokens": 1716,
+        "cost_usd": 0.0809325
+      },
+      "validation_notes": [
+        "action 'adjust_resources' is not allowed for this specialist"
+      ]
+    },
+    "delegation": "tool",
+    "usage_by_agent": {
+      "orchestrator": {
+        "input_tokens": 4898,
+        "output_tokens": 236,
+        "cost_usd": 0.0066858
+      },
+      "network": {
+        "input_tokens": 15945,
+        "output_tokens": 1716,
+        "cost_usd": 0.0809325
+      }
+    },
+    "error": null,
+    "related_incidents": [],
+    "related_to": null,
+    "similar_incidents": [
+      {
+        "title": "LRN-2e4fd60547e332f6: Unhealthy on Deployment netpol-client",
+        "category": "network",
+        "score": 0.7535053193569183,
+        "fix": "Approved fix (not yet confirmed): set spec.ingress[0].from[0].podSelector.matchLabels.app on NetworkPolicy/allow-trusted from netpol-trusted to netpol-client.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/learned/2e4fd60547e332f6.md",
+        "excerpt": "The server pod is healthy (ready=true) and its endpoint is ready, ruling out a server-side crash or misconfiguration. (diagnosis confidence: high). ## Evidence - `list_network_policies` ingress[0].from[0].podSelector.matchLabels.app: netpol-trusted - `get_pod` labels.app: netpol-client - `get_endpoints` endpoints[0].ready: true - `get_endpoints` endpoints[0].pod: netpol-server-568c86dd49-zznk5 - `",
+        "origin": "learned"
+      },
+      {
+        "title": "PM-2026-066: CoreDNS forwarding loop broke name resolution cluster-wide",
+        "category": "network",
+        "score": 0.7501327097415924,
+        "fix": "Reverted the forward block in the kube-system/coredns ConfigMap that created a resolver loop (plugin/loop: Loop detected) and restarted CoreDNS. Clue: many unrelated workloads fail at once with 'no such host'.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/04-coredns-forwarding-loop.md",
+        "excerpt": ".\"`. - `kubectl -n kube-system get pods -l k8s-app=kube-dns`: CrashLoopBackOff on both replicas. - Application events across namespaces: `Readiness probe failed: dial tcp: lookup orders on 172.20.0.10:53: no such host`. - `kube-dns` EndpointSlice had zero ready endpoints. ## Fix Reverted the `forward corp.internal 10.40.0.2` block in the `coredns` ConfigMap through the GitOps repo and restarted th",
+        "origin": "seeded"
+      },
+      {
+        "title": "LRN-009de3634d72afbc: Unhealthy on Deployment netpol-client",
+        "category": "network",
+        "score": 0.7310692071914673,
+        "fix": "Approved fix (not yet confirmed): set spec.ingress[0].from[0].podSelector.matchLabels.app on NetworkPolicy/allow-trusted from netpol-trusted to netpol-client.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/learned/009de3634d72afbc.md",
+        "excerpt": "# LRN-009de3634d72afbc: Unhealthy on Deployment netpol-client - **Date:** 2026-11-18 - **Source:** learned from an approved incident, not a reviewed postmortem - **Signal:** Unhealthy - **Namespace / workload:** chaos-netpol / Deployment netpol-client, container client ## Summary The NetworkPolicy 'allow-trusted' in namespace 'chaos-netpol' selects pods with label app=netpol-server as the target a",
+        "origin": "learned"
+      }
+    ],
+    "approval": null,
+    "created_at": "2026-11-18T17:59:52.742578Z",
+    "updated_at": "2026-11-18T18:00:11.612888Z"
+  }
+}
