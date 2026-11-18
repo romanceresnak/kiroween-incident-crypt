@@ -22,6 +22,10 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      # The TargetGroupBinding's CRD is installed by the aws-load-balancer-controller
+      # Application. Without this the first sync fails its dry run until the CRD exists
+      # (scenario-lab REQ-LC-06).
+      - SkipDryRunOnMissingResource=true
     # The chart's ServiceMonitors need the CRD from the monitoring Application; on a fresh
     # cluster the first attempts can fail until it exists (memory-and-ui REQ-MON-03).
     retry:

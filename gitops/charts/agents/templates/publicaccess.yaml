@@ -1,0 +1,41 @@
+{{- /*
+Public access (scenario-lab REQ-LC-04, LC-05). The internal ALB's target group is bound to the
+orchestrator Service by the AWS Load Balancer Controller, and the orchestrator accepts the ALB's
+traffic. Both exist only when a target group ARN is configured.
+*/ -}}
+{{- if and .Values.publicAccess.enabled .Values.publicAccess.targetGroupArn }}
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: orchestrator
+  labels:
+    {{- include "agents.labels" . | nindent 4 }}
+    app.kubernetes.io/name: orchestrator
+spec:
+  serviceRef:
+    name: orchestrator
+    port: {{ .Values.ports.api }}
+  targetGroupARN: {{ .Values.publicAccess.targetGroupArn | quote }}
+  targetType: ip
+{{- if .Values.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-alb-to-orchestrator
+  labels: {{- include "agents.labels" . | nindent 4 }}
+spec:
+  # The ALB can only be named by its subnets' CIDRs, which every pod in the VPC also uses.
+  # This keeps the other ports and the other pods closed; the login is what protects the API.
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: orchestrator}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        {{- range .Values.publicAccess.albCidrs }}
+        - ipBlock: {cidr: {{ . | quote }}}
+        {{- end }}
+      ports:
+        - {protocol: TCP, port: {{ .Values.ports.api }}}
+{{- end }}
+{{- end }}

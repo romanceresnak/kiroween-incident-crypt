@@ -6,6 +6,7 @@ Run with any Python that has pytest and PyYAML, and helm on PATH:
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import re
 import shutil
@@ -24,6 +25,8 @@ IMAGE_KEYS = ["orchestrator", "cpuMemory", "network", "deployRollout", "storage"
 SPECIALISTS = ["cpu-memory", "network", "deploy-rollout", "storage"]
 # Everything the orchestrator calls. incident-memory has no Kubernetes RBAC.
 BACKENDS = [*SPECIALISTS, "incident-memory"]
+# The two private /20 subnets the internal ALB uses (infra/modules/vpc).
+ALB_CIDRS = ["10.0.16.0/20", "10.0.32.0/20"]
 
 pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm not installed")
 
@@ -187,7 +190,10 @@ def test_policies_stay_in_the_agents_namespace(docs: list[dict]) -> None:
 
 
 def test_ingress_sources_are_only_the_allowed_ones(docs: list[dict]) -> None:
+    alb = [{"ipBlock": {"cidr": cidr}} for cidr in ALB_CIDRS]
     allowed = {
+        # scenario-lab REQ-LC-05: the internal ALB, into the orchestrator only.
+        "allow-alb-to-orchestrator": alb,
         "allow-watcher-to-orchestrator": [{"podSelector": {"matchLabels": {
             "app.kubernetes.io/name": "orchestrator-watcher"}}}],
         **{f"allow-orchestrator-to-{name}": [{"podSelector": {"matchLabels": {
@@ -228,9 +234,70 @@ def test_dns_https_and_pod_identity_egress(docs: list[dict]) -> None:
     assert agent["ports"] == [{"protocol": "TCP", "port": 80}]
 
 
-def test_no_ingress_from_ip_blocks(docs: list[dict]) -> None:
-    for policy in of_kind(docs, "NetworkPolicy").values():
-        assert all("ipBlock" not in p for p in peers(policy, "ingress"))
+def test_the_only_ip_block_ingress_is_the_alb_subnets_into_the_orchestrator(
+        docs: list[dict]) -> None:
+    """REQ-LC-05: no ingress from an address range except the internal ALB's private subnets,
+    to the orchestrator, on the API port. Never the internet."""
+    with_blocks = {name: p for name, p in of_kind(docs, "NetworkPolicy").items()
+                   if any("ipBlock" in peer for peer in peers(p, "ingress"))}
+    assert list(with_blocks) == ["allow-alb-to-orchestrator"]
+    policy = with_blocks["allow-alb-to-orchestrator"]["spec"]
+    assert policy["podSelector"] == {"matchLabels": {"app.kubernetes.io/name": "orchestrator"}}
+    assert policy["policyTypes"] == ["Ingress"]
+    (rule,) = policy["ingress"]
+    assert rule["ports"] == [{"protocol": "TCP", "port": 8080}]
+    cidrs = [p["ipBlock"]["cidr"] for p in rule["from"]]
+    assert cidrs == ALB_CIDRS
+    for cidr in cidrs:
+        network = ipaddress.ip_network(cidr)
+        assert network.is_private and network.prefixlen >= 16, cidr
+        assert "except" not in str(rule)
+
+
+def test_the_alb_cidrs_are_the_private_subnets_terraform_creates() -> None:
+    """The chart's values and infra/modules/vpc agree: the /20s at index 1 and 2 of the VPC."""
+    variables = (REPO / "infra" / "modules" / "vpc" / "variables.tf").read_text()
+    vpc = ipaddress.ip_network(re.search(r'variable "vpc_cidr".*?default\s*=\s*"([^"]+)"',
+                                         variables, re.S).group(1))
+    subnets = list(vpc.subnets(new_prefix=20))  # cidrsubnet(vpc, 4, n) is subnets[n]
+    assert ALB_CIDRS == [str(subnets[1]), str(subnets[2])]
+    values = yaml.safe_load((CHART / "values.yaml").read_text())
+    assert values["publicAccess"]["albCidrs"] == ALB_CIDRS
+
+
+def test_the_target_group_binding_binds_the_orchestrator_service(docs: list[dict]) -> None:
+    (binding,) = [d for d in docs if d["kind"] == "TargetGroupBinding"]
+    assert binding["apiVersion"] == "elbv2.k8s.aws/v1beta1"
+    spec = binding["spec"]
+    assert spec["serviceRef"] == {"name": "orchestrator", "port": 8080}
+    assert spec["targetType"] == "ip"
+    assert re.fullmatch(r"arn:aws:elasticloadbalancing:eu-west-1:\d{12}:targetgroup/"
+                        r"kiroween-prod-orch/[0-9a-f]{16}", spec["targetGroupARN"])
+    assert "networking" not in spec, "security groups are Terraform's, not the controller's"
+
+
+def test_the_target_group_arn_is_a_target_group_of_this_project() -> None:
+    values = yaml.safe_load((CHART / "values.yaml").read_text())
+    arn = values["publicAccess"]["targetGroupArn"]
+    assert arn.split(":")[5].startswith("targetgroup/kiroween-prod-orch/")
+
+
+def test_without_a_target_group_nothing_public_is_rendered() -> None:
+    out = render("publicAccess.targetGroupArn=", "networkPolicy.enabled=true")
+    assert not [d for d in out if d["kind"] == "TargetGroupBinding"]
+    assert "allow-alb-to-orchestrator" not in of_kind(out, "NetworkPolicy")
+
+
+def test_public_access_can_be_switched_off() -> None:
+    out = render("publicAccess.enabled=false")
+    assert not [d for d in out if d["kind"] == "TargetGroupBinding"]
+    assert "allow-alb-to-orchestrator" not in of_kind(out, "NetworkPolicy")
+
+
+def test_the_binding_is_not_rendered_without_network_policies_but_still_binds() -> None:
+    out = render("networkPolicy.enabled=false")
+    assert [d for d in out if d["kind"] == "TargetGroupBinding"]
+    assert of_kind(out, "NetworkPolicy") == {}
 
 
 def test_network_policies_can_be_disabled() -> None:
@@ -527,3 +594,4 @@ def test_setting_the_data_source_turns_learning_on_for_the_orchestrator_only() -
     for name in ("orchestrator-watcher", "incident-memory", *SPECIALISTS):
         names = {e["name"] for e in container_of(docs, name)["env"]}
         assert not names & {"LEARNING_BUCKET", "KNOWLEDGE_BASE_DATA_SOURCE_ID"}, name
+

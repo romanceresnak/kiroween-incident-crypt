@@ -163,3 +163,15 @@ networkPolicy:
       kubernetes.io/metadata.name: monitoring
   # EKS Pod Identity Agent on every node. Pods fetch their AWS credentials from it.
   podIdentityAgentCIDR: 169.254.170.23/32
+
+# Public HTTPS access for judging (scenario-lab). CloudFront reaches an internal ALB through a
+# VPC origin; the ALB's target group is bound to the orchestrator by a TargetGroupBinding.
+# Values come from the infra outputs target_group_arn and private_subnet_cidrs. With no
+# targetGroupArn nothing here is rendered.
+publicAccess:
+  enabled: true
+  targetGroupArn: arn:aws:elasticloadbalancing:eu-west-1:255834079310:targetgroup/kiroween-prod-orch/1fe86cc9b16b61db
+  # Source addresses of the internal ALB: the two private subnets (the pods use them too).
+  albCidrs:
+    - 10.0.16.0/20
+    - 10.0.32.0/20

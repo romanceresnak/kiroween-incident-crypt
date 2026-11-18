@@ -1,0 +1,75 @@
+# Child of app-of-apps: the AWS Load Balancer Controller, used only to bind the orchestrator
+# Service to the internal ALB's target group with a TargetGroupBinding (scenario-lab REQ-LC-01
+# to LC-03). No Ingress and no Service of type LoadBalancer is used.
+#
+# IAM comes from EKS Pod Identity: infra/modules/lb_controller associates the role with the
+# service account named below. The role can only read network state and register pods in the
+# one target group.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: aws-load-balancer-controller
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://aws.github.io/eks-charts
+    chart: aws-load-balancer-controller
+    # Exact pin: newest in the chart index on 18 Nov 2026 (app v3.6.3).
+    targetRevision: 3.6.3
+    helm:
+      valuesObject:
+        clusterName: kiroween-prod
+        region: eu-west-1
+        # Set so the controller never calls the instance metadata service.
+        vpcId: vpc-00eac9bc1cc1cddf7
+        replicaCount: 1
+        defaultTargetType: ip
+        # A controller that is down must not be able to block unrelated Services.
+        enableServiceMutatorWebhook: false
+        createIngressClassResource: false
+        enableShield: false
+        enableWaf: false
+        enableWafv2: false
+        serviceAccount:
+          create: true
+          # Must match infra/modules/lb_controller (Pod Identity association).
+          name: aws-load-balancer-controller
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+  # The chart generates a self-signed certificate on every render, so the Secret and the
+  # webhooks' caBundle differ from the live ones each time. Without these the Application
+  # would never be in sync.
+  ignoreDifferences:
+    - group: ""
+      kind: Secret
+      name: aws-load-balancer-tls
+      jsonPointers:
+        - /data
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+      name: aws-load-balancer-webhook
+      jqPathExpressions:
+        - .webhooks[].clientConfig.caBundle
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: aws-load-balancer-webhook
+      jqPathExpressions:
+        - .webhooks[].clientConfig.caBundle
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
