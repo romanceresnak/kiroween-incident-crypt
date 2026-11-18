@@ -802,7 +802,8 @@ def test_the_readme_links_the_replay_and_says_what_it_is() -> None:
     text = " ".join(README.replace("\n> ", "\n").split())
     assert f"[replay]({PAGES})" in text
     assert "read-only [replay]" in text and "No login needed" in text
-    assert "no public endpoint" not in text and "by `kubectl port-forward`, never through" not in text
+    assert "no public endpoint" not in text
+    assert "by `kubectl port-forward`, never through" not in text
     assert "## Replay" in README and "tools/replay/build.py" in README
     assert "nine specs" in README and "eight specs" not in README
 

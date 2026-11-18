@@ -52,3 +52,57 @@ removes everything. Fix what does not behave; list what is left.
 ## TASK-10 — Documents and status
 REQ-DC-01 to DC-04, REQ-PA-07. Devpost, README, What's next, the spec counts, the status.
 **Test:** the document tests.
+
+---
+
+## Status, 18 Nov 2026
+
+All ten tasks are committed locally. **Nothing is pushed**, so no image contains the lab code yet.
+
+| Task | Commit | Tests |
+|---|---|---|
+| Spec | `4720466` | the spec tests |
+| TASK-01 Terraform: CloudFront, VPC origin, internal ALB, WAF, controller role, budget 400 | `6e5cb1c` | 17, and **applied**: 13 added, 1 changed (budget 120 to 400), 0 destroyed |
+| TASK-02 GitOps: controller app, `TargetGroupBinding`, ALB `NetworkPolicy` | `e0d5949` | `test_public_access.py` and 2 rewritten chart tests |
+| TASK-03 Login | `41e47d9` | `test_auth.py`, 60 |
+| TASK-04 The 14 scenarios and the renderer | `a1be313` | 131 |
+| TASK-05 Runner and Lab API | `cf8a696` | 34 runner, 9 kube guard, 24 API |
+| TASK-06 Chart: namespaces, quota, runner, RBAC | `16a20ec` | `test_lab_chart.py`, 21, and 9 chart tests updated |
+| TASK-07 Sandbox PRs, no lab learning, `Unhealthy` may be `cpu_memory` | `a072dce` | 48 approvals, 37 watcher |
+| TASK-08 The Lab page, nav, log out, safer redirect | `a9c4449` | 20 lab and 11 login jsdom tests, 5 UI |
+| TASK-09 The live run | `fbfee86` | 17 harness, about 20 pinning the saved results |
+| Replay banner follows the login | `bec8a38` | 41 and 22 |
+| TASK-10 Documents | `98d90d9` | 67 document tests, 5 of them new |
+
+### Corrections found on the way
+
+- **A test hung for 1 h 50 min.** It called `reset()` inside `apply()`, so the cleanup ran inline
+  and waited on a lock the test already held. The runner was right. The test now defers the
+  cleanup, and every test run has a hard timeout.
+- **Reset and Log out would have returned 415.** They posted no JSON header. A DOM test that
+  records requests found it (`a9c4449`).
+- **The sign-in redirect accepted `/ui/../auth/logout`.** Segments `.`, `..`, empty and
+  percent-encoded are refused now.
+- **`$` in a regular expression accepts a trailing newline.** A test found it; `fullmatch` is used.
+- **A classifier prompt line did not work.** It was meant to send a CPU-starved server to the
+  Vampire. Three wordings scored 36 of 42 each on the real classifier, so it was reverted
+  (`fbfee86`, `routing.txt`).
+- **The Terraform plan also wanted to update the Pod Identity add-on** from `v1.4.1-eksbuild.3`
+  to `v1.5.0-eksbuild.3` (it uses `most_recent`). The apply was limited with `-target` to the new
+  modules and the budget, so the add-on was **not** changed.
+
+### Not verified
+
+- The runner, the login, the Lab API and the Lab page have never run on the cluster.
+- CloudFront to ALB to pod, end to end: the `TargetGroupBinding` and the controller have never run,
+  and the controller policy is a minimal subset of the official one.
+- That the WAF common rule set lets the UI's JSON requests through.
+- The Lab and login pages were never viewed in a browser.
+- The harness did not use the runner or Argo CD. The 14 lab namespaces, quotas and limit ranges
+  already exist on the cluster, created by the harness, so the first sync may need adoption.
+- 2 of 14 scenarios go to the wrong specialist.
+- The 15-minute cleanup and the hourly limit were tested with fakes only.
+- Timing under load, quota behaviour with two quick runs, and the GitHub token's permission to
+  create `lab-remediations`.
+- Cost per incident uses prices typed in by hand. `awscrt` was added for one measurement only and
+  is not a project dependency.

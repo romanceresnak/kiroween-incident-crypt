@@ -130,3 +130,6 @@ URL), `docs/SOCIAL-POST.md` (2: confirm the sentence is yours; the post URL), `d
   Devpost text now carries one rewritten placeholder about enabling Pages. The inventory is 7
   placeholders: demo script 1, social post 2, Devpost 4.
 - Totals are now 8 specs, 84 tasks and 327 requirement IDs, and 1035 tests.
+- Later change: the `scenario-lab` spec put the live system behind a login at a public address, so
+  "no public URL by design" no longer holds. The Devpost text, the README and the replay banner
+  were updated there. Totals are now 9 specs, 94 tasks and 403 requirement IDs.
