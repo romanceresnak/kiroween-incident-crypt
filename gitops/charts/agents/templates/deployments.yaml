@@ -62,6 +62,13 @@ spec:
                   name: {{ .Values.orchestrator.github.tokenSecret }}
                   key: token
                   optional: true
+            # Self-learning memory: all three of bucket, KB ID and data source ID are
+            # needed, otherwise approvals record "not configured" (polish REQ-LRN-07).
+            - {name: LEARNING_BUCKET, value: {{ .Values.orchestrator.learning.bucket | quote }}}
+            - {name: LEARNING_PREFIX, value: {{ .Values.orchestrator.learning.prefix | quote }}}
+            - {name: KNOWLEDGE_BASE_ID, value: {{ .Values.incidentMemory.knowledgeBaseId | quote }}}
+            - name: KNOWLEDGE_BASE_DATA_SOURCE_ID
+              value: {{ .Values.orchestrator.learning.dataSourceId | quote }}
           securityContext:
             {{- include "agents.containerSecurityContext" . | nindent 12 }}
           resources:

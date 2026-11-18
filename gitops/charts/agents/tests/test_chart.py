@@ -502,3 +502,24 @@ def test_min_score_is_a_value_and_is_always_a_string_the_pod_can_parse() -> None
     env = {e["name"]: e.get("value") for e in container_of(docs, "incident-memory")["env"]}
     assert env["MIN_SCORE"] == "0.65"
     assert 0.0 <= float(env["MIN_SCORE"]) <= 1.0
+
+
+def test_the_orchestrator_gets_the_learning_settings_and_is_off_until_a_data_source_is_set(
+    docs: list[dict],
+) -> None:
+    env = {e["name"]: e.get("value") for e in container_of(docs, "orchestrator")["env"]}
+    assert env["LEARNING_BUCKET"] == "kiroween-prod-postmortems-255834079310"
+    assert env["LEARNING_PREFIX"] == "learned/"
+    assert env["KNOWLEDGE_BASE_ID"] == "VIBAT27SDH"
+    # Empty by default: the app reports "not configured" instead of guessing an ID.
+    assert env["KNOWLEDGE_BASE_DATA_SOURCE_ID"] == ""
+
+
+def test_setting_the_data_source_turns_learning_on_for_the_orchestrator_only() -> None:
+    docs = render(*(f"images.{key}.tag={SHA}" for key in IMAGE_KEYS),
+                  "orchestrator.learning.dataSourceId=DS12345678")
+    env = {e["name"]: e.get("value") for e in container_of(docs, "orchestrator")["env"]}
+    assert env["KNOWLEDGE_BASE_DATA_SOURCE_ID"] == "DS12345678"
+    for name in ("orchestrator-watcher", "incident-memory", *SPECIALISTS):
+        names = {e["name"] for e in container_of(docs, name)["env"]}
+        assert not names & {"LEARNING_BUCKET", "KNOWLEDGE_BASE_DATA_SOURCE_ID"}, name

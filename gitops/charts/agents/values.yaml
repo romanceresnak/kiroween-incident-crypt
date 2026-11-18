@@ -73,6 +73,17 @@ orchestrator:
     repository: romanceresnak/kiroween-incident-crypt
     baseBranch: main
     tokenSecret: orchestrator-github
+  # Approved incidents are written as postmortems under <prefix> in the postmortem bucket
+  # and the Knowledge Base is re-indexed (polish REQ-LRN). Learning is off, and approvals
+  # record "not configured", until dataSourceId is set. The role may start an ingestion job
+  # but may not list data sources, so the ID is configuration:
+  #   aws bedrock-agent list-data-sources --knowledge-base-id VIBAT27SDH --region eu-west-1 \
+  #     --query 'dataSourceSummaries[].dataSourceId' --output text
+  # The IAM permission is infra/modules/pod_identity (learn-postmortems).
+  learning:
+    bucket: kiroween-prod-postmortems-255834079310
+    prefix: learned/
+    dataSourceId: ""
   resources:
     requests: {cpu: 50m, memory: 192Mi}
     limits: {cpu: 500m, memory: 384Mi}
