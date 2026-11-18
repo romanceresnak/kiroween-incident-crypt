@@ -34,3 +34,6 @@
 /* The decision stays visible but cannot be used. */
 .replay-decision button:disabled { opacity: 0.45; cursor: not-allowed; }
 .replay-decision p { margin: 0.75rem 0 0.25rem; }
+
+/* The replay has no session and no Lab: its navigation is not shown (scenario-lab REQ-UI-05). */
+.topnav { display: none; }

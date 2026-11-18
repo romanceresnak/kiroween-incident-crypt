@@ -188,6 +188,9 @@ function similarView(items) {
 
 // What happened when the approved incident was turned into a postmortem (polish REQ-LRN-08).
 function learningText(l) {
+  if (l.status === "disabled" && l.error === "lab incident") {
+    return "Not learned: this was a Scenario Lab incident, and lab incidents are never saved as memory.";
+  }
   if (l.status === "disabled") return "Not learned: learning is not configured.";
   if (l.status === "error") return "Not learned: " + (l.error || "error");
   const where = "Written to " + l.key;
@@ -367,6 +370,18 @@ function select(id) {
   if (REPLAY) REPLAY.start(id);
   refreshDetail();
   refreshFeed();
+}
+
+// Log out (scenario-lab REQ-AU-11). Not wired in the replay: it has no session and sends nothing.
+const logoutButton = document.getElementById("logout");
+if (logoutButton && !REPLAY) {
+  logoutButton.addEventListener("click", async () => {
+    try {
+      await fetch("/auth/logout", { method: "POST", credentials: "same-origin",
+                                    headers: { "Content-Type": "application/json" }, body: "{}" });
+    } catch (err) { /* leave anyway */ }
+    window.location.assign("/login");
+  });
 }
 
 const fromHash = decodeURIComponent(location.hash.slice(1));

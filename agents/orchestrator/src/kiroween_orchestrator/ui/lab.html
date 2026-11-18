@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scenario Lab - Kiroween Incident Crypt</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="art/ghost.svg" type="image/svg+xml">
+</head>
+<body>
+  <header class="crypt-header">
+    <div class="moon" aria-hidden="true"></div>
+    <div>
+      <h1>Scenario Lab</h1>
+      <p class="tagline">Break a real cluster on purpose and watch the crew find out why.</p>
+    </div>
+    <div class="live" id="live" role="status" aria-live="polite">connecting&hellip;</div>
+  </header>
+
+  <nav class="topnav" aria-label="Pages">
+    <a href="index.html">Incident feed</a>
+    <a href="lab.html" aria-current="page">Scenario Lab</a>
+    <button type="button" id="logout" class="linklike">Log out</button>
+  </nav>
+
+  <main class="lab">
+    <section class="lab-intro">
+      <h2>How it works</h2>
+      <ol>
+        <li>Pick a scenario and press <strong>Run</strong>. It breaks something small in its own
+          namespace on the live cluster.</li>
+        <li>The watcher notices, and the crew investigates. Follow the link to the incident to
+          read the evidence.</li>
+        <li>If you press <strong>Approve</strong> on the incident, it opens a pull request on a
+          sandbox branch. Nothing is applied to the cluster, and nothing is saved as memory.</li>
+      </ol>
+      <p class="muted">One scenario at a time. It is cleaned up by itself after 15 minutes, or when
+        you press Reset.</p>
+    </section>
+
+    <section class="lab-status" id="lab-status" aria-labelledby="status-title" aria-live="polite">
+      <h2 id="status-title">Status</h2>
+      <div id="status-body" class="muted">Loading&hellip;</div>
+      <div class="buttons">
+        <button type="button" id="reset" class="reject" disabled>Reset</button>
+      </div>
+      <p id="lab-message" class="error" role="alert"></p>
+    </section>
+
+    <section aria-labelledby="scenarios-title">
+      <h2 id="scenarios-title">Scenarios</h2>
+      <p id="scenarios-empty" class="muted">Loading the scenarios&hellip;</p>
+      <ul id="scenarios" class="lab-grid"></ul>
+    </section>
+  </main>
+
+  <footer class="muted">Read-only agents. Every change is a pull request a human approves.</footer>
+  <script src="lab.js"></script>
+</body>
+</html>

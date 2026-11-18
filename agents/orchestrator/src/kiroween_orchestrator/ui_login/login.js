@@ -4,8 +4,11 @@
 
 function safeNext(search) {
   const next = new URLSearchParams(search).get("next") || "";
-  // A relative path under /ui. Not //host, not a scheme, not a backslash trick.
-  if (/^\/ui(\/[A-Za-z0-9._~\-\/%]*)?$/.test(next) && !next.includes("//")) return next;
+  // /ui, /ui/ or /ui/<segments>: each segment starts with a letter, digit, _, ~ or -, and a dot
+  // may only sit between name characters (lab.html). So no "." or ".." segment, no empty
+  // segment (//), no backslash, no % escape, and no scheme or host.
+  const segment = "[A-Za-z0-9_~-]+(?:\\.[A-Za-z0-9_~-]+)*";
+  if (new RegExp("^/ui(?:/|(?:/" + segment + ")+/?)?$").test(next)) return next;
   return "/ui/";
 }
 

@@ -159,3 +159,24 @@ footer { text-align: center; padding: 0 0 1.5rem; font-size: 0.8rem; }
   .crew figure[data-agent].busy::before { display: none; animation: none; }
   .crew figure.busy::after { animation: glow 2s ease-in-out infinite; }
 }
+
+/* Navigation and the Scenario Lab (scenario-lab REQ-UI-01 to UI-06). */
+.topnav { display: flex; gap: 1rem; align-items: center; padding: 0.25rem 1.5rem; font-size: 0.9rem; }
+.topnav a { color: var(--bone); text-decoration: none; padding: 0.25rem 0; border-bottom: 2px solid transparent; }
+.topnav a:hover, .topnav a[aria-current="page"] { border-bottom-color: var(--pumpkin); }
+.topnav .linklike { margin-left: auto; background: none; border: 0; color: var(--muted); font: inherit; cursor: pointer; text-decoration: underline; }
+.topnav .linklike:hover { color: var(--bone); }
+.lab { display: grid; gap: 1.25rem; padding: 0.5rem 1.5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
+.lab section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.25rem; }
+.lab-intro ol { margin: 0.25rem 0 0.5rem 1.25rem; padding: 0; line-height: 1.5; }
+.lab-status .buttons { margin-top: 0.5rem; }
+.lab-status p { margin: 0.35rem 0; }
+.error { color: var(--blood); min-height: 1.2em; margin: 0.5rem 0 0; }
+.lab-grid { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.9rem; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.lab-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 0.9rem 1rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.lab-card h3 { margin: 0; border: 0; padding: 0; font-size: 1rem; }
+.lab-card p { margin: 0.2rem 0; line-height: 1.4; font-size: 0.9rem; }
+.lab-card-head { display: flex; gap: 0.75rem; align-items: center; }
+.lab-card .lab-run { margin-top: auto; align-self: flex-start; }
+.lab-crew, .lab-signals { font-size: 0.8rem; }
+.lab-run:disabled { cursor: not-allowed; }
