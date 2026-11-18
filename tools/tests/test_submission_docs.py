@@ -487,3 +487,74 @@ def test_demo_does_not_overclaim() -> None:
     assert missing_paths(DEMO, DEMO_PATH.parent) == []
     assert DEMO.count("TODO(user)") == 1
     assert "has not been observed" not in DEMO
+
+
+# ------------------------------------------------------------ blog and social
+
+BLOG_PATH = REPO / "docs" / "BLOG-DRAFT.md"
+BLOG = BLOG_PATH.read_text() if BLOG_PATH.exists() else ""
+SOCIAL_PATH = REPO / "docs" / "SOCIAL-POST.md"
+SOCIAL = SOCIAL_PATH.read_text() if SOCIAL_PATH.exists() else ""
+needs_blog = pytest.mark.skipif(not BLOG, reason="docs/BLOG-DRAFT.md not written yet")
+needs_social = pytest.mark.skipif(not SOCIAL, reason="docs/SOCIAL-POST.md not written yet")
+
+
+@needs_blog
+def test_blog_says_it_is_part_of_the_hackathon_and_is_about_kiro_and_the_project() -> None:
+    assert "part of my entry to the Kiroween 2026 hackathon" in BLOG
+    assert BLOG.startswith("# ")
+    assert len(re.findall(r"\bKiro\b", BLOG)) >= 8
+    assert "https://github.com/romanceresnak/kiroween-incident-crypt" in BLOG
+    assert 700 <= len(BLOG.split()) <= 1500
+
+
+@needs_blog
+def test_blog_numbers_come_from_the_saved_records_and_the_specs() -> None:
+    first = demo_result("netpol-first-run-real.json")
+    second = demo_result("netpol-second-run-real.json")
+    for name in ("grafana-oom-real.json", "netpol-first-run-real.json",
+                 "netpol-second-run-real.json"):
+        assert f"${totals(demo_result(name))[2]:.4f}" in BLOG, name
+    top = second["similar_incidents"][0]
+    assert f"{top['score']:.3f}" in BLOG
+    for hit in first["similar_incidents"]:
+        assert f"{hit['score']:.3f}" in BLOG
+    from datetime import datetime
+
+    def parse(text: str) -> datetime:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+
+    seconds = (parse(first["approval"]["at"]) - parse(first["created_at"])).total_seconds()
+    assert f"took {round(seconds)} seconds" in BLOG
+    assert len(first["investigation"]["diagnosis"]["evidence"]) == 6
+    assert "six pieces of evidence" in BLOG
+    for number in (2, 3):
+        assert f"pull/{number})" in BLOG
+    tasks = sum(spec_counts(name)[0] for name in SPECS)
+    reqs = sum(spec_counts(name)[1] for name in SPECS)
+    assert len(SPECS) == 7
+    assert f"seven specs, {tasks} tasks and more than {reqs // 10 * 10} requirement IDs" in BLOG
+
+
+@needs_blog
+def test_blog_states_its_limits() -> None:
+    text = " ".join(BLOG.split())
+    for phrase in ("does not change the cluster yet", "one observation", "What I did not use",
+                   "not checked them against the AWS price list", "never run inside a Kiro",
+                   "Approved changes are recorded, not applied"):
+        assert phrase in text, phrase
+    assert "TODO" not in BLOG
+    assert missing_paths(BLOG, BLOG_PATH.parent) == []
+
+
+@needs_social
+def test_social_post_follows_the_rules() -> None:
+    match = re.search(r"```text\n(.+?)\n```", SOCIAL, re.S)
+    assert match
+    post = match.group(1)
+    assert post.startswith("#KiroweenHackathon26 ")
+    assert len(post) <= 280, len(post)
+    assert "Kiro" in post
+    assert "favourite" in post.lower() or "favorite" in post.lower()
+    assert "github.com/romanceresnak/kiroween-incident-crypt" in post
+    assert SOCIAL.count("TODO(user)") == 2
