@@ -1,0 +1,17 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "infra-terraform-check",
+      "description": "Saving Terraform in infra/ runs terraform fmt -check and terraform validate. Needs terraform init -backend=false once.",
+      "trigger": "PostFileSave",
+      "matcher": "(^|/)infra/.*\\.(tf|tfvars)$",
+      "timeout": 300,
+      "enabled": true,
+      "action": {
+        "type": "command",
+        "command": "scripts/kiro-hook.sh infra \"{{filePath}}\""
+      }
+    }
+  ]
+}

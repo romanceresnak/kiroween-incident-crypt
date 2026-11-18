@@ -1,0 +1,17 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "chaos-shellcheck",
+      "description": "Saving a chaos script runs shellcheck on it.",
+      "trigger": "PostFileSave",
+      "matcher": "(^|/)chaos/.*\\.sh$",
+      "timeout": 60,
+      "enabled": true,
+      "action": {
+        "type": "command",
+        "command": "scripts/kiro-hook.sh chaos \"{{filePath}}\""
+      }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "ui-dom-tests",
+      "description": "Saving the UI (or its jsdom tests) runs npm test in tools/ui-tests.",
+      "trigger": "PostFileSave",
+      "matcher": "(^|/)(tools/ui-tests/[^/]*\\.(mjs|js|json)|agents/orchestrator/.*/ui/.*)$",
+      "timeout": 300,
+      "enabled": true,
+      "action": {
+        "type": "command",
+        "command": "scripts/kiro-hook.sh ui \"{{filePath}}\""
+      }
+    }
+  ]
+}

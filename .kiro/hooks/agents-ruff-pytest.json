@@ -1,0 +1,17 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "agents-ruff-pytest",
+      "description": "Saving a Python or pyproject file in agents/<package> runs ruff and pytest for that package (the CI commands).",
+      "trigger": "PostFileSave",
+      "matcher": "^(?!.*gitops/charts/).*(^|/)agents/[a-z][a-z0-9_]*/.*\\.(py|toml)$",
+      "timeout": 300,
+      "enabled": true,
+      "action": {
+        "type": "command",
+        "command": "scripts/kiro-hook.sh agents \"{{filePath}}\""
+      }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "charts-helm-lint-tests",
+      "description": "Saving a file in a Helm chart runs helm lint and the chart tests.",
+      "trigger": "PostFileSave",
+      "matcher": "(^|/)gitops/charts/.*\\.(ya?ml|tpl|json|py)$",
+      "timeout": 300,
+      "enabled": true,
+      "action": {
+        "type": "command",
+        "command": "scripts/kiro-hook.sh chart \"{{filePath}}\""
+      }
+    }
+  ]
+}
