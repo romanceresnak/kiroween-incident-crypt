@@ -17,7 +17,7 @@ README = (REPO / "README.md").read_text()
 TOP_LEVEL = {"agents", "infra", "gitops", "chaos", "docs", "tools", "scripts", ".kiro"}
 # Documents the README links to that a later task of this spec writes. Each task removes its
 # own entry; the last test of this file fails while any is left.
-PENDING = {"docs/DEVPOST.md"}
+PENDING: set[str] = set()
 
 
 def git(*args: str) -> str:
@@ -558,3 +558,79 @@ def test_social_post_follows_the_rules() -> None:
     assert "favourite" in post.lower() or "favorite" in post.lower()
     assert "github.com/romanceresnak/kiroween-incident-crypt" in post
     assert SOCIAL.count("TODO(user)") == 2
+
+
+# ------------------------------------------------------------------- Devpost
+
+DEVPOST_PATH = REPO / "docs" / "DEVPOST.md"
+DEVPOST = DEVPOST_PATH.read_text() if DEVPOST_PATH.exists() else ""
+needs_devpost = pytest.mark.skipif(not DEVPOST, reason="docs/DEVPOST.md not written yet")
+
+
+@needs_devpost
+def test_devpost_has_every_section_in_order() -> None:
+    headings = re.findall(r"^## (.+)$", DEVPOST, re.M)
+    wanted = ["Inspiration", "What it does", "How I built it", "Challenges", "Accomplishments",
+              "What is next", "Category", "Built with"]
+    assert [h for h in headings if h in wanted] == wanted
+
+
+@needs_devpost
+def test_devpost_category_is_frankenstein_and_quotes_the_rule() -> None:
+    category = DEVPOST.split("## Category")[1].split("## Built with")[0]
+    assert "**Frankenstein**" in category
+    assert "Stitch together a chimera of technologies into one app" in category
+    assert "seemingly incompatible elements" in category
+
+
+@needs_devpost
+def test_devpost_answers_all_five_judging_criteria() -> None:
+    table = DEVPOST.split("## How this maps to the judging criteria")[1].split("## Links")[0]
+    for criterion in ("Potential impact", "Technological implementation", "Design", "Innovation",
+                      "Presentation"):
+        assert f"| {criterion} |" in table, criterion
+
+
+@needs_devpost
+def test_devpost_numbers_match_the_repository() -> None:
+    tasks = sum(spec_counts(name)[0] for name in SPECS)
+    reqs = sum(spec_counts(name)[1] for name in SPECS)
+    assert f"seven specs, {tasks} tasks and {reqs} requirement IDs" in DEVPOST
+    first = demo_result("netpol-first-run-real.json")
+    second = demo_result("netpol-second-run-real.json")
+    top = second["similar_incidents"][0]
+    assert f"score {top['score']:.3f}" in DEVPOST
+    for hit in first["similar_incidents"]:
+        assert f"{hit['score']:.3f}" in DEVPOST
+    for name in ("grafana-oom-real.json", "netpol-first-run-real.json",
+                 "netpol-second-run-real.json"):
+        assert f"${totals(demo_result(name))[2]:.4f}" in DEVPOST, name
+    graf = demo_result("grafana-oom-real.json")["investigation"]["diagnosis"]["evidence"]
+    assert f"{len(graf)} pieces of" in DEVPOST
+    for number, run in ((2, first), (3, second)):
+        assert run["approval"]["pull_request"]["url"] in DEVPOST
+        assert run["approval"]["pull_request"]["url"].endswith(f"/pull/{number}")
+    assert len(list((REPO / "docs" / "postmortems").glob("*.md"))) == 8
+    assert "eight postmortems" in DEVPOST
+    ui_tests = len(re.findall(r"^\s*test\(", "".join(
+        p.read_text() for p in (REPO / "tools" / "ui-tests").glob("*.test.mjs")), re.M))
+    assert f"{ui_tests} jsdom tests" in DEVPOST
+
+
+@needs_devpost
+def test_devpost_states_the_limits_and_the_url_decision() -> None:
+    text = " ".join(DEVPOST.split())
+    assert "merging the pull request does not change the cluster yet" in text
+    assert "no public URL by design" in text
+    assert "URL to your working app" in text
+    assert "More than 900 automated tests" in text
+    assert "Best Kiro Crew App" in text and "is not claimed" in text
+    assert DEVPOST.count("TODO(user)") == 4
+
+
+@needs_devpost
+def test_devpost_links_exist() -> None:
+    assert missing_paths(DEVPOST, DEVPOST_PATH.parent) == []
+    assert "https://github.com/romanceresnak/kiroween-incident-crypt" in DEVPOST
+    assert "docs/KIRO-WRITEUP.md" in DEVPOST and "#kiro-caught-it" in DEVPOST
+    assert "## Kiro caught it" in WRITEUP
