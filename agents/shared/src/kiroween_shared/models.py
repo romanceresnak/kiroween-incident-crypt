@@ -205,6 +205,17 @@ class PullRequest(BaseModel):
     error: str | None = None
 
 
+class Learning(BaseModel):
+    """What happened when an approved incident was turned into a postmortem
+    (polish REQ-LRN-05). Never carries an error message, only the error class."""
+
+    status: Literal["written", "disabled", "error"]
+    key: str | None = Field(default=None, max_length=300)
+    ingestion: Literal["started", "already_running", "failed"] | None = None
+    ingestion_job_id: str | None = Field(default=None, max_length=100)
+    error: str | None = Field(default=None, max_length=200)
+
+
 class Approval(BaseModel):
     """A human decision on a proposal (REQ-APR-01)."""
 
@@ -213,6 +224,7 @@ class Approval(BaseModel):
     at: datetime = Field(default_factory=utcnow)
     comment: str = Field(default="", max_length=500)
     pull_request: PullRequest | None = None
+    learning: Learning | None = None
 
 
 class IncidentRecord(BaseModel):

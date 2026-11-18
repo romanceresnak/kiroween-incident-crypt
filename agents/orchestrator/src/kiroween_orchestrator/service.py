@@ -17,6 +17,7 @@ from kiroween_shared.models import (
     Incident,
     IncidentRecord,
     Investigation,
+    Learning,
     RelatedIncident,
     SimilarIncident,
     Usage,
@@ -25,7 +26,8 @@ from kiroween_shared.models import (
 
 from .approval import Approver
 from .correlation import correlate
-from .metrics import APPROVALS, INVESTIGATION_SECONDS, record_incident
+from .learning import Learner, can_learn, error_name
+from .metrics import APPROVALS, INVESTIGATION_SECONDS, LEARNED, record_incident
 from .specialists import SPECIALIST_AGENTS
 from .store import IncidentStore
 
@@ -63,10 +65,12 @@ class IncidentService:
         now: Callable[[], datetime] = utcnow,
         similar: Callable[[Incident, str | None], Awaitable[list[SimilarIncident]]] | None = None,
         approver: Approver | None = None,
+        learner: Learner | None = None,
     ) -> None:
         # Categories with a configured specialist. Everything else ends as no_specialist.
         self.specialists = specialists
         self._memory = similar
+        self._learner = learner
         self._approver = approver if approver is not None else Approver()
         self._correlation_window = correlation_window_s
         self._now = now
@@ -209,6 +213,25 @@ class IncidentService:
         self.store.update(incident_id, status="failed", error=error[:500])
         record_incident(category, "failed", None)
 
+    async def _learn(self, incident_id: str, record: IncidentRecord,
+                     approval: Approval) -> tuple[Approval, IncidentRecord]:
+        """Turn the approved incident into a postmortem (polish REQ-LRN-05). Whatever goes
+        wrong, the approval and its pull request stay as they are."""
+        if self._learner is None:
+            return approval, record
+        try:
+            with incident_context(incident_id):
+                learning = await self._learner.learn(record, approval)
+        except Exception as exc:  # Learner.learn does not raise; this is the second wall
+            logger.exception("learning failed for %s", incident_id)
+            learning = Learning(status="error", error=error_name(exc))
+        result = (f"written_{learning.ingestion}" if learning.status == "written"
+                  else learning.status)
+        LEARNED.labels(result=result).inc()
+        approval = approval.model_copy(update={"learning": learning})
+        updated = self.store.update(incident_id, approval=approval)
+        return approval, updated if updated is not None else record
+
     async def decide(self, incident_id: str, decision: Literal["approved", "rejected"],
                      by: str, comment: str = "") -> IncidentRecord:
         """Record a human decision (REQ-APR-01). Raises KeyError / DecisionConflict."""
@@ -225,6 +248,9 @@ class IncidentService:
                 pr = await self._approver.pull_request(record, approval)
             approval = approval.model_copy(update={"pull_request": pr})
             record = self.store.update(incident_id, approval=approval)
+        if (decision == "approved" and self._learner is not None and record is not None
+                and can_learn(record)):
+            approval, record = await self._learn(incident_id, record, approval)
         delivery = "none"
         if approval.pull_request is not None:
             pr = approval.pull_request

@@ -21,6 +21,7 @@ from kiroween_shared.server import configure_logging, create_app, serve
 
 from .agent import Orchestrator
 from .approval import Approver, GitHubClient
+from .learning import build_learner
 from .memory import MemoryClient
 from .service import DecisionConflict, IncidentService, QueueFull
 from .specialists import SpecialistClient
@@ -168,6 +169,9 @@ def main() -> None:
         correlation_window_s=env_int(env, "CORRELATION_WINDOW_SECONDS", 300),
         similar=memory.similar if memory else None,
         approver=Approver(github),
+        # Off unless LEARNING_BUCKET, KNOWLEDGE_BASE_ID and KNOWLEDGE_BASE_DATA_SOURCE_ID are
+        # all set (polish REQ-LRN-07).
+        learner=build_learner(env),
     )
     start_metrics_server(settings.metrics_port)
     serve(create(service), settings.api_port)

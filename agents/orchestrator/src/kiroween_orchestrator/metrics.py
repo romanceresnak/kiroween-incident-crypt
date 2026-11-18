@@ -31,3 +31,11 @@ APPROVALS = Counter(
     ["decision", "delivery"],
     registry=REGISTRY,
 )
+
+LEARNED = Counter(
+    "orchestrator_learned",
+    "Approved incidents turned into postmortems, by outcome (disabled, error, "
+    "written_started, written_already_running, written_failed)",
+    ["result"],
+    registry=REGISTRY,
+)
