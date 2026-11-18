@@ -1,0 +1,13 @@
+# Approved remediation for incident 2e4fd60547e332f6 (Unhealthy).
+# Approved by Roman Ceresnak at 2026-11-18T07:53:38.681317+00:00.
+# NetworkPolicy/allow-trusted spec.ingress[0].from[0].podSelector.matchLabels.app: 'netpol-trusted' -> 'netpol-client'
+# Kustomize patch entry (RFC 6902 JSON patch).
+target:
+  group: networking.k8s.io
+  version: v1
+  kind: NetworkPolicy
+  name: allow-trusted
+  namespace: chaos-netpol
+patch: "- op: test\n  path: /spec/ingress/0/from/0/podSelector/matchLabels/app\n \
+  \ value: netpol-trusted\n- op: replace\n  path: /spec/ingress/0/from/0/podSelector/matchLabels/app\n\
+  \  value: netpol-client\n"
