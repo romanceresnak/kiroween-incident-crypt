@@ -319,7 +319,11 @@ def main() -> None:
                      ready=lambda: pod_beat.recent() and event_beat.recent())
     threading.Thread(target=serve, args=(app, settings.health_port), daemon=True).start()
 
-    watcher = Watcher(settings, OrchestratorClient(settings.orchestrator_url),
+    token = os.environ.get("ORCHESTRATOR_TOKEN", "")
+    if not token:
+        logger.warning("ORCHESTRATOR_TOKEN is not set: an orchestrator that requires a login "
+                       "will refuse every incident")
+    watcher = Watcher(settings, OrchestratorClient(settings.orchestrator_url, token=token),
                       get_pod=kubernetes_get_pod())
     list_events, watch_events = kubernetes_sources("events")
     def recheck_forever() -> None:

@@ -55,6 +55,22 @@ spec:
               value: {{ .Values.orchestrator.correlationWindowSeconds | quote }}
             - {name: GITHUB_REPOSITORY, value: {{ .Values.orchestrator.github.repository | quote }}}
             - {name: GITHUB_BASE_BRANCH, value: {{ .Values.orchestrator.github.baseBranch | quote }}}
+            # Login (scenario-lab REQ-AU). The Secret is created by the operator and is optional
+            # here: without it the orchestrator answers 503 to everything but the health probes,
+            # it never falls back to open access.
+            - {name: AUTH_REQUIRED, value: {{ .Values.auth.required | quote }}}
+            - {name: AUTH_LAB_ONLY, value: {{ .Values.auth.labOnly | quote }}}
+            - {name: TRUSTED_PROXY_HOPS, value: {{ .Values.auth.trustedProxyHops | quote }}}
+            - {name: PUBLIC_HOSTS, value: {{ join "," .Values.auth.publicHosts | quote }}}
+            - name: AUTH_USERNAME
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.auth.secretName }}, key: username, optional: true}
+            - name: AUTH_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.auth.secretName }}, key: password, optional: true}
+            - name: AUTH_INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.auth.secretName }}, key: internal-token, optional: true}
             # Optional: no Secret means approvals are dry runs (REQ-APR-05).
             - name: GITHUB_TOKEN
               valueFrom:
@@ -112,6 +128,12 @@ spec:
             - {name: LOG_LEVEL, value: {{ .Values.logLevel | quote }}}
             - {name: API_PORT, value: {{ .Values.ports.api | quote }}}
             - {name: ORCHESTRATOR_URL, value: "http://orchestrator:{{ .Values.ports.api }}"}
+            # The orchestrator requires a login; the watcher authenticates with this token
+            # (scenario-lab REQ-AU-09). Optional, so a missing Secret shows as rejected
+            # incidents in the log and not as a crashing pod.
+            - name: ORCHESTRATOR_TOKEN
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.auth.secretName }}, key: internal-token, optional: true}
             - {name: WATCH_REASONS, value: {{ join "," .Values.watcher.reasons | quote }}}
             - name: WAITING_REASONS
               value: {{ join "," .Values.watcher.waitingReasons | quote }}

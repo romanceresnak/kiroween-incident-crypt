@@ -595,3 +595,50 @@ def test_setting_the_data_source_turns_learning_on_for_the_orchestrator_only() -
         names = {e["name"] for e in container_of(docs, name)["env"]}
         assert not names & {"LEARNING_BUCKET", "KNOWLEDGE_BASE_DATA_SOURCE_ID"}, name
 
+
+# --- login wiring (scenario-lab REQ-AU-02, AU-03, AU-09) ---------------------------------
+
+
+def env_entries(docs: list[dict], deployment: str) -> dict[str, dict]:
+    spec = of_kind(docs, "Deployment")[deployment]["spec"]["template"]["spec"]
+    (container,) = spec["containers"]
+    return {e["name"]: e for e in container["env"]}
+
+
+def test_the_orchestrator_reads_the_login_from_an_optional_operator_secret(
+        docs: list[dict]) -> None:
+    env = env_entries(docs, "orchestrator")
+    for name, key in [("AUTH_USERNAME", "username"), ("AUTH_PASSWORD", "password"),
+                      ("AUTH_INTERNAL_TOKEN", "internal-token")]:
+        ref = env[name]["valueFrom"]["secretKeyRef"]
+        assert ref == {"name": "orchestrator-auth", "key": key, "optional": True}, name
+    assert env["AUTH_REQUIRED"]["value"] == "true"
+    assert env["AUTH_LAB_ONLY"]["value"] == "true"
+    assert env["TRUSTED_PROXY_HOPS"]["value"] == "2"
+
+
+def test_the_watcher_gets_only_the_internal_token(docs: list[dict]) -> None:
+    env = env_entries(docs, "orchestrator-watcher")
+    ref = env["ORCHESTRATOR_TOKEN"]["valueFrom"]["secretKeyRef"]
+    assert ref == {"name": "orchestrator-auth", "key": "internal-token", "optional": True}
+    assert not [n for n in env if n.startswith("AUTH_") or "PASSWORD" in n]
+
+
+def test_the_chart_never_creates_a_secret_or_carries_a_credential(docs: list[dict]) -> None:
+    assert not [d for d in docs if d["kind"] == "Secret"]
+    values = (CHART / "values.yaml").read_text()
+    template = (CHART / "templates" / "deployments.yaml").read_text()
+    for text in (values, template):
+        assert not re.search(r"(?i)password\s*:\s*[\"']?[A-Za-z0-9]{6,}", text.replace(
+            "key: password", ""))
+    assert "AUTH_PASSWORD" in template and "value:" not in re.search(
+        r"name: AUTH_PASSWORD\n(?:.*\n){1,3}", template).group(0)
+
+
+def test_login_cannot_be_switched_off_by_a_missing_secret(docs: list[dict]) -> None:
+    """The Secret is optional for the pod, but the app fails closed without it (tested in
+    agents/orchestrator/tests/test_auth.py), so the default stays required: true."""
+    values = yaml.safe_load((CHART / "values.yaml").read_text())
+    assert values["auth"]["required"] is True
+    assert values["auth"]["labOnly"] is True
+    assert values["auth"]["secretName"] == "orchestrator-auth"

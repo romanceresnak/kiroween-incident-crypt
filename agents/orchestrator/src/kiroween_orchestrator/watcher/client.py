@@ -23,8 +23,13 @@ class OrchestratorClient:
         timeout_s: float = 10.0,
         transport: httpx.BaseTransport | None = None,
         sleep: Callable[[float], None] = time.sleep,
+        token: str = "",
     ) -> None:
-        self._client = httpx.Client(base_url=base_url, timeout=timeout_s, transport=transport)
+        # The orchestrator requires a login; the watcher has a token instead (scenario-lab
+        # REQ-AU-09). It is sent only to POST /incidents and never logged.
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        self._client = httpx.Client(base_url=base_url, timeout=timeout_s, transport=transport,
+                                    headers=headers)
         self._attempts = attempts
         self._backoff = backoff_s
         self._sleep = sleep

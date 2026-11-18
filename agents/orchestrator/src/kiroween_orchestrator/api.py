@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
-from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.staticfiles import StaticFiles
@@ -19,16 +19,24 @@ from kiroween_shared.metrics import PriceTable, start_metrics_server
 from kiroween_shared.models import Incident, IncidentRecord
 from kiroween_shared.server import configure_logging, create_app, serve
 
+from . import auth as auth_module
 from .agent import Orchestrator
 from .approval import Approver, GitHubClient
+from .auth import Auth, AuthConfig, is_lab_namespace
 from .learning import build_learner
 from .memory import MemoryClient
 from .service import DecisionConflict, IncidentService, QueueFull
 from .specialists import SpecialistClient
 from .store import IncidentStore
 
+logger = logging.getLogger(__name__)
 
-def create(service: IncidentService) -> FastAPI:
+
+def create(service: IncidentService, auth: Auth | None = None) -> FastAPI:
+    """The API and the UI. With ``auth`` every route except the health probes and the login
+    needs a session (or, for POST /incidents, the watcher's token). Without it nothing does,
+    which is how the tests and a local run use it; main() always passes one."""
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await service.start()
@@ -39,8 +47,18 @@ def create(service: IncidentService) -> FastAPI:
 
     app = create_app("orchestrator", ready=lambda: service.running, lifespan=lifespan)
 
+    def lab_only(request: Request) -> bool:
+        """A signed-in judge may act on lab incidents only (REQ-AU-13). The watcher's token,
+        and an app without login (tests, a local run), are not limited."""
+        return (auth is not None and auth.config.lab_only
+                and getattr(request.state, "auth_kind", "open") == "session")
+
     @app.post("/incidents", status_code=202)
-    async def post_incident(incident: Incident, response: Response) -> dict[str, str]:
+    async def post_incident(incident: Incident, request: Request,
+                            response: Response) -> dict[str, str]:
+        if lab_only(request) and not is_lab_namespace(incident.namespace):
+            raise HTTPException(status_code=403,
+                                detail="this account can submit lab incidents only")
         try:
             record, created = service.submit(incident)
         except QueueFull as exc:
@@ -64,7 +82,13 @@ def create(service: IncidentService) -> FastAPI:
 
     async def decide(incident_id: str, decision: Literal["approved", "rejected"],
                      body: DecisionRequest, request: Request) -> IncidentRecord:
-        check_same_origin(request)
+        check_same_origin(request, auth)
+        if lab_only(request):
+            record = service.store.get(incident_id)
+            if record is not None and not is_lab_namespace(record.incident.namespace):
+                # A real incident's pull request would go to the main branch.
+                raise HTTPException(status_code=403,
+                                    detail="this account can decide lab incidents only")
         try:
             return await service.decide(incident_id, decision, body.by, body.comment)
         except KeyError as exc:
@@ -82,11 +106,17 @@ def create(service: IncidentService) -> FastAPI:
                      request: Request) -> IncidentRecord:
         return await decide(incident_id, "rejected", body, request)
 
+    # Installed before ui_headers, so ui_headers wraps it and its responses get the headers too.
+    if auth is not None:
+        auth_module.install(app, auth)
+
     # The UI: static files in this package, same origin as the API (REQ-UI-01, UI-04).
     @app.middleware("http")
     async def ui_headers(request: Request, call_next):  # type: ignore[no-untyped-def]
         response = await call_next(request)
-        if request.url.path == "/ui" or request.url.path.startswith("/ui/"):
+        path = request.url.path
+        if (path == "/ui" or path.startswith("/ui/") or path == "/login"
+                or path.startswith("/login-assets/")):
             response.headers["Content-Security-Policy"] = UI_CSP
             response.headers["X-Content-Type-Options"] = "nosniff"
             response.headers["Referrer-Policy"] = "no-referrer"
@@ -111,19 +141,8 @@ class DecisionRequest(BaseModel):
     comment: str = Field(default="", max_length=500)
 
 
-def check_same_origin(request: Request) -> None:
-    """Only JSON from this host (REQ-APR-02).
-
-    A page on another site can make the operator's browser send a "simple" request (form
-    or text/plain) through the port-forward. Requiring application/json forces a CORS
-    preflight, which this app never answers; the Origin check refuses the rest.
-    """
-    content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
-    if content_type != "application/json":
-        raise HTTPException(status_code=415, detail="send application/json")
-    origin = request.headers.get("origin")
-    if origin is not None and urlsplit(origin).netloc != request.headers.get("host", ""):
-        raise HTTPException(status_code=403, detail="cross-origin decision refused")
+# The implementation lives in auth.py (scenario-lab REQ-AU-08); the name stays importable.
+check_same_origin = auth_module.check_same_origin
 
 
 SPECIALIST_URL_ENV: dict[str, str] = {
@@ -173,5 +192,11 @@ def main() -> None:
         # all set (polish REQ-LRN-07).
         learner=build_learner(env),
     )
+    auth = Auth(AuthConfig.from_env(env))
+    if auth.config.required and not auth.config.configured:
+        logger.warning("login is required but the Secret orchestrator-auth has no username and "
+                       "password: every route except the health probes answers 503")
+    if auth.config.required and not auth.config.internal_token:
+        logger.warning("no internal token: the watcher cannot submit incidents")
     start_metrics_server(settings.metrics_port)
-    serve(create(service), settings.api_port)
+    serve(create(service, auth), settings.api_port)
