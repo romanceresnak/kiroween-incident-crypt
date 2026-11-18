@@ -232,8 +232,8 @@ was labelled `app: netpol-client`. The proposal was a change of
 `spec.ingress[0].from[0].podSelector.matchLabels.app`.
 
 1. Roman Ceresnak clicked Approve in the UI (the orchestrator log: "approved by Roman
-   Ceresnak (github)"; the file header says "Approved by Roman Ceresnak at
-   2026-11-18T07:53:38.681317+00:00").
+   Ceresnak (github)"; the header of the file in that pull request says "Approved by Roman
+   Ceresnak at 2026-11-18T07:53:38.681317+00:00").
 2. The orchestrator opened
    [pull request #2](https://github.com/romanceresnak/kiroween-incident-crypt/pull/2): branch
    `remediation/2e4fd60547e332f6`, commit `0c4d20b` made through the GitHub API, adding
@@ -243,7 +243,8 @@ was labelled `app: netpol-client`. The proposal was a change of
    cluster: no Argo CD Application applies `gitops/remediations/`, the chaos workloads are
    not managed by Argo CD, and the patch was not run through `kustomize build`
    (`memory-and-ui/tasks.md` records this). The pull request is the audit trail of the
-   approved change.
+   approved change. Pull request #3 later wrote the same path (see "Which pull request is on
+   `main`" below).
 4. The orchestrator wrote `learned/2e4fd60547e332f6.md` and its metadata sidecar to the
    postmortem bucket and started a Knowledge Base ingestion job. The job completed: nine
    documents scanned, one new document indexed.
@@ -268,6 +269,17 @@ postmortems. Run 2 was approved by the same person, opened
 three real incidents is $0.1104 (Grafana), $0.0790 (run 1) and $0.1052 (run 2). Two more
 incidents were captured later the same day, from `chaos/badimage` ($0.0609) and `chaos/pvc`
 ($0.0508); both stopped at `awaiting_approval` and were not approved.
+
+**Which pull request is on `main`.** Both runs proposed the same change to the same path, so
+pull request #3 replaced the file that pull request #2 had added. Pull request #2 was merged at
+08:55 (`c2ba64d`). Pull request #3 (commit `4fd7a65`, merged as `8cd8ee4` at 11:10, after #2)
+changed only the two header lines of
+[`networkpolicy-allow-trusted.yaml`](../gitops/remediations/chaos-netpol/networkpolicy-allow-trusted.yaml):
+the incident (`009de3634d72afbc` instead of `2e4fd60547e332f6`) and the approval time
+(2026-11-18T08:07:41.071878+00:00 instead of 07:53:38.681317+00:00). The patch itself, a `test`
+of `netpol-trusted` and a `replace` with `netpol-client`, is identical in both. So the version on
+`main` is pull request #3's, and the approval stamp in the file is run 2's. The history of the
+file keeps both. Neither version has been applied to the cluster.
 
 **Still not verified:** that the learned hit generalises. It was one observation, for the same
 scenario both times, so it shows that retrieval works, not that a different incident would

@@ -412,12 +412,83 @@ def test_writeup_grafana_and_pull_request_facts_match_the_evidence() -> None:
     assert "256Mi" in json.dumps(proposal) and "512Mi" in json.dumps(proposal)
     total = sum(u["cost_usd"] for u in data["usage_by_agent"].values())
     assert f"${total:.4f}" in WRITEUP
-    patch = (REPO / "gitops" / "remediations" / "chaos-netpol"
-             / "networkpolicy-allow-trusted.yaml").read_text()
-    stamp = "Approved by Roman Ceresnak at 2026-11-18T07:53:38.681317+00:00"
-    assert stamp in patch and stamp in " ".join(WRITEUP.split())
-    assert "netpol-trusted" in patch and "netpol-client" in patch
     assert "pull/2" in WRITEUP
+
+
+REMEDIATION = (REPO / "gitops" / "remediations" / "chaos-netpol"
+               / "networkpolicy-allow-trusted.yaml")
+
+
+def header(text: str) -> dict[str, str]:
+    """The incident and the approval stamp in a remediation file's comment header."""
+    incident = re.search(r"^# Approved remediation for incident (\S+) ", text, re.M)
+    stamp = re.search(r"^# (Approved by .+? at (\S+?))\.$", text, re.M)
+    assert incident and stamp, "the remediation file has no approval header"
+    return {"incident": incident.group(1), "stamp": stamp.group(1), "time": stamp.group(2)}
+
+
+def body(text: str) -> str:
+    return "".join(line for line in text.splitlines(keepends=True) if not line.startswith("#"))
+
+
+def pull_requests() -> dict[str, dict]:
+    """Each real approved run by incident id: its pull request number and the file it sent."""
+    runs = {}
+    for name in ("netpol-first-run-real.json", "netpol-second-run-real.json"):
+        record = demo_result(name)
+        pr = record["approval"]["pull_request"]
+        number = int(re.search(r"/pull/(\d+)$", pr["url"]).group(1))
+        runs[record["incident"]["incident_id"]] = {"number": number, "content": pr["content"]}
+    return runs
+
+
+@needs_writeup
+def test_writeup_says_which_pull_requests_version_of_the_remediation_is_on_main() -> None:
+    """The stamp, the incident and the pull request number come from the file and the saved
+    records, so the next pull request that rewrites the file shows up here as a failure."""
+    on_main = header(REMEDIATION.read_text())
+    runs = pull_requests()
+    assert on_main["incident"] in runs, f"no saved record for {on_main['incident']}"
+    text = " ".join(WRITEUP.split())
+    number = runs[on_main["incident"]]["number"]
+    assert f"the version on `main` is pull request #{number}'s" in text
+    assert on_main["time"] in text and on_main["incident"] in text
+    # The saved pull request carried exactly the file that is on main.
+    assert runs[on_main["incident"]]["content"] == REMEDIATION.read_text()
+    # The other run's version is described as the earlier one, with its own stamp.
+    (other_id,) = set(runs) - {on_main["incident"]}
+    other = header(runs[other_id]["content"])
+    assert other["time"] in text and other_id in text
+    assert f"pull request #{runs[other_id]['number']}" in text
+    assert "changed only the two header lines" in text
+    assert "is identical in both" in text
+    # "Identical" is checked, not assumed: only the comment header differs between the runs.
+    assert body(runs[on_main["incident"]]["content"]) == body(runs[other_id]["content"])
+    assert header(runs[on_main["incident"]]["content"]) != other
+    assert "netpol-trusted" in body(REMEDIATION.read_text())
+    assert "netpol-client" in body(REMEDIATION.read_text())
+
+
+@needs_writeup
+def test_writeup_does_not_credit_the_stamp_on_main_to_the_other_pull_request() -> None:
+    on_main = header(REMEDIATION.read_text())
+    runs = pull_requests()
+    wrong = [r["number"] for incident, r in runs.items() if incident != on_main["incident"]]
+    text = " ".join(WRITEUP.split())
+    for number in wrong:
+        assert f"the version on `main` is pull request #{number}'s" not in text
+
+
+@needs_writeup
+@needs_history
+def test_writeup_pull_request_commits_exist_and_merge_order_is_as_stated() -> None:
+    for rev in ("0c4d20b", "c2ba64d", "4fd7a65", "8cd8ee4"):
+        assert commit_exists(rev), rev
+        assert f"`{rev}`" in WRITEUP, rev
+    # Pull request #2 was merged before #3, which is why #3's file replaced #2's.
+    first = git("log", "-1", "--format=%at", "c2ba64d").strip()
+    second = git("log", "-1", "--format=%at", "8cd8ee4").strip()
+    assert int(first) < int(second)
 
 
 @needs_writeup

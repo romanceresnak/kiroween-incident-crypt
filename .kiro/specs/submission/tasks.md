@@ -124,9 +124,9 @@ URL), `docs/SOCIAL-POST.md` (2: confirm the sentence is yours; the post URL), `d
 - The "URL to your working app" decision (step 5 above) is settled by the `replay` spec: a
   read-only replay at <https://romanceresnak.github.io/kiroween-incident-crypt/>. Its status,
   including what is not verified, is in `.kiro/specs/replay/tasks.md`.
-- `chaos/badimage` and `chaos/pvc` were re-run and captured (`1f667a9`); both stopped at
+- `chaos/badimage` and `chaos/pvc` were re-run and captured (`d44a0e2`); both stopped at
   `awaiting_approval` and were not approved. The costs are in the README table.
-- The two write-up placeholders were filled from the author's account (`ceebdd6`), and the
+- The two write-up placeholders were filled from the author's account (`41b6b7c`), and the
   Devpost text now carries one rewritten placeholder about enabling Pages. The inventory is 7
   placeholders: demo script 1, social post 2, Devpost 4.
 - Totals are now 8 specs, 84 tasks and 327 requirement IDs, and 1035 tests.

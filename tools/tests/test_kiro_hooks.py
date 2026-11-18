@@ -104,13 +104,17 @@ def test_every_file_starts_exactly_the_right_hooks(rel: str, absolute: bool) -> 
 
 # ------------------------------------------------------------------ the script
 
-FAKE_TOOL = """#!/usr/bin/env bash
+FAKE_TOOL = """#!/bin/bash
 echo "$PWD|$(basename "$0") $*" >> "$FAKE_LOG"
 case "$(basename "$0") $*" in
   *"$FAKE_FAIL"*) [[ -n "$FAKE_FAIL" ]] && exit 3 ;;
 esac
 exit 0
 """
+
+
+# What kiro-hook.sh and the fake tools call that is not a shell builtin.
+SYSTEM_PROGRAMS = ("dirname", "basename")
 
 
 class Sandbox:
@@ -122,6 +126,15 @@ class Sandbox:
         shutil.copy(SCRIPT, self.root / "scripts" / "kiro-hook.sh")
         self.bin = tmp_path / "bin"
         self.bin.mkdir()
+        # The only system programs the script and the fake tools run. Everything else on the
+        # machine is invisible, so a real shellcheck, terraform or npm in /usr/bin cannot be
+        # found when a test removes the fake (GitHub's runner has shellcheck in /usr/bin).
+        self.system = tmp_path / "system"
+        self.system.mkdir()
+        for name in SYSTEM_PROGRAMS:
+            found = shutil.which(name)
+            assert found, f"{name} is needed to run the script"
+            (self.system / name).symlink_to(found)
         self.log = tmp_path / "calls.log"
         for tool in ("uv", "terraform", "helm", "shellcheck", "npm"):
             self.add_tool(tool)
@@ -136,16 +149,18 @@ class Sandbox:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
 
-    def run(self, *args: str, fail: str = "") -> subprocess.CompletedProcess[str]:
-        env = {
-            "PATH": f"{self.bin}:/usr/bin:/bin",
+    def env(self, fail: str = "") -> dict[str, str]:
+        return {
+            "PATH": f"{self.bin}:{self.system}",
             "HOME": str(self.root),
             "FAKE_LOG": str(self.log),
             "FAKE_FAIL": fail,
         }
+
+    def run(self, *args: str, fail: str = "") -> subprocess.CompletedProcess[str]:
         return subprocess.run(  # noqa: S603
             ["/bin/bash", str(self.root / "scripts" / "kiro-hook.sh"), *args],
-            env=env, capture_output=True, text=True, check=False, cwd="/",
+            env=self.env(fail), capture_output=True, text=True, check=False, cwd="/",
         )
 
     def calls(self) -> list[str]:
@@ -350,3 +365,17 @@ def test_a_bad_call_exits_2(box: Sandbox, args: list[str]) -> None:
 def test_the_script_is_shellchecked_by_ci() -> None:
     workflow = (REPO / ".github" / "workflows" / "agents-images.yml").read_text()
     assert "shellcheck chaos/*/*.sh scripts/*.sh" in workflow
+
+
+def test_the_sandbox_path_holds_only_the_fakes_and_two_system_programs(box: Sandbox) -> None:
+    """A missing-tool test must not depend on what the machine has installed (REQ-HK-05)."""
+    path = box.env()["PATH"]
+    assert path == f"{box.bin}:{box.system}"
+    assert sorted(p.name for p in box.system.iterdir()) == sorted(SYSTEM_PROGRAMS)
+    for tool in ("uv", "terraform", "helm", "shellcheck", "npm", "ruff", "pytest"):
+        found = shutil.which(tool, path=path)
+        assert found is None or Path(found).parent == box.bin, (tool, found)
+    # With the fake removed, no tool is found anywhere on the controlled PATH.
+    for tool in ("uv", "terraform", "helm", "shellcheck", "npm"):
+        (box.bin / tool).unlink()
+        assert shutil.which(tool, path=path) is None, tool

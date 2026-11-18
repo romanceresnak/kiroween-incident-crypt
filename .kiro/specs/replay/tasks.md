@@ -36,14 +36,14 @@ All four tasks are done and committed. Nothing is pushed by the agent.
 
 | Task | Commit | Tests |
 |---|---|---|
-| Spec | `77c6efa` | none (documents) |
-| TASK-01 build | `4926cab` | 41 in `tools/tests/test_replay_build.py`; 7 mutations caught |
-| TASK-02 replay mode and engine | `a843813` | 22 DOM tests in `tools/ui-tests/replay.test.mjs`; the 34 live UI tests unchanged |
-| TASK-03 Pages workflow | `37abb9b` | 12 in `tools/tests/test_replay_workflow.py`; `actionlint` 1.7.12 clean |
+| Spec | `842eeca` | none (documents) |
+| TASK-01 build | `342ae94` | 41 in `tools/tests/test_replay_build.py`; 7 mutations caught |
+| TASK-02 replay mode and engine | `357b5f2` | 22 DOM tests in `tools/ui-tests/replay.test.mjs`; the 34 live UI tests unchanged |
+| TASK-03 Pages workflow | `ecaeda9` | 12 in `tools/tests/test_replay_workflow.py`; `actionlint` 1.7.12 clean |
 | TASK-04 documents | this commit | 6 new document tests |
 
-Before the spec, the real records were captured (`1f667a9`) and the author's placeholders in the
-write-up were filled (`ceebdd6`).
+Before the spec, the real records were captured (`d44a0e2`) and the author's placeholders in the
+write-up were filled (`41b6b7c`).
 
 **Mutation checks of TASK-02 were stopped part way** at the author's request. Fourteen mutations
 of `replay.js` and `app.js` were planned and none of their results were read. The interruption left
