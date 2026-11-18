@@ -259,7 +259,9 @@ postmortems. Run 2 was approved by the same person, opened
 `learned/009de3634d72afbc.md` and started ingestion job `013WGNC1LA`. Both records are saved:
 [`netpol-first-run-real.json`](demo-results/netpol-first-run-real.json) and
 [`netpol-second-run-real.json`](demo-results/netpol-second-run-real.json). The cost of the
-three real incidents is $0.1104 (Grafana), $0.0790 (run 1) and $0.1052 (run 2).
+three real incidents is $0.1104 (Grafana), $0.0790 (run 1) and $0.1052 (run 2). Two more
+incidents were captured later the same day, from `chaos/badimage` ($0.0609) and `chaos/pvc`
+($0.0508); both stopped at `awaiting_approval` and were not approved.
 
 **Still not verified:** that the learned hit generalises. It was one observation, for the same
 scenario both times, so it shows that retrieval works, not that a different incident would
@@ -277,5 +279,6 @@ merged when this was written, and neither pull request was applied to the cluste
   checked the served files, not what `app.js` does; the fix added jsdom tests that run it.
 - The retrieval result looked fine in unit tests with mocked responses and had duplicates on
   the real service (10).
-- Open items, stated in the README: `badimage` and `pvc` after the latest watcher changes; the untuned similarity threshold (0.5); model prices entered by
+- Open items, stated in the README: that the `badimage` and `pvc` proposals work (they were
+  not approved); the untuned similarity threshold (0.5); model prices entered by
   hand; the hooks inside a Kiro app.

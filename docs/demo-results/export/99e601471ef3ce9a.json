@@ -1,0 +1,30 @@
+{
+  "incident": {
+    "incident_id": "99e601471ef3ce9a",
+    "source": "watcher",
+    "reason": "ImagePullBackOff",
+    "namespace": "chaos-badimage",
+    "workload": {
+      "kind": "Deployment",
+      "name": "badimage-demo"
+    },
+    "pod": "badimage-demo-67d8f7bfbf-xkbps",
+    "container": "web",
+    "message": "ImagePullBackOff: Back-off pulling image \"public.ecr.aws/docker/library/python:0.0.0-does-not-exist\": ErrImagePull: rpc error: code = NotFound desc = failed to pull and unpack image \"public.ecr.aws/docker/library/python:0.0.0-does-not-exist\": failed to resolve reference \"public.ecr.aws/docker/library/python:0.0.0-does-not-exist\": public.ecr.aws/docker/library/python:0.0.0-does-not-exist: not found",
+    "observed_at": "2026-11-18T09:00:11.195255Z",
+    "depends_on": [],
+    "similar_incidents": []
+  },
+  "status": "correlated",
+  "classification": null,
+  "investigation": null,
+  "delegation": null,
+  "usage_by_agent": {},
+  "error": null,
+  "related_incidents": [],
+  "related_to": "1384b03838aa51eb",
+  "similar_incidents": [],
+  "approval": null,
+  "created_at": "2026-11-18T09:00:11.202171Z",
+  "updated_at": "2026-11-18T09:00:11.202171Z"
+}

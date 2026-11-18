@@ -181,9 +181,9 @@ def totals(record: dict) -> tuple[int, int, float]:
             sum(u["cost_usd"] for u in usage))
 
 
-def test_readme_cost_table_covers_all_three_saved_incidents() -> None:
+def test_readme_cost_table_covers_all_five_saved_incidents() -> None:
     for name in ("grafana-oom-real.json", "netpol-first-run-real.json",
-                 "netpol-second-run-real.json"):
+                 "netpol-second-run-real.json", "badimage-real.json", "pvc-real.json"):
         tin, tout, cost = totals(demo_result(name))
         row = f"| {tin:,} | {tout:,} | ${cost:.4f} |"
         assert row in README, name
@@ -214,6 +214,50 @@ def test_readme_learning_loop_claims_match_the_saved_runs() -> None:
     gap = (datetime.fromisoformat(second["created_at"].replace("Z", "+00:00"))
            - datetime.fromisoformat(first["created_at"].replace("Z", "+00:00")))
     assert round(gap.total_seconds() / 60) == 14 and "14 minutes later" in README
+
+
+def test_readme_badimage_and_pvc_rows_match_the_saved_records() -> None:
+    from datetime import datetime
+
+    def parse(text: str) -> datetime:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+
+    for name, category, proposed in (("badimage-real.json", "deploy_rollout", "python:3.12-slim"),
+                                     ("pvc-real.json", "storage", "gp2")):
+        record = demo_result(name)
+        assert record["status"] == "awaiting_approval" and record["approval"] is None
+        assert record["classification"]["category"] == category
+        assert record["classification"]["confidence"] == "high"
+        assert record["investigation"]["outcome"] == "action_required"
+        assert record["incident"]["source"] == "watcher"
+        evidence = len(record["investigation"]["diagnosis"]["evidence"])
+        seconds = round((parse(record["updated_at"]) - parse(record["created_at"]))
+                        .total_seconds())
+        assert (f"classified `{category}` (high), {evidence} pieces of evidence, "
+                f"`awaiting_approval` {seconds} s after detection") in README, name
+        assert proposed in record["investigation"]["proposal"]["proposed"]
+        assert f"`{proposed}`" in README or f"`{proposed}`," in README
+    assert "Not approved." in README
+
+
+def test_the_raw_export_holds_every_incident_that_the_docs_cite() -> None:
+    export = REPO / "docs" / "demo-results" / "export"
+    listing = json.loads((export / "incidents-list.json").read_text())
+    ids = {r["incident"]["incident_id"] for r in listing}
+    assert {"2e4fd60547e332f6", "009de3634d72afbc", "1384b03838aa51eb",
+            "af99b9217f60475f"} <= ids
+    for iid in ids:
+        record = json.loads((export / f"{iid}.json").read_text())
+        assert record["incident"]["incident_id"] == iid
+    # The correlated signals point at an incident that is in the export.
+    for record in listing:
+        if record["related_to"]:
+            assert record["related_to"] in ids
+    for name, iid in (("badimage-real.json", "1384b03838aa51eb"),
+                      ("pvc-real.json", "af99b9217f60475f"),
+                      ("netpol-first-run-real.json", "2e4fd60547e332f6"),
+                      ("netpol-second-run-real.json", "009de3634d72afbc")):
+        assert demo_result(name) == json.loads((export / f"{iid}.json").read_text())
 
 
 def test_readme_says_what_the_single_observation_does_not_show() -> None:

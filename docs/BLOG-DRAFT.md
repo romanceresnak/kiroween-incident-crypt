@@ -68,9 +68,10 @@ find it in the repo.
 
 ## What an incident costs
 
-Every Bedrock call is counted by agent and by incident and shown in Grafana. Three real
+Every Bedrock call is counted by agent and by incident and shown in Grafana. Five real
 incidents so far: a Grafana out-of-memory that the crew diagnosed on the same cluster ($0.1104),
-and the two network runs ($0.0790 and $0.1052). The prices are the ones I typed into the chart,
+the two network runs ($0.0790 and $0.1052), a bad image tag ($0.0609) and a missing
+StorageClass ($0.0508). The prices are the ones I typed into the chart,
 and I have not checked them against the AWS price list.
 
 ## How Kiro fit in
@@ -122,8 +123,8 @@ app, so I cannot tell you how they behave there.
 ## What is not finished
 
 - Approved changes are recorded, not applied.
-- `badimage` and `pvc`, two of the four demo scenarios, have not been re-run since later
-  changes to the watcher.
+- The `badimage` and `pvc` scenarios were re-run after the watcher changes and stopped at
+  `awaiting_approval`. I did not approve them, so I do not know that their proposals work.
 - The similarity threshold of 0.5 is a first guess.
 - Incident state is in memory, so a restart of the orchestrator loses it.
 

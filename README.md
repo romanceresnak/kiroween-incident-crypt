@@ -176,7 +176,7 @@ Haiku 1.10 in and 5.50 out, Sonnet 3.30 in and 16.50 out). Those prices were typ
 and have not been checked against the AWS price list. The incident predates the Archivist, so
 it carries no retrieval step. Other incidents will differ: a longer investigation costs more.
 
-Three real incidents so far, from the saved records in
+Five real incidents so far, from the saved records in
 [`docs/demo-results`](docs/demo-results/):
 
 | Incident | Specialist | Input tokens | Output tokens | Cost |
@@ -184,6 +184,8 @@ Three real incidents so far, from the saved records in
 | Grafana OOM (submitted by hand) | cpu-memory | 25,223 | 2,202 | $0.1104 |
 | NetworkPolicy, run 1 | network | 19,883 | 1,536 | $0.0790 |
 | NetworkPolicy, run 2 | network | 27,440 | 1,738 | $0.1052 |
+| Bad image tag (`chaos/badimage`) | deploy-rollout | 14,199 | 1,679 | $0.0609 |
+| Missing StorageClass (`chaos/pvc`) | storage | 12,753 | 1,243 | $0.0508 |
 
 The cost is exported as Prometheus metrics labelled by agent and incident, and shown in the
 Grafana dashboard "Kiroween Incident Crypt". The AWS Budget defaults to 120 USD a month.
@@ -239,8 +241,8 @@ points at the cluster `kiroween-prod`. Run `down` afterwards.
 |---|---|---|---|
 | `chaos/oom` | A container that exceeds its memory limit | Vampire | Not recorded in the repository. |
 | `chaos/netpol` | A NetworkPolicy lets only `app: netpol-trusted` reach the server; the client is `app: netpol-client` | Spider | Carried through approval twice. Both proposed `spec.ingress[0].from[0].podSelector.matchLabels.app` from `netpol-trusted` to `netpol-client`: pull request [#2](https://github.com/romanceresnak/kiroween-incident-crypt/pull/2) (merged) and [#3](https://github.com/romanceresnak/kiroween-incident-crypt/pull/3). In run 2 the learned postmortem from run 1 was the top similar incident. |
-| `chaos/badimage` | A Deployment updated to an image tag that does not exist (revision 1 still works) | Zombie | Ran live on 17 Nov, before the watcher changes; not re-run since. |
-| `chaos/pvc` | A PVC that names a missing StorageClass, and a Deployment that mounts it | Ghost | Ran live on 17 Nov, before the watcher changes; not re-run since. |
+| `chaos/badimage` | A Deployment updated to an image tag that does not exist (revision 1 still works) | Zombie | Re-run on 18 Nov after the hardening changes: classified `deploy_rollout` (high), 7 pieces of evidence, `awaiting_approval` 15 s after detection. It proposed the image `python:3.12-slim`, the revision that worked, and the second signal (`ImagePullBackOff`) was correlated to it. Not approved. |
+| `chaos/pvc` | A PVC that names a missing StorageClass, and a Deployment that mounts it | Ghost | Re-run on 18 Nov after the hardening changes: classified `storage` (high), 6 pieces of evidence, `awaiting_approval` 11 s after detection. It proposed `storageClassName` `gp2`, the only StorageClass in the cluster; the `FailedScheduling` signal was correlated to it. Not approved. |
 
 For `netpol`, the `Unhealthy` event appears about 60 to 70 seconds after `up`. Then open the
 UI, read the evidence, click Approve and open the pull request. The step-by-step recording
@@ -307,8 +309,9 @@ Not verified:
   a useful one.
 - That a rendered patch applies cleanly (`kustomize build`), and the pull request against a
   protected branch (a protected `main` may block it).
-- The `badimage` and `pvc` scenarios after the latest watcher changes, and the `gp2` fix for
-  `pvc` on Kubernetes 1.37.
+- That the `badimage` and `pvc` proposals fix anything: both were investigated and left
+  unapproved, so the image change and the `gp2` StorageClass (in-tree provisioner, on
+  Kubernetes 1.37) were never applied.
 - The minimum similarity score (0.5) is a first guess; scores seen ranged from 0.64 to 0.73,
   and an unrelated postmortem once scored just above the right one.
 - Model prices (see above) and the cost of anything but the one incident shown.

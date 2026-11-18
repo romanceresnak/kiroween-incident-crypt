@@ -54,7 +54,8 @@ Real results, saved in `docs/demo-results/`:
   against 0.708 and 0.683 for the seeded ones).
 - A real Grafana out-of-memory on the same cluster, diagnosed by the Vampire with 13 pieces of
   evidence.
-- Cost per incident, from Bedrock token counts: $0.1104, $0.0790 and $0.1052.
+- Cost per incident, from Bedrock token counts, for five real incidents: $0.1104, $0.0790,
+  $0.1052, $0.0609 and $0.0508.
 
 What it does not do: merging the pull request does not change the cluster yet. Nothing syncs
 `gitops/remediations/`. The pull request is the audit trail of an approved change.
@@ -120,7 +121,8 @@ The system itself:
 - Check whether a learned fix worked before it is trusted, and tune the 0.5 similarity
   threshold with more incidents.
 - Add login to the approval page, and persist incident state outside memory.
-- Re-run the image and storage scenarios after the latest watcher changes.
+- Approve the image and storage proposals and check that they fix the cluster; both scenarios
+  stopped at `awaiting_approval` and were left unapproved.
 
 ## Category
 

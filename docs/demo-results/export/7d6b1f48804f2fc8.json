@@ -1,0 +1,35 @@
+{
+  "incident": {
+    "incident_id": "7d6b1f48804f2fc8",
+    "source": "watcher",
+    "reason": "FailedScheduling",
+    "namespace": "chaos-pvc",
+    "workload": {
+      "kind": "Deployment",
+      "name": "pvc-demo"
+    },
+    "pod": "pvc-demo-b864ddb8f-5sqrm",
+    "container": null,
+    "message": "FailedScheduling: 0/2 nodes are available: pod has unbound immediate PersistentVolumeClaims. not found",
+    "observed_at": "2026-11-18T09:01:25.606318Z",
+    "depends_on": [
+      {
+        "kind": "PersistentVolumeClaim",
+        "name": "data"
+      }
+    ],
+    "similar_incidents": []
+  },
+  "status": "correlated",
+  "classification": null,
+  "investigation": null,
+  "delegation": null,
+  "usage_by_agent": {},
+  "error": null,
+  "related_incidents": [],
+  "related_to": "af99b9217f60475f",
+  "similar_incidents": [],
+  "approval": null,
+  "created_at": "2026-11-18T09:01:25.608423Z",
+  "updated_at": "2026-11-18T09:01:25.608423Z"
+}

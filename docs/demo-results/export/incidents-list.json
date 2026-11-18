@@ -1,0 +1,645 @@
+[
+  {
+    "incident": {
+      "incident_id": "7d6b1f48804f2fc8",
+      "source": "watcher",
+      "reason": "FailedScheduling",
+      "namespace": "chaos-pvc",
+      "workload": {
+        "kind": "Deployment",
+        "name": "pvc-demo"
+      },
+      "pod": "pvc-demo-b864ddb8f-5sqrm",
+      "container": null,
+      "message": "FailedScheduling: 0/2 nodes are available: pod has unbound immediate PersistentVolumeClaims. not found",
+      "observed_at": "2026-11-18T09:01:25.606318Z",
+      "depends_on": [
+        {
+          "kind": "PersistentVolumeClaim",
+          "name": "data"
+        }
+      ],
+      "similar_incidents": []
+    },
+    "status": "correlated",
+    "classification": null,
+    "investigation": null,
+    "delegation": null,
+    "usage_by_agent": {},
+    "error": null,
+    "related_incidents": [],
+    "related_to": "af99b9217f60475f",
+    "similar_incidents": [],
+    "approval": null,
+    "created_at": "2026-11-18T09:01:25.608423Z",
+    "updated_at": "2026-11-18T09:01:25.608423Z"
+  },
+  {
+    "incident": {
+      "incident_id": "af99b9217f60475f",
+      "source": "watcher",
+      "reason": "ProvisioningFailed",
+      "namespace": "chaos-pvc",
+      "workload": {
+        "kind": "PersistentVolumeClaim",
+        "name": "data"
+      },
+      "pod": null,
+      "container": null,
+      "message": "ProvisioningFailed: storageclass.storage.k8s.io \"does-not-exist\" not found",
+      "observed_at": "2026-11-18T09:01:25.441024Z",
+      "depends_on": [],
+      "similar_incidents": []
+    },
+    "status": "awaiting_approval",
+    "classification": {
+      "category": "storage",
+      "rationale": "PersistentVolumeClaim provisioning failed because the referenced storageclass does not exist, preventing volume binding.",
+      "confidence": "high"
+    },
+    "investigation": {
+      "outcome": "action_required",
+      "diagnosis": {
+        "root_cause": "PVC 'data' in namespace 'chaos-pvc' references StorageClass 'does-not-exist', which does not exist in the cluster. The only available StorageClass is 'gp2'. Because the StorageClass cannot be found, the EBS CSI provisioner cannot create the backing volume, leaving the PVC permanently stuck in Pending.",
+        "confidence": "high",
+        "evidence": [
+          {
+            "tool": "get_pvc",
+            "field": "storageClassName",
+            "value": "does-not-exist"
+          },
+          {
+            "tool": "get_pvc",
+            "field": "phase",
+            "value": "Pending"
+          },
+          {
+            "tool": "get_pvc",
+            "field": "volumeName",
+            "value": "null"
+          },
+          {
+            "tool": "list_events",
+            "field": "message (reason: ProvisioningFailed)",
+            "value": "storageclass.storage.k8s.io \"does-not-exist\" not found"
+          },
+          {
+            "tool": "list_storage_classes",
+            "field": "name (only entry)",
+            "value": "gp2"
+          },
+          {
+            "tool": "list_storage_classes",
+            "field": "default",
+            "value": "false"
+          }
+        ]
+      },
+      "proposal": {
+        "action": "set_field",
+        "target": {
+          "namespace": "chaos-pvc",
+          "kind": "PersistentVolumeClaim",
+          "name": "data",
+          "container": null
+        },
+        "field": "spec.storageClassName",
+        "current": "does-not-exist",
+        "proposed": "gp2",
+        "rationale": "The PVC references a non-existent StorageClass. The only StorageClass present in the cluster is 'gp2' (AWS EBS in-tree provisioner). Changing storageClassName to 'gp2' will allow provisioning to proceed. Because spec.storageClassName is immutable, the PVC must be deleted and recreated with the corrected value.",
+        "risk": "spec.storageClassName is an immutable field \u2014 the PVC must be deleted and recreated. Since the PVC is still Pending and has never bound (volumeName is null), no data has ever been written to it and none will be lost. Ensure no workload is actively waiting on this PVC before deleting it, or be prepared for a brief scheduling disruption.",
+        "requires_approval": true,
+        "delivery": "Apply as a pull request against /gitops after a human approves it. The agent does not change the cluster."
+      },
+      "usage": {
+        "input_tokens": 8560,
+        "output_tokens": 1012,
+        "cost_usd": 0.044946
+      },
+      "validation_notes": []
+    },
+    "delegation": "tool",
+    "usage_by_agent": {
+      "orchestrator": {
+        "input_tokens": 4193,
+        "output_tokens": 231,
+        "cost_usd": 0.0058828
+      },
+      "storage": {
+        "input_tokens": 8560,
+        "output_tokens": 1012,
+        "cost_usd": 0.044946
+      }
+    },
+    "error": null,
+    "related_incidents": [
+      {
+        "incident_id": "7d6b1f48804f2fc8",
+        "reason": "FailedScheduling",
+        "workload": {
+          "kind": "Deployment",
+          "name": "pvc-demo"
+        },
+        "pod": "pvc-demo-b864ddb8f-5sqrm",
+        "match": "depends_on",
+        "observed_at": "2026-11-18T09:01:25.606318Z"
+      }
+    ],
+    "related_to": null,
+    "similar_incidents": [
+      {
+        "title": "PM-2026-085: analytics-cache stuck Pending on a StorageClass that did not exist",
+        "category": "storage",
+        "score": 0.8374966084957123,
+        "fix": "Changed spec.storageClassName of the PVC to a StorageClass that exists in the cluster and recreated the claim (the field is immutable; the claim had never bound, so no data was lost). The pod's FailedScheduling had the same cause.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/07-pvc-missing-storageclass.md",
+        "excerpt": "This cluster's StorageClasses were `gp2` (in-tree) and `gp3` (EBS CSI); there was no `fast-ssd` and no default class. `storageClassName` cannot be changed on an existing claim, so the claim had to be recreated with the right class. ## Evidence - PVC events: `ProvisioningFailed: storageclass.storage.k8s.io \"fast-ssd\" not found`. - PVC `status.phase: Pending`, no `volumeName`. - Pod events: `0/3 nod",
+        "origin": "seeded"
+      },
+      {
+        "title": "PM-2026-091: node disk pressure evicted pods after container logs filled the root volume",
+        "category": "storage",
+        "score": 0.6271544694900513,
+        "fix": "Turned off the debug logging, set resources.limits.ephemeral-storage 2Gi and an emptyDir sizeLimit of 1Gi on the noisy container, and replaced the affected node. Clue: evictions of unrelated pods on one node with DiskPressure=True.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/08-node-disk-pressure.md",
+        "excerpt": "`thumbnailer` had no `ephemeral-storage` limit and no `sizeLimit` on its scratch `emptyDir`, so nothing stopped one pod from filling the disk. ## Evidence - Node condition `DiskPressure=True`; taint `node.kubernetes.io/disk-pressure`. - Kubelet events: `The node was low on resource: ephemeral-storage`, `Evicted` pods. - `thumbnailer` scratch `emptyDir` at 11 GiB; its container log at 6 GiB. - Othe",
+        "origin": "seeded"
+      }
+    ],
+    "approval": null,
+    "created_at": "2026-11-18T09:01:25.444692Z",
+    "updated_at": "2026-11-18T09:01:36.698926Z"
+  },
+  {
+    "incident": {
+      "incident_id": "99e601471ef3ce9a",
+      "source": "watcher",
+      "reason": "ImagePullBackOff",
+      "namespace": "chaos-badimage",
+      "workload": {
+        "kind": "Deployment",
+        "name": "badimage-demo"
+      },
+      "pod": "badimage-demo-67d8f7bfbf-xkbps",
+      "container": "web",
+      "message": "ImagePullBackOff: Back-off pulling image \"public.ecr.aws/docker/library/python:0.0.0-does-not-exist\": ErrImagePull: rpc error: code = NotFound desc = failed to pull and unpack image \"public.ecr.aws/docker/library/python:0.0.0-does-not-exist\": failed to resolve reference \"public.ecr.aws/docker/library/python:0.0.0-does-not-exist\": public.ecr.aws/docker/library/python:0.0.0-does-not-exist: not found",
+      "observed_at": "2026-11-18T09:00:11.195255Z",
+      "depends_on": [],
+      "similar_incidents": []
+    },
+    "status": "correlated",
+    "classification": null,
+    "investigation": null,
+    "delegation": null,
+    "usage_by_agent": {},
+    "error": null,
+    "related_incidents": [],
+    "related_to": "1384b03838aa51eb",
+    "similar_incidents": [],
+    "approval": null,
+    "created_at": "2026-11-18T09:00:11.202171Z",
+    "updated_at": "2026-11-18T09:00:11.202171Z"
+  },
+  {
+    "incident": {
+      "incident_id": "1384b03838aa51eb",
+      "source": "watcher",
+      "reason": "ErrImagePull",
+      "namespace": "chaos-badimage",
+      "workload": {
+        "kind": "Deployment",
+        "name": "badimage-demo"
+      },
+      "pod": "badimage-demo-67d8f7bfbf-xkbps",
+      "container": "web",
+      "message": "ErrImagePull: rpc error: code = NotFound desc = failed to pull and unpack image \"public.ecr.aws/docker/library/python:0.0.0-does-not-exist\": failed to resolve reference \"public.ecr.aws/docker/library/python:0.0.0-does-not-exist\": public.ecr.aws/docker/library/python:0.0.0-does-not-exist: not found",
+      "observed_at": "2026-11-18T09:00:00.413177Z",
+      "depends_on": [],
+      "similar_incidents": []
+    },
+    "status": "awaiting_approval",
+    "classification": {
+      "category": "deploy_rollout",
+      "rationale": "The container image `python:0.0.0-does-not-exist` cannot be pulled from the registry, preventing the pod from starting.",
+      "confidence": "high"
+    },
+    "investigation": {
+      "outcome": "action_required",
+      "diagnosis": {
+        "root_cause": "The Deployment badimage-demo was rolled to revision 2 with a non-existent container image tag (python:0.0.0-does-not-exist). The ECR registry returns NotFound / manifest unknown for this tag, so Kubernetes cannot pull the image and the new pod is stuck in ErrImagePull / ImagePullBackOff. The previous revision (1) used python:3.12-slim which was ready and is still available in ReplicaSet badimage-demo-5c588d65d7.",
+        "confidence": "high",
+        "evidence": [
+          {
+            "tool": "get_pod",
+            "field": "containerStatuses[web].state.reason",
+            "value": "ErrImagePull"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containerStatuses[web].state.message",
+            "value": "rpc error: code = NotFound desc = failed to pull and unpack image \"public.ecr.aws/docker/library/python:0.0.0-does-not-exist\": failed to resolve reference \"public.ecr.aws/docker/library/python:0.0.0-does-not-exist\": public.ecr.aws/docker/library/python:0.0.0-does-not-exist: not found"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containers[web].image",
+            "value": "public.ecr.aws/docker/library/python:0.0.0-does-not-exist"
+          },
+          {
+            "tool": "list_events",
+            "field": "Warning/Failed message",
+            "value": "Failed to pull image \"public.ecr.aws/docker/library/python:0.0.0-does-not-exist\": rpc error: code = NotFound ..."
+          },
+          {
+            "tool": "list_events",
+            "field": "Warning/Failed message",
+            "value": "Error: ImagePullBackOff"
+          },
+          {
+            "tool": "get_rollout_history",
+            "field": "revision 2 images.web / ready",
+            "value": "public.ecr.aws/docker/library/python:0.0.0-does-not-exist / ready: 0"
+          },
+          {
+            "tool": "get_rollout_history",
+            "field": "revision 1 images.web / ready",
+            "value": "public.ecr.aws/docker/library/python:3.12-slim / ready: 1"
+          }
+        ]
+      },
+      "proposal": {
+        "action": "set_field",
+        "target": {
+          "namespace": "chaos-badimage",
+          "kind": "Deployment",
+          "name": "badimage-demo",
+          "container": "web"
+        },
+        "field": "spec.template.spec.containers[name=web].image",
+        "current": "public.ecr.aws/docker/library/python:0.0.0-does-not-exist",
+        "proposed": "public.ecr.aws/docker/library/python:3.12-slim",
+        "rationale": "Revision 1 used python:3.12-slim and was ready (1/1). Rolling the image back to that tag will immediately unblock the Deployment. Once the correct new tag is built and pushed to the registry, a fresh rollout can be attempted.",
+        "risk": "Rolls back to the previously running image (revision 1). Any code changes introduced in revision 2 will not be served until the correct image tag is pushed and the Deployment is updated again. No data loss is expected.",
+        "requires_approval": true,
+        "delivery": "Apply as a pull request against /gitops after a human approves it. The agent does not change the cluster."
+      },
+      "usage": {
+        "input_tokens": 9755,
+        "output_tokens": 1328,
+        "cost_usd": 0.0541035
+      },
+      "validation_notes": []
+    },
+    "delegation": "tool",
+    "usage_by_agent": {
+      "orchestrator": {
+        "input_tokens": 4444,
+        "output_tokens": 351,
+        "cost_usd": 0.006818899999999999
+      },
+      "deploy-rollout": {
+        "input_tokens": 9755,
+        "output_tokens": 1328,
+        "cost_usd": 0.0541035
+      }
+    },
+    "error": null,
+    "related_incidents": [
+      {
+        "incident_id": "99e601471ef3ce9a",
+        "reason": "ImagePullBackOff",
+        "workload": {
+          "kind": "Deployment",
+          "name": "badimage-demo"
+        },
+        "pod": "badimage-demo-67d8f7bfbf-xkbps",
+        "match": "same_workload",
+        "observed_at": "2026-11-18T09:00:11.195255Z"
+      }
+    ],
+    "related_to": null,
+    "similar_incidents": [
+      {
+        "title": "PM-2026-072: search-indexer rollout stuck on a tag that was never pushed",
+        "category": "deploy_rollout",
+        "score": 0.7152050137519836,
+        "fix": "Rolled the container image back to the image of the last ReplicaSet revision that was Ready (indexer:2.13.2, revision 41) via a GitOps pull request, then rebuilt and pushed the missing tag before releasing again.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/05-imagepullbackoff-search-indexer.md",
+        "excerpt": "The registry returned `manifest unknown` for the new tag. Kubernetes behaved as designed: `maxUnavailable: 0` kept the old pod running. ## Evidence - Pod events: `Failed to pull image \"...indexer:2.14.0\": not found`, then `Back-off pulling image`. - Container state: `waiting.reason: ImagePullBackOff`. - ReplicaSet history: revision 41 image `indexer:2.13.2`, ready 1/1; revision 42 image `indexer:2",
+        "origin": "seeded"
+      },
+      {
+        "title": "PM-2026-079: notification-gateway crash loop after a ConfigMap key rename",
+        "category": "deploy_rollout",
+        "score": 0.5948076844215393,
+        "fix": "Restored the required key SMTP_HOST in the ConfigMap the Deployment loads with envFrom (keeping the new key too) and restarted the Deployment. Clue: exit code 1 with a config error in the previous container log, normal memory and CPU.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/06-crashloop-bad-configmap.md",
+        "excerpt": "The rename was valid YAML and passed review, but nothing checked that the application still found the keys it requires. A second Deployment that used `valueFrom.configMapKeyRef` on the old key failed earlier and louder, with `CreateContainerConfigError: couldn't find key SMTP_HOST in ConfigMap notify/gateway-config`. ## Evidence - Previous container log: `FATAL config: SMTP_HOST is required` then ",
+        "origin": "seeded"
+      }
+    ],
+    "approval": null,
+    "created_at": "2026-11-18T09:00:00.418421Z",
+    "updated_at": "2026-11-18T09:00:15.779517Z"
+  },
+  {
+    "incident": {
+      "incident_id": "009de3634d72afbc",
+      "source": "watcher",
+      "reason": "Unhealthy",
+      "namespace": "chaos-netpol",
+      "workload": {
+        "kind": "Deployment",
+        "name": "netpol-client"
+      },
+      "pod": "netpol-client-66f84c6b55-z9kx7",
+      "container": "client",
+      "message": "Unhealthy: Readiness probe failed: wget: download timed out\n",
+      "observed_at": "2026-11-18T08:07:03.751341Z",
+      "depends_on": [],
+      "similar_incidents": []
+    },
+    "status": "approved",
+    "classification": {
+      "category": "network",
+      "rationale": "Readiness probe timeout on wget download indicates a network connectivity or service reachability problem between the client pod and its dependency.",
+      "confidence": "high"
+    },
+    "investigation": {
+      "outcome": "action_required",
+      "diagnosis": {
+        "root_cause": "The NetworkPolicy 'allow-trusted' in namespace 'chaos-netpol' selects pods with label app=netpol-server as the target and only permits ingress from pods matching app=netpol-trusted. The client pod (netpol-client-66f84c6b55-z9kx7) carries label app=netpol-client, which does not match that podSelector. All TCP traffic from the client to netpol-server on port 8080 is silently dropped by the CNI network policy agent, causing the readiness probe's wget to time out.",
+        "confidence": "high",
+        "evidence": [
+          {
+            "tool": "list_network_policies",
+            "field": "ingress[0].from[0].podSelector.matchLabels.app",
+            "value": "netpol-trusted"
+          },
+          {
+            "tool": "list_network_policies",
+            "field": "podSelector.matchLabels.app",
+            "value": "netpol-server"
+          },
+          {
+            "tool": "get_pod",
+            "field": "labels.app",
+            "value": "netpol-client"
+          },
+          {
+            "tool": "list_events",
+            "field": "message (count=8)",
+            "value": "Readiness probe failed: wget: download timed out"
+          },
+          {
+            "tool": "get_endpoints",
+            "field": "endpoints[0].ready",
+            "value": "true"
+          },
+          {
+            "tool": "get_pod",
+            "field": "containerStatuses[0].ready (netpol-server-568c86dd49-d9czj)",
+            "value": "true"
+          }
+        ]
+      },
+      "proposal": {
+        "action": "set_field",
+        "target": {
+          "namespace": "chaos-netpol",
+          "kind": "NetworkPolicy",
+          "name": "allow-trusted",
+          "container": null
+        },
+        "field": "spec.ingress[0].from[0].podSelector.matchLabels.app",
+        "current": "netpol-trusted",
+        "proposed": "netpol-client",
+        "rationale": "The NetworkPolicy's ingress rule currently admits only pods labelled app=netpol-trusted. The actual client pod carries app=netpol-client. Updating the matchLabels value to netpol-client will allow the client's traffic to reach netpol-server on port 8080, resolving the probe timeout. The server endpoint is already ready; this is the sole blocker.",
+        "risk": "Low. The change narrows the allow-list to the actual client workload. No other pod in the namespace carries app=netpol-client, so the blast radius is limited to allowing only the intended client access.",
+        "requires_approval": true,
+        "delivery": "Apply as a pull request against /gitops after a human approves it. The agent does not change the cluster."
+      },
+      "usage": {
+        "input_tokens": 22706,
+        "output_tokens": 1407,
+        "cost_usd": 0.0981453
+      },
+      "validation_notes": []
+    },
+    "delegation": "tool",
+    "usage_by_agent": {
+      "orchestrator": {
+        "input_tokens": 4734,
+        "output_tokens": 331,
+        "cost_usd": 0.007027900000000001
+      },
+      "network": {
+        "input_tokens": 22706,
+        "output_tokens": 1407,
+        "cost_usd": 0.0981453
+      }
+    },
+    "error": null,
+    "related_incidents": [],
+    "related_to": null,
+    "similar_incidents": [
+      {
+        "title": "LRN-2e4fd60547e332f6: Unhealthy on Deployment netpol-client",
+        "category": "network",
+        "score": 0.8455390334129333,
+        "fix": "Approved fix (not yet confirmed): set spec.ingress[0].from[0].podSelector.matchLabels.app on NetworkPolicy/allow-trusted from netpol-trusted to netpol-client.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/learned/2e4fd60547e332f6.md",
+        "excerpt": "Message seen: Unhealthy: Readiness probe failed: wget: download timed out ## Impact Not recorded. This postmortem was written automatically when the incident was approved; no impact was measured. ## Root cause The NetworkPolicy 'allow-trusted' in namespace 'chaos-netpol' restricts ingress to pods with label app=netpol-server, permitting traffic only from pods matching app=netpol-trusted. The clien",
+        "origin": "learned"
+      },
+      {
+        "title": "PM-2026-058: NetworkPolicy blocked the billing worker from the ledger service",
+        "category": "network",
+        "score": 0.7078257501125336,
+        "fix": "Changed spec.ingress[0].from[0].podSelector.matchLabels.app of the server's NetworkPolicy from the old client label to the client's current label, via a GitOps pull request. Clue: client probe timeouts while the server's endpoints are all ready=true.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/03-networkpolicy-blocks-invoice-worker.md",
+        "excerpt": "The label rename on the worker's pod template was reviewed as a cosmetic change; nobody checked which NetworkPolicies selected the old label. With the VPC CNI network policy agent enforcing policies, the packets were dropped silently, so the client saw timeouts, not connection refused. ## Evidence - Client pod events: `Readiness probe failed: wget: download timed out` every 10 s. - `ledger` Endpoi",
+        "origin": "seeded"
+      },
+      {
+        "title": "PM-2026-066: CoreDNS forwarding loop broke name resolution cluster-wide",
+        "category": "network",
+        "score": 0.6832879185676575,
+        "fix": "Reverted the forward block in the kube-system/coredns ConfigMap that created a resolver loop (plugin/loop: Loop detected) and restarted CoreDNS. Clue: many unrelated workloads fail at once with 'no such host'.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/04-coredns-forwarding-loop.md",
+        "excerpt": ".\"`. - `kubectl -n kube-system get pods -l k8s-app=kube-dns`: CrashLoopBackOff on both replicas. - Application events across namespaces: `Readiness probe failed: dial tcp: lookup orders on 172.20.0.10:53: no such host`. - `kube-dns` EndpointSlice had zero ready endpoints. ## Fix Reverted the `forward corp.internal 10.40.0.2` block in the `coredns` ConfigMap through the GitOps repo and restarted th",
+        "origin": "seeded"
+      }
+    ],
+    "approval": {
+      "decision": "approved",
+      "by": "Roman Ceresnak",
+      "at": "2026-11-18T08:07:41.071878Z",
+      "comment": "Agreed",
+      "pull_request": {
+        "mode": "github",
+        "title": "fix(chaos-netpol): spec.ingress[0].from[0].podSelector.matchLabels.app on NetworkPolicy/allow-trusted (incident 009de3634d72afbc)",
+        "branch": "remediation/009de3634d72afbc",
+        "path": "gitops/remediations/chaos-netpol/networkpolicy-allow-trusted.yaml",
+        "content": "# Approved remediation for incident 009de3634d72afbc (Unhealthy).\n# Approved by Roman Ceresnak at 2026-11-18T08:07:41.071878+00:00.\n# NetworkPolicy/allow-trusted spec.ingress[0].from[0].podSelector.matchLabels.app: 'netpol-trusted' -> 'netpol-client'\n# Kustomize patch entry (RFC 6902 JSON patch).\ntarget:\n  group: networking.k8s.io\n  version: v1\n  kind: NetworkPolicy\n  name: allow-trusted\n  namespace: chaos-netpol\npatch: \"- op: test\\n  path: /spec/ingress/0/from/0/podSelector/matchLabels/app\\n \\\n  \\ value: netpol-trusted\\n- op: replace\\n  path: /spec/ingress/0/from/0/podSelector/matchLabels/app\\n\\\n  \\  value: netpol-client\\n\"\n",
+        "body": "Approved remediation for incident `009de3634d72afbc`, approved by **Roman Ceresnak** at 2026-11-18T08:07:41.071878+00:00.\n\n## Incident\n- Signal: `Unhealthy` on Deployment `chaos-netpol/netpol-client`\n- Category: `network`\n- Message: Unhealthy: Readiness probe failed: wget: download timed out\n\n\n## Diagnosis\nThe NetworkPolicy 'allow-trusted' in namespace 'chaos-netpol' selects pods with label app=netpol-server as the target and only permits ingress from pods matching app=netpol-trusted. The client pod (netpol-client-66f84c6b55-z9kx7) carries label app=netpol-client, which does not match that podSelector. All TCP traffic from the client to netpol-server on port 8080 is silently dropped by the CNI network policy agent, causing the readiness probe's wget to time out.\n\nConfidence: high\n\n## Evidence\n- `list_network_policies` ingress[0].from[0].podSelector.matchLabels.app: `netpol-trusted`\n- `list_network_policies` podSelector.matchLabels.app: `netpol-server`\n- `get_pod` labels.app: `netpol-client`\n- `list_events` message (count=8): `Readiness probe failed: wget: download timed out`\n- `get_endpoints` endpoints[0].ready: `true`\n- `get_pod` containerStatuses[0].ready (netpol-server-568c86dd49-d9czj): `true`\n\n## Change\n- `NetworkPolicy/allow-trusted` in `chaos-netpol`\n- `spec.ingress[0].from[0].podSelector.matchLabels.app`: `netpol-trusted` -> `netpol-client`\n- File: `gitops/remediations/chaos-netpol/networkpolicy-allow-trusted.yaml`\n\n## Rationale\nThe NetworkPolicy's ingress rule currently admits only pods labelled app=netpol-trusted. The actual client pod carries app=netpol-client. Updating the matchLabels value to netpol-client will allow the client's traffic to reach netpol-server on port 8080, resolving the probe timeout. The server endpoint is already ready; this is the sole blocker.\n\n## Risk\nLow. The change narrows the allow-list to the actual client workload. No other pod in the namespace carries app=netpol-client, so the blast radius is limited to allowing only the intended client access.\n\n## Similar past incidents\n- LRN-2e4fd60547e332f6: Unhealthy on Deployment netpol-client (score 0.85): Approved fix (not yet confirmed): set spec.ingress[0].from[0].podSelector.matchLabels.app on NetworkPolicy/allow-trusted from netpol-trusted to netpol-client.\n- PM-2026-058: NetworkPolicy blocked the billing worker from the ledger service (score 0.71): Changed spec.ingress[0].from[0].podSelector.matchLabels.app of the server's NetworkPolicy from the old client label to the client's current label, via a GitOps pull request. Clue: client probe timeouts while the server's endpoints are all ready=true.\n- PM-2026-066: CoreDNS forwarding loop broke name resolution cluster-wide (score 0.68): Reverted the forward block in the kube-system/coredns ConfigMap that created a resolver loop (plugin/loop: Loop detected) and restarted CoreDNS. Clue: many unrelated workloads fail at once with 'no such host'.\n\nGenerated by the Kiroween orchestrator. The agents have read-only access; this change takes effect only after this PR is reviewed and merged.\n\nApprover comment: Agreed",
+        "url": "https://github.com/romanceresnak/kiroween-incident-crypt/pull/3",
+        "error": null
+      },
+      "learning": {
+        "status": "written",
+        "key": "learned/009de3634d72afbc.md",
+        "ingestion": "started",
+        "ingestion_job_id": "013WGNC1LA",
+        "error": null
+      }
+    },
+    "created_at": "2026-11-18T08:07:03.755139Z",
+    "updated_at": "2026-11-18T08:07:45.780020Z"
+  },
+  {
+    "incident": {
+      "incident_id": "2e4fd60547e332f6",
+      "source": "watcher",
+      "reason": "Unhealthy",
+      "namespace": "chaos-netpol",
+      "workload": {
+        "kind": "Deployment",
+        "name": "netpol-client"
+      },
+      "pod": "netpol-client-66f84c6b55-nwf7g",
+      "container": "client",
+      "message": "Unhealthy: Readiness probe failed: wget: download timed out\n",
+      "observed_at": "2026-11-18T07:52:58.677456Z",
+      "depends_on": [],
+      "similar_incidents": []
+    },
+    "status": "approved",
+    "classification": {
+      "category": "network",
+      "rationale": "A readiness probe timeout during a wget download indicates a network connectivity or DNS failure preventing the container from reaching its target service.",
+      "confidence": "high"
+    },
+    "investigation": {
+      "outcome": "action_required",
+      "diagnosis": {
+        "root_cause": "The NetworkPolicy 'allow-trusted' in namespace 'chaos-netpol' restricts ingress to pods with label app=netpol-server, permitting traffic only from pods matching app=netpol-trusted. The client pod 'netpol-client-66f84c6b55-nwf7g' carries label app=netpol-client, which does not match the policy's ingress from-selector. As a result, all TCP packets from the client to the server on port 8080 are silently dropped, causing the readiness probe wget to time out. The server pod is healthy (ready=true) and its endpoint is ready, ruling out a server-side crash or misconfiguration.",
+        "confidence": "high",
+        "evidence": [
+          {
+            "tool": "list_network_policies",
+            "field": "ingress[0].from[0].podSelector.matchLabels.app",
+            "value": "netpol-trusted"
+          },
+          {
+            "tool": "get_pod",
+            "field": "labels.app",
+            "value": "netpol-client"
+          },
+          {
+            "tool": "get_endpoints",
+            "field": "endpoints[0].ready",
+            "value": "true"
+          },
+          {
+            "tool": "get_endpoints",
+            "field": "endpoints[0].pod",
+            "value": "netpol-server-568c86dd49-zznk5"
+          },
+          {
+            "tool": "list_pods",
+            "field": "netpol-server-568c86dd49-zznk5 containerStatuses[0].ready",
+            "value": "true"
+          },
+          {
+            "tool": "list_events",
+            "field": "Unhealthy message (count=8)",
+            "value": "Readiness probe failed: wget: download timed out"
+          }
+        ]
+      },
+      "proposal": {
+        "action": "set_field",
+        "target": {
+          "namespace": "chaos-netpol",
+          "kind": "NetworkPolicy",
+          "name": "allow-trusted",
+          "container": null
+        },
+        "field": "spec.ingress[0].from[0].podSelector.matchLabels.app",
+        "current": "netpol-trusted",
+        "proposed": "netpol-client",
+        "rationale": "The NetworkPolicy 'allow-trusted' only allows ingress from pods labelled app=netpol-trusted, but the client pod actually carries app=netpol-client. Changing the matchLabel to netpol-client makes the policy admit the real client, immediately unblocking the probe traffic and restoring readiness.",
+        "risk": "Low. The change narrows the set of allowed sources to the actual client workload. No other pod in the namespace carries app=netpol-client, so no unintended traffic is permitted.",
+        "requires_approval": true,
+        "delivery": "Apply as a pull request against /gitops after a human approves it. The agent does not change the cluster."
+      },
+      "usage": {
+        "input_tokens": 15656,
+        "output_tokens": 1293,
+        "cost_usd": 0.07299929999999999
+      },
+      "validation_notes": []
+    },
+    "delegation": "tool",
+    "usage_by_agent": {
+      "orchestrator": {
+        "input_tokens": 4227,
+        "output_tokens": 243,
+        "cost_usd": 0.0059862000000000005
+      },
+      "network": {
+        "input_tokens": 15656,
+        "output_tokens": 1293,
+        "cost_usd": 0.07299929999999999
+      }
+    },
+    "error": null,
+    "related_incidents": [],
+    "related_to": null,
+    "similar_incidents": [
+      {
+        "title": "PM-2026-058: NetworkPolicy blocked the billing worker from the ledger service",
+        "category": "network",
+        "score": 0.7076804041862488,
+        "fix": "Changed spec.ingress[0].from[0].podSelector.matchLabels.app of the server's NetworkPolicy from the old client label to the client's current label, via a GitOps pull request. Clue: client probe timeouts while the server's endpoints are all ready=true.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/03-networkpolicy-blocks-invoice-worker.md",
+        "excerpt": "The label rename on the worker's pod template was reviewed as a cosmetic change; nobody checked which NetworkPolicies selected the old label. With the VPC CNI network policy agent enforcing policies, the packets were dropped silently, so the client saw timeouts, not connection refused. ## Evidence - Client pod events: `Readiness probe failed: wget: download timed out` every 10 s. - `ledger` Endpoi",
+        "origin": "seeded"
+      },
+      {
+        "title": "PM-2026-066: CoreDNS forwarding loop broke name resolution cluster-wide",
+        "category": "network",
+        "score": 0.6832461357116699,
+        "fix": "Reverted the forward block in the kube-system/coredns ConfigMap that created a resolver loop (plugin/loop: Loop detected) and restarted CoreDNS. Clue: many unrelated workloads fail at once with 'no such host'.",
+        "source": "s3://kiroween-prod-postmortems-255834079310/postmortems/04-coredns-forwarding-loop.md",
+        "excerpt": ".\"`. - `kubectl -n kube-system get pods -l k8s-app=kube-dns`: CrashLoopBackOff on both replicas. - Application events across namespaces: `Readiness probe failed: dial tcp: lookup orders on 172.20.0.10:53: no such host`. - `kube-dns` EndpointSlice had zero ready endpoints. ## Fix Reverted the `forward corp.internal 10.40.0.2` block in the `coredns` ConfigMap through the GitOps repo and restarted th",
+        "origin": "seeded"
+      }
+    ],
+    "approval": {
+      "decision": "approved",
+      "by": "Roman Ceresnak",
+      "at": "2026-11-18T07:53:38.681317Z",
+      "comment": "",
+      "pull_request": {
+        "mode": "github",
+        "title": "fix(chaos-netpol): spec.ingress[0].from[0].podSelector.matchLabels.app on NetworkPolicy/allow-trusted (incident 2e4fd60547e332f6)",
+        "branch": "remediation/2e4fd60547e332f6",
+        "path": "gitops/remediations/chaos-netpol/networkpolicy-allow-trusted.yaml",
+        "content": "# Approved remediation for incident 2e4fd60547e332f6 (Unhealthy).\n# Approved by Roman Ceresnak at 2026-11-18T07:53:38.681317+00:00.\n# NetworkPolicy/allow-trusted spec.ingress[0].from[0].podSelector.matchLabels.app: 'netpol-trusted' -> 'netpol-client'\n# Kustomize patch entry (RFC 6902 JSON patch).\ntarget:\n  group: networking.k8s.io\n  version: v1\n  kind: NetworkPolicy\n  name: allow-trusted\n  namespace: chaos-netpol\npatch: \"- op: test\\n  path: /spec/ingress/0/from/0/podSelector/matchLabels/app\\n \\\n  \\ value: netpol-trusted\\n- op: replace\\n  path: /spec/ingress/0/from/0/podSelector/matchLabels/app\\n\\\n  \\  value: netpol-client\\n\"\n",
+        "body": "Approved remediation for incident `2e4fd60547e332f6`, approved by **Roman Ceresnak** at 2026-11-18T07:53:38.681317+00:00.\n\n## Incident\n- Signal: `Unhealthy` on Deployment `chaos-netpol/netpol-client`\n- Category: `network`\n- Message: Unhealthy: Readiness probe failed: wget: download timed out\n\n\n## Diagnosis\nThe NetworkPolicy 'allow-trusted' in namespace 'chaos-netpol' restricts ingress to pods with label app=netpol-server, permitting traffic only from pods matching app=netpol-trusted. The client pod 'netpol-client-66f84c6b55-nwf7g' carries label app=netpol-client, which does not match the policy's ingress from-selector. As a result, all TCP packets from the client to the server on port 8080 are silently dropped, causing the readiness probe wget to time out. The server pod is healthy (ready=true) and its endpoint is ready, ruling out a server-side crash or misconfiguration.\n\nConfidence: high\n\n## Evidence\n- `list_network_policies` ingress[0].from[0].podSelector.matchLabels.app: `netpol-trusted`\n- `get_pod` labels.app: `netpol-client`\n- `get_endpoints` endpoints[0].ready: `true`\n- `get_endpoints` endpoints[0].pod: `netpol-server-568c86dd49-zznk5`\n- `list_pods` netpol-server-568c86dd49-zznk5 containerStatuses[0].ready: `true`\n- `list_events` Unhealthy message (count=8): `Readiness probe failed: wget: download timed out`\n\n## Change\n- `NetworkPolicy/allow-trusted` in `chaos-netpol`\n- `spec.ingress[0].from[0].podSelector.matchLabels.app`: `netpol-trusted` -> `netpol-client`\n- File: `gitops/remediations/chaos-netpol/networkpolicy-allow-trusted.yaml`\n\n## Rationale\nThe NetworkPolicy 'allow-trusted' only allows ingress from pods labelled app=netpol-trusted, but the client pod actually carries app=netpol-client. Changing the matchLabel to netpol-client makes the policy admit the real client, immediately unblocking the probe traffic and restoring readiness.\n\n## Risk\nLow. The change narrows the set of allowed sources to the actual client workload. No other pod in the namespace carries app=netpol-client, so no unintended traffic is permitted.\n\n## Similar past incidents\n- PM-2026-058: NetworkPolicy blocked the billing worker from the ledger service (score 0.71): Changed spec.ingress[0].from[0].podSelector.matchLabels.app of the server's NetworkPolicy from the old client label to the client's current label, via a GitOps pull request. Clue: client probe timeouts while the server's endpoints are all ready=true.\n- PM-2026-066: CoreDNS forwarding loop broke name resolution cluster-wide (score 0.68): Reverted the forward block in the kube-system/coredns ConfigMap that created a resolver loop (plugin/loop: Loop detected) and restarted CoreDNS. Clue: many unrelated workloads fail at once with 'no such host'.\n\nGenerated by the Kiroween orchestrator. The agents have read-only access; this change takes effect only after this PR is reviewed and merged.",
+        "url": "https://github.com/romanceresnak/kiroween-incident-crypt/pull/2",
+        "error": null
+      },
+      "learning": {
+        "status": "written",
+        "key": "learned/2e4fd60547e332f6.md",
+        "ingestion": "started",
+        "ingestion_job_id": "VRU2UILOJC",
+        "error": null
+      }
+    },
+    "created_at": "2026-11-18T07:52:58.684539Z",
+    "updated_at": "2026-11-18T07:53:44.003203Z"
+  }
+]
