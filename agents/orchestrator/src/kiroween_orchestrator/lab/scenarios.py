@@ -39,6 +39,8 @@ class Scenario:
     breaks: str  # plain words for someone who has never seen Kubernetes
     signals: tuple[str, ...]  # what the watcher should report
     phases: tuple[Phase, ...]
+    # True when the crew does not yet answer this one reliably. It stays runnable; the card says so.
+    experimental: bool = False
 
 
 # --- builders --------------------------------------------------------------------------
@@ -329,7 +331,8 @@ def _scenarios() -> tuple[Scenario, ...]:
             "A working version is running. The update changes the health check to a page that "
             "does not exist, so the new pod never counts as ready and the rollout stalls.",
             ("Unhealthy",),
-            (p((shop_ok,)), p((shop_stuck,), wait_for=f"shop-{RUN}"))),
+            (p((shop_ok,)), p((shop_stuck,), wait_for=f"shop-{RUN}")),
+            experimental=True),
         Scenario(
             "pvc-missing-storageclass", "lab-12",
             "A disk request for a storage type that does not exist",

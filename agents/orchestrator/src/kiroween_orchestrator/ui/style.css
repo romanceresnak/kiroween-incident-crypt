@@ -180,3 +180,6 @@ footer { text-align: center; padding: 0 0 1.5rem; font-size: 0.8rem; }
 .lab-card .lab-run { margin-top: auto; align-self: flex-start; }
 .lab-crew, .lab-signals { font-size: 0.8rem; }
 .lab-run:disabled { cursor: not-allowed; }
+.badge.experimental { margin-left: 0; margin-top: 0.3rem; background: #3d2a00; color: #ffd27a; border: 1px solid #8a6200; }
+.lab-card-experimental { border-style: dashed; border-color: #8a6200; }
+.lab-card p.lab-experimental { color: #ffd27a; font-size: 0.85rem; }

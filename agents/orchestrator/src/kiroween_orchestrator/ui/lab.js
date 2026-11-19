@@ -12,6 +12,8 @@ const CREW_BY_CATEGORY = {
   cpu_memory: "Vampire", network: "Spider", deploy_rollout: "Zombie", storage: "Ghost",
 };
 const STATE_WORDS = { idle: "Ready", running: "Running", cleaning: "Cleaning up" };
+// Shown on a card the catalog marks experimental. The scenario still runs.
+const EXPERIMENTAL_NOTE = "The crew does not yet answer this one reliably.";
 const STATUS_WORDS = {
   accepted: "Detected", processing: "Being investigated", awaiting_approval: "Waiting for you",
   completed: "Finished", approved: "Approved", rejected: "Rejected", failed: "Failed",
@@ -106,13 +108,17 @@ function why() {
 function renderScenarios() {
   const list = document.getElementById("scenarios");
   document.getElementById("scenarios-empty").hidden = scenarios.length > 0;
-  list.replaceChildren(...scenarios.map((s) => el("li", { class: "lab-card", "data-scenario": s.id },
+  list.replaceChildren(...scenarios.map((s) => el("li", {
+    class: s.experimental === true ? "lab-card lab-card-experimental" : "lab-card",
+    "data-scenario": s.id },
     el("div", { class: "lab-card-head" },
       el("img", { src: ART[s.agent] || ART.network, alt: "", width: 48, height: 48 }),
       el("div", {},
         el("h3", { text: s.title }),
-        el("div", { class: "muted lab-crew", text: s.crew + " (" + s.agent + ") should answer" }))),
+        el("div", { class: "muted lab-crew", text: s.crew + " (" + s.agent + ") should answer" }),
+        s.experimental === true ? el("span", { class: "badge experimental", text: "Experimental" }) : null)),
     el("p", { text: s.breaks }),
+    s.experimental === true ? el("p", { class: "lab-experimental", text: EXPERIMENTAL_NOTE }) : null,
     el("p", { class: "muted lab-signals", text: "The watcher should report: " + s.signals.join(", ") }),
     el("button", { type: "button", class: "approve lab-run", "data-scenario": s.id,
                    onclick: () => run(s) }, "Run"))));

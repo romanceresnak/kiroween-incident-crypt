@@ -208,9 +208,24 @@ def test_the_catalogue_shows_no_manifests() -> None:
     assert [p["id"] for p in public] == IDS
     for entry in public:
         assert set(entry) == {"id", "namespace", "title", "agent", "crew", "category", "breaks",
-                              "signals"}
+                              "signals", "experimental"}
+        assert isinstance(entry["experimental"], bool)
     assert {p["crew"] for p in public} == {"Vampire", "Spider", "Zombie", "Ghost"}
     assert "phases" not in str(public) and "spec" not in str(public).replace("specialist", "")
+
+
+def test_only_the_stuck_rollout_is_marked_experimental_and_it_still_runs() -> None:
+    """lab-11 reached the right specialist in 1 of 10 replays (routing-cpu-hint.txt). It is
+    flagged for the judges, not hidden: it still renders to objects the runner can apply."""
+    flagged = [s.id for s in SCENARIOS if s.experimental]
+    assert flagged == ["rollout-stuck-readiness"]
+    assert BY_ID["rollout-stuck-readiness"].namespace == "lab-11"
+    assert {p["id"] for p in catalog.public() if p["experimental"]} == {"rollout-stuck-readiness"}
+    phases = render("rollout-stuck-readiness", "abc123")
+    assert phases and all(phase.objects for phase in phases)
+    # The flag changes nothing about what is applied.
+    plain = replace(BY_ID["rollout-stuck-readiness"], experimental=False)
+    assert render(plain, "abc123") == phases
 
 
 # ------------------------------------------------- the scenarios break what they say (SC-01)

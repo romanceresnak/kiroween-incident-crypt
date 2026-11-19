@@ -134,3 +134,6 @@ none changes a requirement ID.
   it was a safety-policy block. The login-page tests were then written with the edit tool instead
   of a shell heredoc.
 - **A lint error was committed.** `78fa533` has a docstring over 100 characters; `a601331` fixes it.
+- **lab-11 is marked Experimental** (a flag on the scenario, passed through the catalogue, shown as a
+  badge and one sentence on its card). It still runs. The reason is the measurement: 1 of 10
+  replays reached the right specialist. README and Devpost recommend the other 13.

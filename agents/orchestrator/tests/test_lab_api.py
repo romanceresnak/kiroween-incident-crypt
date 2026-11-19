@@ -164,6 +164,16 @@ def test_run_sends_only_the_scenario_id_to_the_runner() -> None:
     assert runner.calls == [("POST", "/run", {"scenario": "oom-killed"})]
 
 
+def test_the_experimental_scenario_is_flagged_in_the_catalogue_and_can_still_be_run() -> None:
+    runner = FakeRunner()
+    with app(runner) as client:
+        cards = {s["id"]: s for s in client.get("/lab/scenarios").json()}
+        response = client.post("/lab/run", json={"scenario": "rollout-stuck-readiness"})
+    assert [i for i, c in cards.items() if c["experimental"]] == ["rollout-stuck-readiness"]
+    assert response.status_code == 202
+    assert runner.calls == [("POST", "/run", {"scenario": "rollout-stuck-readiness"})]
+
+
 @pytest.mark.parametrize("body", [{}, {"scenario": ""}, {"scenario": "oom-killed", "x": 1},
                                   {"scenario": "A" * 65}, {"scenario": "Has Space"},
                                   {"scenario": 5}, ["oom-killed"]])

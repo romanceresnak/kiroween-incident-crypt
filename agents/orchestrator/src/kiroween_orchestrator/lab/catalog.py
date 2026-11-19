@@ -15,6 +15,6 @@ def public() -> list[dict[str, Any]]:
     return [
         {"id": s.id, "namespace": s.namespace, "title": s.title, "agent": s.agent,
          "crew": CREW[s.agent], "category": s.category, "breaks": s.breaks,
-         "signals": list(s.signals)}
+         "signals": list(s.signals), "experimental": s.experimental}
         for s in SCENARIOS
     ]

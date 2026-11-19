@@ -924,3 +924,25 @@ def test_the_lab_02_update_matches_the_saved_measurement_and_says_what_it_did_no
         assert "routing-cpu-hint.txt" in doc
     # The table is the 18 Nov run and still says what happened then.
     assert "**Spider** (card says Vampire)" in README
+
+
+def test_the_experimental_scenario_in_the_docs_matches_the_code_and_the_record() -> None:
+    import sys
+
+    sys.path.insert(0, str(REPO / "agents" / "orchestrator" / "src"))
+    sys.path.insert(0, str(REPO / "agents" / "shared" / "src"))
+    from kiroween_orchestrator.lab.scenarios import SCENARIOS
+
+    flagged = [s for s in SCENARIOS if s.experimental]
+    assert [s.id for s in flagged] == ["rollout-stuck-readiness"]
+    rest = len(SCENARIOS) - len(flagged)
+    assert rest == 13
+    hint = (LAB_RESULTS / "routing-cpu-hint.txt").read_text()
+    row = re.search(r"^rollout-stuck-readiness\s+\w+\s+(\d+)/(\d+)", hint.split("### E:")[1], re.M)
+    assert row and (row.group(1), row.group(2)) == ("1", "10")
+    for name, text in (("README", README), ("DEVPOST", DEVPOST)):
+        flat = " ".join(text.split())
+        assert "Experimental" in flat and "An update that never becomes ready" in flat, name
+        assert "1 of 10" in flat and f"the other {rest}" in flat, name
+    assert "It still runs" in " ".join(README.split())
+    assert "it runs" in " ".join(DEVPOST.split())

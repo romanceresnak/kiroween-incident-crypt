@@ -190,7 +190,10 @@ How to test it:
 
 1. Open the address and sign in with the credentials from the instructions field.
 2. Choose **Scenario Lab**. Pick a card, for example "A firewall rule blocks the client", and
-   press **Run**. It breaks a small workload in its own namespace on the real EKS cluster.
+   press **Run**. It breaks a small workload in its own namespace on the real EKS cluster. One
+   card, "An update that never becomes ready", is marked **Experimental**: it runs, but the crew
+   does not yet answer it reliably (it reached the right specialist in 1 of 10 replays), so
+   please try the other 13.
 3. The page links to the incident the run produced. It appears after about 3 to 90 seconds (a
    failed health check is reported after the watcher waits 60 s, so those take about a minute).
    Open it: the crew animates, then you see the classification, the evidence table, similar past

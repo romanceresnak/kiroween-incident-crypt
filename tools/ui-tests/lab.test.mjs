@@ -112,6 +112,45 @@ test("one card per scenario shows the title, the crew member, what breaks and th
   } finally { ui.close(); }
 });
 
+test("an experimental card carries a visible badge and one sentence, and can still be run", async () => {
+  const stuck = { id: "rollout-stuck-readiness", namespace: "lab-11",
+                  title: "An update that never becomes ready", agent: "deploy-rollout",
+                  crew: "Zombie", category: "deploy_rollout", signals: ["Unhealthy"],
+                  breaks: "Plain words about the stuck rollout.", experimental: true };
+  const plain = CARDS.map((card) => ({ ...card, experimental: false }));
+  const ui = await open({ scenarios: [...plain, stuck] });
+  try {
+    const cards = [...ui.document.querySelectorAll(".lab-card")];
+    assert.equal(cards.length, 5);
+    const flagged = cards.filter((c) => c.querySelector(".badge.experimental"));
+    assert.deepEqual(flagged.map((c) => c.dataset.scenario), ["rollout-stuck-readiness"]);
+    const card = flagged[0];
+    assert.equal(card.querySelector(".badge.experimental").textContent, "Experimental");
+    assert.ok(card.classList.contains("lab-card-experimental"));
+    const note = card.querySelector(".lab-experimental");
+    assert.equal(note.textContent, "The crew does not yet answer this one reliably.");
+    assert.equal(note.textContent.split(".").filter(Boolean).length, 1, "one sentence");
+    // It is not hidden and not disabled: a judge can still run it.
+    const run = card.querySelector("button.lab-run");
+    assert.equal(run.disabled, false);
+    // No other card says it.
+    for (const other of cards.filter((c) => c !== card)) {
+      assert.equal(other.querySelector(".lab-experimental"), null);
+      assert.ok(!other.textContent.includes("Experimental"));
+    }
+    // The title is still a plain heading, so the badge does not change how the card reads out.
+    assert.equal(card.querySelector("h3").textContent, stuck.title);
+  } finally { ui.close(); }
+});
+
+test("a catalogue that does not mention experimental shows no badge", async () => {
+  const ui = await open();  // the fixture cards have no such field
+  try {
+    assert.equal(ui.document.querySelectorAll(".badge.experimental").length, 0);
+    assert.equal(ui.document.querySelectorAll(".lab-experimental").length, 0);
+  } finally { ui.close(); }
+});
+
 test("the page says what the lab does and does not do", async () => {
   const ui = await open();
   try {

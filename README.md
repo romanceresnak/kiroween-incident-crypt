@@ -301,6 +301,12 @@ cluster and nothing is saved as memory. Press **Reset** to clean up at once.
 
 Limits: one scenario at a time, ten runs an hour, cleaned up by itself after 15 minutes.
 
+**Experimental.** `rollout-stuck-readiness` (lab-11, "An update that never becomes ready") has an
+Experimental badge on its card and a line saying the crew does not yet answer it reliably. It
+still runs. In the replay of its saved incident the classifier reached the right specialist in 1
+of 10 runs ([`routing-cpu-hint.txt`](docs/demo-results/lab/routing-cpu-hint.txt)). To see the
+crew at its best, try the other 13.
+
 The 14 scenarios, **as measured on the live cluster on 18 Nov 2026** (one run each, before this
 change was deployed; records in [`docs/demo-results/lab`](docs/demo-results/lab/)):
 
