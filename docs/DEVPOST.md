@@ -131,8 +131,11 @@ The system itself:
 - Persist incident state outside memory: a restart of the orchestrator loses incidents, sessions
   and the Lab's run count.
 - Route a failed health check to the right specialist. The classifier sees one event, and three
-  prompt wordings all scored 36 of 42 on the 14 scenarios, so it needs more input (the pod's limits
-  or rollout state) or a hand-over between specialists.
+  prompt wordings all scored 36 of 42 on the 14 scenarios, so it needs more input. For a CPU-starved
+  server the watcher now passes the container's CPU limit and usage, and in a replay with the usage
+  assumed that sent lab-02 to the right specialist 10 of 10 times (not yet seen on the cluster). The
+  stuck rollout (a 404 on the probe path) still needs rollout state, or a hand-over between
+  specialists.
 - Approve the image and storage proposals and check that they fix the cluster; both scenarios
   stopped at `awaiting_approval` and were left unapproved.
 

@@ -905,3 +905,22 @@ def test_the_devpost_testing_steps_name_what_a_judge_can_and_cannot_do() -> None
     for needle in ("judges-only instructions field", "Scenario Lab", "**Run**", "**Approve**",
                    "**Reset**", "never on `main`", "lab incidents only"):
         assert needle in flat, needle
+
+
+def test_the_lab_02_update_matches_the_saved_measurement_and_says_what_it_did_not_measure() -> None:
+    hint = (LAB_RESULTS / "routing-cpu-hint.txt").read_text()
+    flat = " ".join(README.split())
+    assert "Update, 19 Nov, for lab-02 only" in flat
+    # The numbers the docs quote are the ones in the record.
+    assert re.search(r"^cpu-throttling\s+cpu_memory\s+10/10", hint.split("### E:")[1], re.M)
+    assert re.search(r"^cpu-throttling\s+cpu_memory\s+0/3", hint.split("### B:")[1], re.M)
+    assert "10 of 10" in flat and "(0 of 3)" in flat
+    # The assumption is stated where the number is, and in the record itself.
+    assert "usage **assumed**" in flat and "has not been seen for a lab-02 pod" in flat
+    assert "WHAT WAS NOT MEASURED: CPU usage" in hint
+    assert "not yet seen on the cluster" in " ".join(DEVPOST.split())
+    assert "not seen on the cluster" in " ".join(WRITEUP.split())
+    for doc in (README, WRITEUP):
+        assert "routing-cpu-hint.txt" in doc
+    # The table is the 18 Nov run and still says what happened then.
+    assert "**Spider** (card says Vampire)" in README

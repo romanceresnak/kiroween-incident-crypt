@@ -309,6 +309,14 @@ seconds. The whole run cost $1.26. Nothing was approved, and the cluster was lef
   ([`routing.txt`](demo-results/lab/routing.txt)). The classifier sees one event, and a failed
   health check looks the same whatever caused it. The lines were not kept. A real fix needs more
   input than the event text.
+- **More input did fix lab-02, in a replay.** The watcher now reads the container's CPU limit and
+  request from the pod and its CPU usage from metrics-server. The limit alone changed nothing (0 of
+  3) and the data without the prompt rule changed nothing (0 of 3). With both, and the usage
+  **assumed** at the 20m limit, lab-02 went to the Vampire 10 of 10 times and the NetworkPolicy,
+  DNS, Service and port scenarios stayed with the Spider
+  ([`routing-cpu-hint.txt`](demo-results/lab/routing-cpu-hint.txt)). Nobody has read
+  metrics-server for a lab-02 pod yet, so this is not seen on the cluster. The stuck rollout is
+  not fixed.
 
 The runner's tests also hung once for 1 hour 50 minutes. The cause was a test, not the runner:
 it called `reset()` from inside `apply()`, which in the test ran the cleanup inline and waited

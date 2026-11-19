@@ -53,6 +53,19 @@ class SimilarIncident(BaseModel):
     origin: Literal["seeded", "learned"] = "seeded"
 
 
+class ContainerResources(BaseModel):
+    """CPU the failing container may use and is using, as the watcher read it (scenario-lab
+    REQ-WT-03). A hint for the classifier, not evidence: a probe that fails on a container
+    running at its CPU limit is a starved server, which the event text alone cannot show.
+    Millicores; a field is absent when it is not known (no limit set, no metrics yet)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cpu_limit_millicores: int | None = Field(default=None, ge=0, le=10_000_000)
+    cpu_request_millicores: int | None = Field(default=None, ge=0, le=10_000_000)
+    cpu_usage_millicores: int | None = Field(default=None, ge=0, le=10_000_000)
+
+
 class Incident(BaseModel):
     """An incident as submitted to ``POST /incidents`` (REQ-ORC-02)."""
 
@@ -72,6 +85,8 @@ class Incident(BaseModel):
     depends_on: list[Workload] = Field(default_factory=list, max_length=20)
     # Past postmortems that look alike; hints for the specialist, not evidence (REQ-MEM-07).
     similar_incidents: list[SimilarIncident] = Field(default_factory=list, max_length=5)
+    # Only the watcher sets this, for an Unhealthy probe (scenario-lab REQ-WT-03).
+    resources: ContainerResources | None = None
 
 
 class Classification(BaseModel):

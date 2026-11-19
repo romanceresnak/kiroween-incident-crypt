@@ -20,6 +20,7 @@ from .detect import (
     EVENT_REASONS,
     WAITING_REASONS,
     Signal,
+    container_resources,
     container_started,
     event_signal,
     pod_claims,
@@ -28,6 +29,7 @@ from .detect import (
     signal_to_incident,
     termination_signal,
     terminations,
+    usage_millicores_of,
     waiting_signals,
 )
 
@@ -83,10 +85,12 @@ class Watcher:
         clock: Callable[[], float] = time.monotonic,
         now: Callable[[], datetime] = utcnow,
         get_pod: Callable[[str, str], dict[str, Any] | None] | None = None,
+        get_pod_metrics: Callable[[str, str], dict[str, Any] | None] | None = None,
     ) -> None:
         self.settings = settings
         self.client = client
         self._get_pod = get_pod
+        self._get_pod_metrics = get_pod_metrics
         # The pod and event streams run in two threads and share the dedup state.
         self._lock = threading.Lock()
         self._now = now
@@ -162,9 +166,26 @@ class Watcher:
                 logger.info("pod %s/%s became Ready; no incident", s.namespace, s.pod)
                 continue
             # Still not Ready, or it could not be read: report it rather than lose it.
-            if (iid := self._submit(s)) is not None:
+            if (iid := self._submit(self._with_resources(s, pod))) is not None:
                 submitted.append(iid)
         return submitted
+
+    def _with_resources(self, s: Signal, pod: dict[str, Any] | None) -> Signal:
+        """Attach the container's CPU limit, request and usage to a probe signal (REQ-WT-03).
+
+        The event text cannot tell a starved server from a network fault: both are a refused or
+        slow probe. The limit comes from the pod already read; usage is best effort."""
+        if pod is None:
+            return s
+        usage = None
+        if self._get_pod_metrics is not None and s.pod:
+            try:
+                usage = usage_millicores_of(self._get_pod_metrics(s.namespace, s.pod),
+                                            s.container)
+            except Exception as exc:
+                logger.debug("no CPU usage for %s/%s: %s", s.namespace, s.pod, exc)
+        resources = container_resources(pod, s.container, usage)
+        return replace(s, resources=resources) if resources is not None else s
 
     def pending(self) -> int:
         with self._lock:
@@ -309,6 +330,21 @@ def kubernetes_get_pod() -> Callable[[str, str], dict[str, Any] | None]:
     return get_pod
 
 
+def kubernetes_get_pod_metrics() -> Callable[[str, str], dict[str, Any] | None]:
+    """Read one pod's PodMetrics from metrics-server (read-only: get on metrics.k8s.io pods)."""
+    from kubernetes import client
+
+    from kiroween_shared.k8s.client import load_api_client
+
+    custom = client.CustomObjectsApi(load_api_client())
+
+    def get_pod_metrics(namespace: str, name: str) -> dict[str, Any] | None:
+        return custom.get_namespaced_custom_object(
+            "metrics.k8s.io", "v1beta1", namespace, "pods", name)
+
+    return get_pod_metrics
+
+
 def main() -> None:
     from kiroween_shared.server import configure_logging, create_app, serve
 
@@ -324,7 +360,7 @@ def main() -> None:
         logger.warning("ORCHESTRATOR_TOKEN is not set: an orchestrator that requires a login "
                        "will refuse every incident")
     watcher = Watcher(settings, OrchestratorClient(settings.orchestrator_url, token=token),
-                      get_pod=kubernetes_get_pod())
+                      get_pod=kubernetes_get_pod(), get_pod_metrics=kubernetes_get_pod_metrics())
     list_events, watch_events = kubernetes_sources("events")
     def recheck_forever() -> None:
         while True:

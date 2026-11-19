@@ -34,7 +34,8 @@ class SpecialistClient:
     async def investigate(self, incident: Incident) -> Investigation:
         try:
             response = await self._client.post(
-                "/investigate", json=incident.model_dump(mode="json")
+                "/investigate", json=incident.model_dump(
+                    mode="json", exclude=None if incident.resources is not None else {"resources"})
             )
         except httpx.TimeoutException as exc:
             raise SpecialistError(f"specialist at {self.base_url} timed out") from exc

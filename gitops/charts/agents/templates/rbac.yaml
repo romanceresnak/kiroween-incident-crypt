@@ -15,6 +15,11 @@ rules:
   - apiGroups: [""]
     resources: [pods, events]
     verbs: [get, list, watch]
+  # One pod's CPU usage, to tell a starved server from a network fault when a probe fails
+  # (scenario-lab REQ-WT-03). get only: the watcher reads a named pod, never lists metrics.
+  - apiGroups: [metrics.k8s.io]
+    resources: [pods]
+    verbs: [get]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

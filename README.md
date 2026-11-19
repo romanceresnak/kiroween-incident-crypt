@@ -328,7 +328,20 @@ diagnosed both correctly (the 20m CPU limit; a `/ready` path that answers 404) b
 propose a resource or probe change, so they ended as a diagnosis. The classifier sees one
 event, and a failed health check looks the same whatever caused it. Three prompt wordings were
 measured (36 of 42 each, [`routing.txt`](docs/demo-results/lab/routing.txt)); none helped, so
-none was kept. Seven scenarios end as a diagnosis because the crew cannot create a Secret or a
+none was kept.
+
+**Update, 19 Nov, for lab-02 only (the table above is the 18 Nov run and is unchanged).** Those
+three wordings changed only the prompt, and the classifier still saw one event. The watcher now
+also reads the failing container's CPU limit and request from the pod and its CPU usage from
+metrics-server, and puts them on the incident, and the prompt says how to use them. Replaying
+the 14 saved incidents through the real classifier with the usage **assumed** (lab-02 at its 20m
+limit, every other probe container idle) sent lab-02 to the Vampire 10 of 10 times, and kept the
+NetworkPolicy, DNS, Service and port scenarios with the Spider 10 of 10
+([`routing-cpu-hint.txt`](docs/demo-results/lab/routing-cpu-hint.txt)). The CPU limit alone did
+not help (0 of 3), so the result depends on metrics-server reporting that usage, which has not
+been seen for a lab-02 pod. `rollout-stuck-readiness` is not fixed by this.
+
+Seven scenarios end as a diagnosis because the crew cannot create a Secret or a
 ConfigMap, or change what block storage can do.
 
 How it is built: `lab/scenarios.py` holds the 14 fixed scenarios, `render.py` checks each
@@ -425,6 +438,11 @@ Not verified:
   the same renderer and the same objects; the runner's limits, cleanup and RBAC are tested
   against fakes and a rendered chart only.
 - That the WAF's common rule set lets the UI's JSON requests through.
+- That lab-02 is now sent to the Vampire on the cluster. The 10 of 10 is a replay with CPU usage
+  assumed, not measured. To check it: run `cpu-throttling` from the Lab, then
+  `kubectl top pod -n lab-02` while the pod is not Ready. If the usage is near 20m the watcher
+  will report it; if metrics-server shows nothing, the incident carries only the limit and goes
+  where it went on 18 Nov. The watcher's new `get` on `metrics.k8s.io` pods has not been used.
 - That Approve opens a pull request on `lab-remediations` against the real GitHub API: tested
   with a fake only.
 - That the Lab page looks right in a browser: it was tested in jsdom and never viewed.

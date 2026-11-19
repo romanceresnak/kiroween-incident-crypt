@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from kiroween_shared.models import Incident
+from kiroween_shared.models import ContainerResources, Incident
 
 
 @dataclass(frozen=True)
@@ -130,6 +130,57 @@ class Signal:
     message: str
     # (kind, name) of objects the pod needs: the PVCs it mounts (hardening REQ-WSU-06).
     depends_on: tuple[tuple[str, str], ...] = ()
+    # What the failing container may use and is using; read for an Unhealthy probe only.
+    resources: ContainerResources | None = None
+
+
+_CPU_QUANTITY = re.compile(r"(\d+(?:\.\d+)?)([num]?)")
+
+
+def parse_cpu_millicores(value: Any) -> int | None:
+    """A Kubernetes CPU quantity as whole millicores: "20m", "0.5", "2", "250u", "19739000n"."""
+    if isinstance(value, bool) or value is None:
+        return None
+    match = _CPU_QUANTITY.fullmatch(str(value).strip())
+    if match is None:
+        return None
+    scale = {"n": 1e-6, "u": 1e-3, "m": 1.0, "": 1000.0}[match.group(2)]
+    amount = float(match.group(1)) * scale
+    return round(amount) if amount <= 10_000_000 else None
+
+
+def container_resources(
+    pod: dict[str, Any] | None, container: str | None, usage_millicores: int | None = None
+) -> ContainerResources | None:
+    """The named container's CPU limit and request from the pod spec, plus its measured usage.
+
+    None when there is nothing to report, so an incident without a hint is unchanged."""
+    if not pod:
+        return None
+    spec = pod.get("spec") or {}
+    containers = spec.get("containers") or []
+    if container is None and len(containers) == 1:  # an event without a field path
+        container = containers[0].get("name")
+    if not container:
+        return None
+    for c in [*containers, *(spec.get("initContainers") or [])]:
+        if c.get("name") == container:
+            res = c.get("resources") or {}
+            limit = parse_cpu_millicores((res.get("limits") or {}).get("cpu"))
+            request = parse_cpu_millicores((res.get("requests") or {}).get("cpu"))
+            if limit is None and request is None and usage_millicores is None:
+                return None
+            return ContainerResources(cpu_limit_millicores=limit, cpu_request_millicores=request,
+                                      cpu_usage_millicores=usage_millicores)
+    return None
+
+
+def usage_millicores_of(metrics: dict[str, Any] | None, container: str | None) -> int | None:
+    """The named container's CPU in a metrics.k8s.io PodMetrics object, if it has one."""
+    for c in (metrics or {}).get("containers") or []:
+        if c.get("name") == container:
+            return parse_cpu_millicores((c.get("usage") or {}).get("cpu"))
+    return None
 
 
 def pod_claims(pod: dict[str, Any] | None) -> tuple[tuple[str, str], ...]:
@@ -233,4 +284,5 @@ def signal_to_incident(s: Signal, observed_at: datetime) -> Incident:
         message=s.message[:2000],
         observed_at=observed_at,
         depends_on=[{"kind": kind, "name": name} for kind, name in s.depends_on],
+        resources=s.resources,
     )

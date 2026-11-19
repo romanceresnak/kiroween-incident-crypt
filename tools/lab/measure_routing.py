@@ -39,6 +39,51 @@ def load_records(directory: Path = RESULTS) -> list[tuple[str, str, dict[str, An
     return found
 
 
+def pod_of(workload: str, scenario: str) -> dict[str, Any] | None:
+    """The pod spec the watcher would read: the pod template of the scenario's Deployment.
+
+    The run suffix is the last part of the workload name. When a scenario applies the same
+    Deployment twice (a good revision, then a broken one) the last one is the broken one."""
+    from kiroween_orchestrator.lab.render import render
+
+    run = workload.rsplit("-", 1)[-1]
+    found = None
+    for phase in render(scenario, run):
+        for obj in phase.objects:
+            if obj["kind"] == "Deployment" and obj["metadata"]["name"] == workload:
+                found = {"spec": obj["spec"]["template"]["spec"]}
+    return found
+
+
+def attach_hints(records: list[tuple[str, str, dict[str, Any]]], usage: dict[str, int],
+                 default_usage: int | None) -> list[tuple[str, str, dict[str, Any]]]:
+    """Give every Unhealthy incident the `resources` the watcher would attach to it.
+
+    The limit and request come from the scenario's own pod spec through the watcher's own
+    function. Usage is NOT measured here: it is what the caller assumes, per scenario or as a
+    default, and the report says so."""
+    from kiroween_orchestrator.watcher.detect import container_resources
+
+    out = []
+    for scenario, expected, incident in records:
+        if incident["reason"] == "Unhealthy":
+            pod = pod_of(incident["workload"]["name"], scenario)
+            resources = container_resources(pod, incident.get("container"),
+                                            usage.get(scenario, default_usage))
+            if resources is not None:
+                incident = {**incident, "resources": resources.model_dump(exclude_none=True)}
+        out.append((scenario, expected, incident))
+    return out
+
+
+def parse_usage(items: list[str]) -> dict[str, int]:
+    usage = {}
+    for item in items:
+        name, _, value = item.partition("=")
+        usage[name] = int(value)
+    return usage
+
+
 def tally(results: dict[str, list[str]], expected: dict[str, str]) -> dict[str, dict[str, Any]]:
     """Per scenario: the categories chosen, how many matched the card, and the rate."""
     out = {}
@@ -96,8 +141,24 @@ def main(argv: list[str] | None = None) -> int:
                         help="'current' or a file with a prompt text; repeatable")
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--dir", type=Path, default=RESULTS)
+    parser.add_argument("--hints", action="store_true",
+                        help="attach the CPU limit and request the watcher would read")
+    parser.add_argument("--assume-usage", action="append", default=[],
+                        metavar="SCENARIO=MILLICORES",
+                        help="with --hints: CPU usage to ASSUME for a scenario (not measured)")
+    parser.add_argument("--assume-usage-default", type=int, default=None, metavar="MILLICORES",
+                        help="with --hints: CPU usage to ASSUME for every other Unhealthy scenario")
+    parser.add_argument("--only", nargs="*", help="scenario ids to replay (default: all)")
     args = parser.parse_args(argv)
     records = load_records(args.dir)
+    if args.only:
+        records = [r for r in records if r[0] in args.only]
+    if args.hints:
+        records = attach_hints(records, parse_usage(args.assume_usage), args.assume_usage_default)
+        print("resources shown to the classifier (usage is assumed, not measured):")
+        for scenario, _, incident in records:
+            if "resources" in incident:
+                print(f"  {scenario:<30}{incident['resources']}")
     if not records:
         print(f"no saved scenarios in {args.dir}", file=sys.stderr)
         return 2

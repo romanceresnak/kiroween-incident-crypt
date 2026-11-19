@@ -106,3 +106,31 @@ All ten tasks are committed locally. **Nothing is pushed**, so no image contains
   create `lab-remediations`.
 - Cost per incident uses prices typed in by hand. `awscrt` was added for one measurement only and
   is not a project dependency.
+
+### Follow-ups, 19 Nov 2026
+
+Three fixes found while the author tested the live Lab through CloudFront. Each is its own commit;
+none changes a requirement ID.
+
+| Fix | Commit | Tests |
+|---|---|---|
+| `GET /` and `HEAD /` redirect to `/ui/` instead of a JSON 401 (extends REQ-AU-10) | `78fa533` | 3 in `test_auth.py` |
+| Login page as the crypt entrance; every asset served from `/login-assets/` (REQ-AU-12) | `a601331` | 7 in `test_auth.py`, 1 jsdom |
+| The classifier is shown the failing container's CPU limit, request and usage (REQ-WT-03) | see `git log` | 46 in `test_cpu_hint.py`, 6 evidence tests, 1 document test, 1 chart test |
+
+- **Not verified, lab-02.** The routing result (10 of 10 to the Vampire) is a replay on the real
+  classifier with the CPU usage **assumed** at the 20m limit. Nobody has read metrics-server for a
+  lab-02 pod. The CPU limit alone does not change the answer (0 of 3), so if metrics-server shows
+  nothing the incident goes where it went on 18 Nov. `routing-cpu-hint.txt` has the tables.
+- **Not fixed.** `rollout-stuck-readiness` (lab-11) is still not routed to `deploy_rollout`: 1 of 10
+  runs was right (network 7, cpu_memory 1, unknown 1).
+- **A rolling update can refuse one kind of incident for a few minutes.** `resources` is a new field
+  and the models forbid unknown fields, so an Unhealthy incident that carries it is refused by an
+  orchestrator or specialist image from before this change. Incidents without a hint are sent
+  without the field and are not affected.
+- **The watcher has a new read-only permission:** `get` on `metrics.k8s.io` `pods`. It has not run
+  on the cluster.
+- **An earlier report was wrong.** One refused tool call was reported as a decision by the user;
+  it was a safety-policy block. The login-page tests were then written with the edit tool instead
+  of a shell heredoc.
+- **A lint error was committed.** `78fa533` has a docstring over 100 characters; `a601331` fixes it.

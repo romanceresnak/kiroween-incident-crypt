@@ -80,10 +80,12 @@ def test_role_bindings(docs: list[dict]) -> None:
     }
 
 
-def test_watcher_can_only_read_pods_and_events(docs: list[dict]) -> None:
+def test_watcher_can_only_read_pods_events_and_one_pods_cpu_usage(docs: list[dict]) -> None:
     rules = of_kind(docs, "ClusterRole")["kiroween-agents-watcher"]["rules"]
-    assert rules == [{"apiGroups": [""], "resources": ["pods", "events"],
-                      "verbs": ["get", "list", "watch"]}]
+    assert rules == [
+        {"apiGroups": [""], "resources": ["pods", "events"], "verbs": ["get", "list", "watch"]},
+        {"apiGroups": ["metrics.k8s.io"], "resources": ["pods"], "verbs": ["get"]},
+    ]
 
 
 def test_orchestrator_has_no_kubernetes_permissions(docs: list[dict]) -> None:

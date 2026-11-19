@@ -139,11 +139,76 @@ def test_the_routing_measurement_is_saved_and_says_what_it_found() -> None:
         assert re.search(rf"{scenario}\s+\w+\s+0/3", text)
 
 
-def test_the_prompt_in_the_code_is_the_one_that_was_measured_as_old() -> None:
-    """The prompt wording that did not help is not shipped."""
+def test_the_prompt_in_the_code_keeps_the_categories_and_adds_only_the_resources_rule() -> None:
+    """The 18 Nov wording that did not help is still not shipped. The only addition is the rule
+    for the `resources` hint, which was measured on 19 Nov (routing-cpu-hint.txt)."""
     assert "cpu_memory: OOMKilled containers, memory pressure, CPU throttling, resource limits\n" \
         in CLASSIFY_PROMPT
-    assert "CPU limit" not in CLASSIFY_PROMPT and "HTTP error" not in CLASSIFY_PROMPT
+    assert "HTTP error" not in CLASSIFY_PROMPT
+    assert "When the incident has `resources`" in CLASSIFY_PROMPT
+    assert "usage" in CLASSIFY_PROMPT.split("When the incident has `resources`")[1]
+
+
+# --------------------------------------------- the lab-02 fix: what was measured, and what not
+
+HINT_FILE = (LAB_RESULTS / "routing-cpu-hint.txt").read_text()
+
+
+def hint_section(letter: str) -> str:
+    return HINT_FILE.split(f"### {letter}:")[1].split("### ")[0]
+
+
+def hint_row(section: str, scenario: str) -> tuple[int, int]:
+    match = re.search(rf"^{scenario}\s+\w+\s+(\d+)/(\d+)", section, re.M)
+    assert match, scenario
+    return int(match.group(1)), int(match.group(2))
+
+
+def test_the_cpu_limit_alone_and_the_data_alone_did_not_fix_lab_02() -> None:
+    assert hint_row(hint_section("A"), "cpu-throttling") == (0, 3)
+    assert hint_row(hint_section("B"), "cpu-throttling") == (0, 3)
+    assert hint_row(hint_section("D"), "cpu-throttling") == (0, 3)
+
+
+def test_with_the_rule_and_usage_at_the_limit_lab_02_goes_to_cpu_memory() -> None:
+    assert hint_row(hint_section("C"), "cpu-throttling") == (3, 3)
+    assert hint_row(hint_section("E"), "cpu-throttling") == (10, 10)
+
+
+def test_the_network_scenarios_stay_network_in_the_measurement() -> None:
+    for letter in ("C", "E"):
+        for scenario in ("netpol-blocks-client", "dns-missing-service",
+                         "service-selector-mismatch", "wrong-target-port"):
+            hits, runs = hint_row(hint_section(letter), scenario)
+            assert hits == runs, (letter, scenario)
+
+
+def test_lab_11_is_still_misrouted_and_the_record_says_so() -> None:
+    hits, runs = hint_row(hint_section("E"), "rollout-stuck-readiness")
+    assert (hits, runs) == (1, 10)
+    assert "rollout-stuck-readiness (lab-11) is still not routed" in " ".join(HINT_FILE.split())
+
+
+def test_the_record_says_the_cpu_usage_was_assumed_and_not_measured() -> None:
+    flat = " ".join(HINT_FILE.split())
+    assert "WHAT WAS NOT MEASURED: CPU usage" in flat
+    assert "ASSUMED" in HINT_FILE
+    for letter in ("B", "C", "D", "E"):
+        assert "resources shown to the classifier (usage is assumed, not measured):" \
+            in hint_section(letter)
+
+
+def test_the_hints_shown_in_the_record_are_what_the_tool_builds_today() -> None:
+    """The limits and requests are the scenarios' own; nobody typed them into the record."""
+    shown = hint_section("C")
+    built = measure.attach_hints(measure.load_records(), {"cpu-throttling": 20}, 1)
+    count = 0
+    for scenario, _, incident in built:
+        if "resources" in incident:
+            assert f"{scenario:<30}{incident['resources']}" in shown, scenario
+            count += 1
+    assert count == 6
+    assert "'cpu_usage_millicores'" not in hint_section("B")
 
 
 # ----------------------------------------------------------------- the measuring tool

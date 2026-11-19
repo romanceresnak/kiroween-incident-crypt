@@ -1,0 +1,151 @@
+Routing measurement for the lab-02 fix, 19 Nov 2026.
+
+The lab-02 incident (cpu-throttling, "a busy server starved of CPU") was answered by the Spider
+because the classifier saw one event: Readiness probe failed ... connection refused. The watcher
+now reads the failing container's CPU limit and request from the pod, and its CPU usage from
+metrics-server, and puts them on the incident as `resources`. The classifier prompt says what
+to do with them. The 14 saved lab incidents were replayed through the real classifier (Claude
+Haiku 4.5 on Amazon Bedrock) by tools/lab/measure_routing.py.
+
+WHAT WAS NOT MEASURED: CPU usage. Nobody has read metrics-server for a lab-02 pod. In
+configurations C, D and E the usage is ASSUMED: cpu-throttling at its 20m limit (a busy loop held
+to its quota), every other probe container idle at 1m. The limits and requests are real: they
+come from the scenarios' own pod specs through the watcher's own function. So these tables show
+what the classifier does IF the usage is what is assumed here. They do not show that lab-02 on
+the cluster reports that usage. That needs one live run (see the README).
+
+Configurations (3 runs per scenario unless stated; Unhealthy incidents are the only ones with a hint):
+  A  new prompt, no hint        (does the new prompt text change anything by itself?)
+  B  new prompt, limit and request only, usage unknown
+  C  new prompt, limit, request and assumed usage
+  D  OLD prompt (the one on the cluster before), same hints as C   (is the data alone enough?)
+  E  as C, 10 runs, the six probe scenarios only
+
+Reading it:
+  - The CPU limit alone does not fix lab-02 (B: 0/3).
+  - The data alone does not fix it either (D: 0/3). The prompt rule is needed.
+  - With both, and usage at the limit, lab-02 goes to cpu_memory (C: 3/3, E: 10/10).
+  - The network scenarios stay network, including the NetworkPolicy one (C: 3/3, E: 10/10).
+  - rollout-stuck-readiness (lab-11) is still not routed to deploy_rollout (E: 1/10). This change
+    does not fix it, and in 1 of 10 runs the hint sent it to cpu_memory, which is also wrong.
+  - Across the 14 scenarios the totals are 36, 35, 39, 36 of 42. The 1-run differences in A and B
+    on scenarios that have no hint (missing-configmap-mount 2/3 in B) are sampling noise.
+
+### A: new prompt, no hints
+
+== prompt: current (3 runs each)
+scenario                      expected          hit  chosen
+bad-image-tag                 deploy_rollout  3/3   {'deploy_rollout': 3}
+cpu-throttling                cpu_memory      0/3   {'deploy_rollout': 3}
+crashloop-missing-config-key  deploy_rollout  3/3   {'deploy_rollout': 3}
+dns-missing-service           network         3/3   {'network': 3}
+memory-leak                   cpu_memory      3/3   {'cpu_memory': 3}
+missing-configmap-mount       storage         3/3   {'storage': 3}
+missing-secret                deploy_rollout  3/3   {'deploy_rollout': 3}
+netpol-blocks-client          network         3/3   {'network': 3}
+oom-killed                    cpu_memory      3/3   {'cpu_memory': 3}
+pvc-missing-storageclass      storage         3/3   {'storage': 3}
+rollout-stuck-readiness       deploy_rollout  0/3   {'unknown': 3}
+rwx-on-ebs                    storage         3/3   {'storage': 3}
+service-selector-mismatch     network         3/3   {'network': 3}
+wrong-target-port             network         3/3   {'network': 3}
+TOTAL                                         36/42
+### B: new prompt, limit and request only (usage not known)
+resources shown to the classifier (usage is assumed, not measured):
+  cpu-throttling                {'cpu_limit_millicores': 20, 'cpu_request_millicores': 10}
+  dns-missing-service           {'cpu_limit_millicores': 50, 'cpu_request_millicores': 5}
+  netpol-blocks-client          {'cpu_limit_millicores': 50, 'cpu_request_millicores': 5}
+  rollout-stuck-readiness       {'cpu_limit_millicores': 100, 'cpu_request_millicores': 5}
+  service-selector-mismatch     {'cpu_limit_millicores': 50, 'cpu_request_millicores': 5}
+  wrong-target-port             {'cpu_limit_millicores': 50, 'cpu_request_millicores': 5}
+
+== prompt: current (3 runs each)
+scenario                      expected          hit  chosen
+bad-image-tag                 deploy_rollout  3/3   {'deploy_rollout': 3}
+cpu-throttling                cpu_memory      0/3   {'network': 1, 'deploy_rollout': 1, 'unknown': 1}
+crashloop-missing-config-key  deploy_rollout  3/3   {'deploy_rollout': 3}
+dns-missing-service           network         3/3   {'network': 3}
+memory-leak                   cpu_memory      3/3   {'cpu_memory': 3}
+missing-configmap-mount       storage         2/3   {'unknown': 1, 'storage': 2}
+missing-secret                deploy_rollout  3/3   {'deploy_rollout': 3}
+netpol-blocks-client          network         3/3   {'network': 3}
+oom-killed                    cpu_memory      3/3   {'cpu_memory': 3}
+pvc-missing-storageclass      storage         3/3   {'storage': 3}
+rollout-stuck-readiness       deploy_rollout  0/3   {'unknown': 1, 'network': 2}
+rwx-on-ebs                    storage         3/3   {'storage': 3}
+service-selector-mismatch     network         3/3   {'network': 3}
+wrong-target-port             network         3/3   {'network': 3}
+TOTAL                                         35/42
+### C: new prompt, limit and request, usage ASSUMED (cpu-throttling 20m, other probes 1m)
+resources shown to the classifier (usage is assumed, not measured):
+  cpu-throttling                {'cpu_limit_millicores': 20, 'cpu_request_millicores': 10, 'cpu_usage_millicores': 20}
+  dns-missing-service           {'cpu_limit_millicores': 50, 'cpu_request_millicores': 5, 'cpu_usage_millicores': 1}
+  netpol-blocks-client          {'cpu_limit_millicores': 50, 'cpu_request_millicores': 5, 'cpu_usage_millicores': 1}
+  rollout-stuck-readiness       {'cpu_limit_millicores': 100, 'cpu_request_millicores': 5, 'cpu_usage_millicores': 1}
+  service-selector-mismatch     {'cpu_limit_millicores': 50, 'cpu_request_millicores': 5, 'cpu_usage_millicores': 1}
+  wrong-target-port             {'cpu_limit_millicores': 50, 'cpu_request_millicores': 5, 'cpu_usage_millicores': 1}
+
+== prompt: current (3 runs each)
+scenario                      expected          hit  chosen
+bad-image-tag                 deploy_rollout  3/3   {'deploy_rollout': 3}
+cpu-throttling                cpu_memory      3/3   {'cpu_memory': 3}
+crashloop-missing-config-key  deploy_rollout  3/3   {'deploy_rollout': 3}
+dns-missing-service           network         3/3   {'network': 3}
+memory-leak                   cpu_memory      3/3   {'cpu_memory': 3}
+missing-configmap-mount       storage         3/3   {'storage': 3}
+missing-secret                deploy_rollout  3/3   {'deploy_rollout': 3}
+netpol-blocks-client          network         3/3   {'network': 3}
+oom-killed                    cpu_memory      3/3   {'cpu_memory': 3}
+pvc-missing-storageclass      storage         3/3   {'storage': 3}
+rollout-stuck-readiness       deploy_rollout  0/3   {'cpu_memory': 1, 'network': 2}
+rwx-on-ebs                    storage         3/3   {'storage': 3}
+service-selector-mismatch     network         3/3   {'network': 3}
+wrong-target-port             network         3/3   {'network': 3}
+TOTAL                                         39/42
+### D: OLD prompt, same hints as C
+resources shown to the classifier (usage is assumed, not measured):
+  cpu-throttling                {'cpu_limit_millicores': 20, 'cpu_request_millicores': 10, 'cpu_usage_millicores': 20}
+  dns-missing-service           {'cpu_limit_millicores': 50, 'cpu_request_millicores': 5, 'cpu_usage_millicores': 1}
+  netpol-blocks-client          {'cpu_limit_millicores': 50, 'cpu_request_millicores': 5, 'cpu_usage_millicores': 1}
+  rollout-stuck-readiness       {'cpu_limit_millicores': 100, 'cpu_request_millicores': 5, 'cpu_usage_millicores': 1}
+  service-selector-mismatch     {'cpu_limit_millicores': 50, 'cpu_request_millicores': 5, 'cpu_usage_millicores': 1}
+  wrong-target-port             {'cpu_limit_millicores': 50, 'cpu_request_millicores': 5, 'cpu_usage_millicores': 1}
+
+== prompt: /tmp/kw-route/old_prompt.txt (3 runs each)
+scenario                      expected          hit  chosen
+bad-image-tag                 deploy_rollout  3/3   {'deploy_rollout': 3}
+cpu-throttling                cpu_memory      0/3   {'network': 3}
+crashloop-missing-config-key  deploy_rollout  3/3   {'deploy_rollout': 3}
+dns-missing-service           network         3/3   {'network': 3}
+memory-leak                   cpu_memory      3/3   {'cpu_memory': 3}
+missing-configmap-mount       storage         3/3   {'storage': 3}
+missing-secret                deploy_rollout  3/3   {'deploy_rollout': 3}
+netpol-blocks-client          network         3/3   {'network': 3}
+oom-killed                    cpu_memory      3/3   {'cpu_memory': 3}
+pvc-missing-storageclass      storage         3/3   {'storage': 3}
+rollout-stuck-readiness       deploy_rollout  0/3   {'network': 3}
+rwx-on-ebs                    storage         3/3   {'storage': 3}
+service-selector-mismatch     network         3/3   {'network': 3}
+wrong-target-port             network         3/3   {'network': 3}
+TOTAL                                         36/42
+### DONE
+
+### E: new prompt, hints, usage ASSUMED, 10 runs, the six probe scenarios
+resources shown to the classifier (usage is assumed, not measured):
+  cpu-throttling                {'cpu_limit_millicores': 20, 'cpu_request_millicores': 10, 'cpu_usage_millicores': 20}
+  dns-missing-service           {'cpu_limit_millicores': 50, 'cpu_request_millicores': 5, 'cpu_usage_millicores': 1}
+  netpol-blocks-client          {'cpu_limit_millicores': 50, 'cpu_request_millicores': 5, 'cpu_usage_millicores': 1}
+  rollout-stuck-readiness       {'cpu_limit_millicores': 100, 'cpu_request_millicores': 5, 'cpu_usage_millicores': 1}
+  service-selector-mismatch     {'cpu_limit_millicores': 50, 'cpu_request_millicores': 5, 'cpu_usage_millicores': 1}
+  wrong-target-port             {'cpu_limit_millicores': 50, 'cpu_request_millicores': 5, 'cpu_usage_millicores': 1}
+
+== prompt: current (10 runs each)
+scenario                      expected          hit  chosen
+cpu-throttling                cpu_memory      10/10  {'cpu_memory': 10}
+dns-missing-service           network         10/10  {'network': 10}
+netpol-blocks-client          network         10/10  {'network': 10}
+rollout-stuck-readiness       deploy_rollout  1/10  {'cpu_memory': 1, 'network': 7, 'deploy_rollout': 1, 'unknown': 1}
+service-selector-mismatch     network         10/10  {'network': 10}
+wrong-target-port             network         10/10  {'network': 10}
+TOTAL                                         51/60
+### DONE

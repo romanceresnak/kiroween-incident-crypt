@@ -36,7 +36,10 @@ class OrchestratorClient:
 
     def submit(self, incident: Incident) -> bool:
         """Post one incident. Returns False if it was dropped; never queues without bound."""
-        body = incident.model_dump(mode="json")
+        # A watcher that is newer than the orchestrator must not send a field the old one rejects:
+        # `resources` goes only when it was read.
+        body = incident.model_dump(
+            mode="json", exclude=None if incident.resources is not None else {"resources"})
         for attempt in range(self._attempts):
             try:
                 response = self._client.post("/incidents", json=body)
