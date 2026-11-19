@@ -10,22 +10,22 @@ image:
 images:
   orchestrator:
     repository: kiroween/orchestrator
-    tag: 7d0e8fa32f8954db71464103a3b09be3e60867fe # ci-managed:orchestrator
+    tag: b0a151e88a88abc31a050af23d9e2df25ed53ad8 # ci-managed:orchestrator
   cpuMemory:
     repository: kiroween/cpu-memory
-    tag: 7d0e8fa32f8954db71464103a3b09be3e60867fe # ci-managed:cpu-memory
+    tag: b0a151e88a88abc31a050af23d9e2df25ed53ad8 # ci-managed:cpu-memory
   network:
     repository: kiroween/network
-    tag: 7d0e8fa32f8954db71464103a3b09be3e60867fe # ci-managed:network
+    tag: b0a151e88a88abc31a050af23d9e2df25ed53ad8 # ci-managed:network
   deployRollout:
     repository: kiroween/deploy-rollout
-    tag: 7d0e8fa32f8954db71464103a3b09be3e60867fe # ci-managed:deploy-rollout
+    tag: b0a151e88a88abc31a050af23d9e2df25ed53ad8 # ci-managed:deploy-rollout
   storage:
     repository: kiroween/storage
-    tag: 7d0e8fa32f8954db71464103a3b09be3e60867fe # ci-managed:storage
+    tag: b0a151e88a88abc31a050af23d9e2df25ed53ad8 # ci-managed:storage
   incidentMemory:
     repository: kiroween/incident-memory
-    tag: 7d0e8fa32f8954db71464103a3b09be3e60867fe # ci-managed:incident-memory
+    tag: b0a151e88a88abc31a050af23d9e2df25ed53ad8 # ci-managed:incident-memory
 
 region: eu-west-1
 
