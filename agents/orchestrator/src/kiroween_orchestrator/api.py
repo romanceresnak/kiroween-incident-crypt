@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -129,6 +130,13 @@ def create(service: IncidentService, auth: Auth | None = None,
         return response
 
     app.mount("/ui", StaticFiles(directory=UI_DIR, html=True), name="ui")
+
+    # A judge opens the bare address first. Send the browser to the UI, which sends it on to the
+    # login page when there is no session. A relative Location keeps the public host (CloudFront)
+    # instead of the internal one.
+    @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
+    async def root() -> RedirectResponse:
+        return RedirectResponse("/ui/", status_code=302, headers={"Cache-Control": "no-store"})
 
     return app
 

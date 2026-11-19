@@ -233,6 +233,7 @@ class LoginRequest(BaseModel):
 
 def is_open(method: str, path: str) -> bool:
     return (path in OPEN_PATHS or path.startswith(OPEN_PREFIXES)
+            or (method in ("GET", "HEAD") and path == "/")
             or (method == "POST" and path == "/auth/login"))
 
 

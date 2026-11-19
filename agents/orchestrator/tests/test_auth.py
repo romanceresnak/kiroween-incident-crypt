@@ -157,6 +157,47 @@ def test_a_browser_visit_to_the_ui_is_sent_to_the_login_page() -> None:
         assert client.post("/ui/", json={}, follow_redirects=False).status_code == 401
 
 
+def test_the_bare_address_redirects_to_the_ui_with_no_session() -> None:
+    """A judge opens https://<cloudfront>/ first: it must not be a JSON error (extends REQ-AU-10)."""
+    client, _, _ = app_client()
+    with client:
+        for method in ("GET", "HEAD"):
+            response = client.request(method, "/", follow_redirects=False)
+            assert response.status_code == 302, method
+            # Relative, so the browser stays on the public host.
+            assert response.headers["location"] == "/ui/"
+            assert response.headers["cache-control"] == "no-store"
+            assert "login required" not in response.text
+        # A query string does not change where it goes.
+        assert client.get("/?next=/evil", follow_redirects=False).headers["location"] == "/ui/"
+        # The whole chain ends on the login page.
+        landing = client.get("/", follow_redirects=True)
+        assert landing.url.path == "/login" and 'id="login"' in landing.text
+
+
+def test_the_bare_address_opens_nothing_else_and_other_methods_stay_closed() -> None:
+    client, _, _ = app_client(svc=service("lab-01"))
+    with client:
+        for method in ("POST", "PUT", "DELETE", "PATCH"):
+            response = client.request(method, "/", json={}, follow_redirects=False)
+            assert response.status_code == 401, method
+        assert client.get("//evil.example/x", follow_redirects=False).status_code == 401
+        assert client.get("/index.html", follow_redirects=False).status_code == 401
+        assert client.get("/incidents", follow_redirects=False).status_code == 401
+
+
+def test_the_bare_address_goes_to_the_ui_when_signed_in_and_when_login_is_off() -> None:
+    client, _, _ = app_client()
+    with client:
+        sign_in(client)
+        response = client.get("/", follow_redirects=False)
+        assert response.status_code == 302 and response.headers["location"] == "/ui/"
+        assert client.get("/", follow_redirects=True).url.path == "/ui/"
+    open_client = TestClient(create(service(), auth=None))
+    with open_client:
+        assert open_client.get("/", follow_redirects=False).headers["location"] == "/ui/"
+
+
 def test_the_redirect_cannot_be_turned_into_an_open_redirect() -> None:
     client, _, _ = app_client()
     with client:
