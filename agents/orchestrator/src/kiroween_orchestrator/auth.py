@@ -30,6 +30,9 @@ logger = logging.getLogger(__name__)
 
 COOKIE = "kiroween_session"
 LOGIN_DIR = Path(__file__).parent / "ui_login"
+# The six crew portraits live with the UI; the login page serves the same files from its own
+# open path, because /ui/ needs a session.
+ART_DIR = Path(__file__).parent / "ui" / "art"
 # The judge's account decides, and submits incidents for, the lab namespaces only.
 # Matched with fullmatch, never "$", which also accepts a trailing newline.
 LAB_NAMESPACE = re.compile(r"lab-(0[1-9]|1[0-4])")
@@ -304,6 +307,8 @@ def install(app: FastAPI, auth: Auth) -> None:
     async def login_page() -> FileResponse:
         return FileResponse(LOGIN_DIR / "login.html", media_type="text/html")
 
+    # Mounted first: the longer prefix has to match before /login-assets does.
+    app.mount("/login-assets/art", StaticFiles(directory=ART_DIR), name="login-art")
     app.mount("/login-assets", StaticFiles(directory=LOGIN_DIR), name="login-assets")
 
     @app.post("/auth/login")

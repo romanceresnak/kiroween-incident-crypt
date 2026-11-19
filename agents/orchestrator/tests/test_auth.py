@@ -158,7 +158,7 @@ def test_a_browser_visit_to_the_ui_is_sent_to_the_login_page() -> None:
 
 
 def test_the_bare_address_redirects_to_the_ui_with_no_session() -> None:
-    """A judge opens https://<cloudfront>/ first: it must not be a JSON error (extends REQ-AU-10)."""
+    """A judge opens https://<cloudfront>/ first; it must not be a JSON error (REQ-AU-10)."""
     client, _, _ = app_client()
     with client:
         for method in ("GET", "HEAD"):
@@ -669,12 +669,112 @@ def test_the_login_page_has_no_inline_script_style_or_handler() -> None:
     html = (LOGIN_DIR / "login.html").read_text()
     assert not re.search(r"<script(?![^>]*\bsrc=)[^>]*>", html)
     assert not re.search(r"\son\w+\s*=", html) and "style=" not in html
-    assert "javascript:" not in html
-    for src in re.findall(r'(?:src|href)="([^"]+)"', html):
-        assert src.startswith("/login-assets/") or src.startswith("/ui/art/"), src
+    assert "<style" not in html and "javascript:" not in html
     js = (LOGIN_DIR / "login.js").read_text()
     assert "innerHTML" not in js and "document.write" not in js and "eval(" not in js
     assert "textContent" in js and "safeNext" in js
+
+
+def page_references(html: str) -> list[str]:
+    """Every file the page asks the browser to fetch (src and href), not same-page #fragments."""
+    found = re.findall(r'\b(?:src|href)="([^"]+)"', html)
+    return [ref for ref in found if not ref.startswith("#")]
+
+
+def test_every_asset_the_login_page_names_is_served_without_a_session() -> None:
+    """The logo was once under /ui/, which needs a session, and showed as a broken image."""
+    html = (LOGIN_DIR / "login.html").read_text()
+    refs = page_references(html)
+    assert refs, "the page references nothing"
+    client, _, _ = app_client()
+    kinds = {"css": "text/css", "js": "javascript", "svg": "image/svg+xml"}
+    with client:
+        assert client.get("/login").status_code == 200  # signed out the whole time
+        for ref in refs:
+            assert ref.startswith("/login-assets/"), f"{ref} is not under the open path"
+            response = client.get(ref, follow_redirects=False)
+            assert response.status_code == 200, ref
+            assert kinds[ref.rsplit(".", 1)[-1]] in response.headers["content-type"], ref
+            assert response.content, ref
+        # What the page shows is what the server has: the six portraits.
+        shown = {ref.rsplit("/", 1)[-1] for ref in refs if "/art/" in ref}
+        assert shown == {"necromancer.svg", "vampire.svg", "spider.svg", "zombie.svg",
+                         "ghost.svg", "archivist.svg"}
+        # The closed path really is closed, so this test would have caught the old logo.
+        assert client.get("/ui/art/ghost.svg", follow_redirects=False).status_code == 302
+
+
+def test_the_login_page_uses_no_external_resource_and_its_css_fetches_nothing() -> None:
+    css = (LOGIN_DIR / "login.css").read_text()
+    html = (LOGIN_DIR / "login.html").read_text()
+    assert "@import" not in css and "@font-face" not in css
+    assert "url(" not in css, "the stylesheet should draw with gradients and shapes only"
+    for text in (css, html):
+        assert not re.search(r"https?://(?!www\.w3\.org/)", text)
+
+
+def test_the_login_page_art_is_the_ui_art_not_a_copy() -> None:
+    ui_art = Path(auth_module.__file__).parent / "ui" / "art"
+    assert auth_module.ART_DIR == ui_art
+    client, _, _ = app_client()
+    with client:
+        for svg in ui_art.glob("*.svg"):
+            assert client.get(f"/login-assets/art/{svg.name}").content == svg.read_bytes()
+
+
+def test_the_login_page_respects_reduced_motion_and_keeps_its_look() -> None:
+    css = (LOGIN_DIR / "login.css").read_text()
+    block = re.search(r"@media \(prefers-reduced-motion: reduce\)\s*\{(.*)\}\s*$", css, re.S)
+    assert block, "no reduced-motion block at the end of the stylesheet"
+    rules = block.group(1)
+    assert re.search(r"animation:\s*none\s*!important", rules)
+    # The scenery stays: nothing is hidden instead of being stilled.
+    assert "display: none" not in rules and "visibility" not in rules and "opacity: 0" not in rules
+    # The bats start off screen, so the block has to rest them somewhere visible.
+    for bat in ("bat-1", "bat-2", "bat-3"):
+        assert re.search(rf"\.{bat}\s*\{{\s*left:\s*\d+%", rules), bat
+    # Only animations carry motion; a transition outside the block would ignore the preference.
+    assert "transition" not in css.split("@media (prefers-reduced-motion")[0]
+
+
+def hex_luminance(value: str) -> float:
+    channels = [int(value[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+    linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def contrast(a: str, b: str) -> float:
+    high, low = sorted((hex_luminance(a), hex_luminance(b)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+def test_the_login_text_colours_have_enough_contrast() -> None:
+    """WCAG AA: 4.5 for text, 3 for the edge of an input and the focus ring."""
+    css = (LOGIN_DIR / "login.css").read_text()
+    colour = dict(re.findall(r"--([\w-]+):\s*(#[0-9a-fA-F]{6})", css))
+    stone = colour["stone-hi"]  # the lightest part of the gravestone: the worst case for text
+    for name in ("ink", "muted", "error", "bone"):
+        assert contrast(colour[name], stone) >= 4.5, (name, contrast(colour[name], stone))
+    assert contrast(colour["ink"], colour["field"]) >= 4.5
+    assert contrast(colour["on-pumpkin"], colour["pumpkin"]) >= 4.5
+    assert contrast(colour["field-edge"], colour["stone"]) >= 3
+    assert contrast(colour["pumpkin"], colour["field"]) >= 3  # the focus ring inside an input
+    assert contrast(colour["pumpkin"], colour["night"]) >= 3
+
+
+def test_the_login_form_is_labelled_and_the_button_says_what_it_does() -> None:
+    html = (LOGIN_DIR / "login.html").read_text()
+    for field in ("username", "password"):
+        assert f'<label for="{field}">' in html and f'id="{field}"' in html
+    assert ">Enter the crypt</button>" in html
+    assert 'role="alert"' in html and html.count("<h1>") == 1
+    assert '<html lang="en">' in html
+
+
+def test_the_login_messages_are_in_the_crypt_voice() -> None:
+    js = (LOGIN_DIR / "login.js").read_text()
+    assert "The crypt does not recognise you." in js
+    assert "Too many knocks. The crypt stays sealed for" in js
 
 
 def test_the_login_page_files_ship_in_the_wheel(tmp_path: Path) -> None:

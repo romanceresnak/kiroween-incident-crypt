@@ -1,37 +1,226 @@
+/* The entrance to the crypt (scenario-lab REQ-AU-12). Pure CSS and inline SVG: no font, no image
+   file but the six crew portraits, no inline style (the page's CSP forbids it).
+   The colour pairs that carry text are the variables below; a test checks their contrast. */
 :root {
-  --bg: #0d0a14;
-  --panel: #171222;
-  --ink: #ece6f5;
-  --muted: #9c90b3;
+  --night: #07050d;
+  --stone-hi: #3a3646;       /* the lightest stop of the gravestone */
+  --stone: #2a2733;
+  --ink: #f1ebfa;            /* text on the stone */
+  --muted: #c4bad9;          /* secondary text on the stone */
+  --field: #17141f;          /* the carved input wells */
+  --field-edge: #8d84a3;
+  --error: #ff9aab;          /* error text on the stone */
   --pumpkin: #ff8a1f;
-  --blood: #ff4d6d;
+  --on-pumpkin: #2a1200;
   --bone: #f3e6c8;
-  --line: #2f2645;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 * { box-sizing: border-box; }
+
+html { background: var(--night); }
+
 body {
-  margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 1rem;
-  background: radial-gradient(circle at 80% -10%, #2b1840, var(--bg) 55%); color: var(--ink);
+  margin: 0; min-height: 100vh; min-height: 100dvh; padding: 1.25rem 1rem 2.5rem;
+  display: grid; place-items: center; position: relative; overflow-x: hidden;
+  color: var(--ink);
+  background: linear-gradient(180deg, #07050d 0%, #120b20 55%, #1f1233 100%);
 }
-.card {
-  width: min(26rem, 100%); padding: 2rem 1.75rem; text-align: center;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+
+.defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* ---------------------------------------------------------------- the sky */
+.sky { position: fixed; inset: 0; overflow: hidden; z-index: 0; pointer-events: none; }
+
+.stars {
+  position: absolute; inset: 0 0 35% 0; opacity: 0.8;
+  background-image:
+    radial-gradient(1.5px 1.5px at 8% 14%, #fff, transparent),
+    radial-gradient(1px 1px at 17% 32%, #e9e2ff, transparent),
+    radial-gradient(1.5px 1.5px at 26% 9%, #fff, transparent),
+    radial-gradient(1px 1px at 33% 24%, #e9e2ff, transparent),
+    radial-gradient(1.5px 1.5px at 41% 40%, #fff, transparent),
+    radial-gradient(1px 1px at 49% 12%, #e9e2ff, transparent),
+    radial-gradient(1.5px 1.5px at 57% 28%, #fff, transparent),
+    radial-gradient(1px 1px at 64% 8%, #e9e2ff, transparent),
+    radial-gradient(1.5px 1.5px at 72% 36%, #fff, transparent),
+    radial-gradient(1px 1px at 79% 20%, #e9e2ff, transparent),
+    radial-gradient(1.5px 1.5px at 88% 46%, #fff, transparent),
+    radial-gradient(1px 1px at 94% 16%, #e9e2ff, transparent),
+    radial-gradient(1px 1px at 12% 52%, #e9e2ff, transparent),
+    radial-gradient(1px 1px at 37% 58%, #fff, transparent),
+    radial-gradient(1px 1px at 83% 60%, #e9e2ff, transparent);
+  animation: twinkle 7s ease-in-out infinite alternate;
 }
-h1 { font-family: Georgia, "Times New Roman", serif; font-size: 1.5rem; color: var(--bone);
-     margin: 0.5rem 0; text-shadow: 0 0 12px #ff8a1f55; }
-.muted { color: var(--muted); font-size: 0.9rem; }
-form { text-align: left; margin-top: 1.25rem; }
-label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.25rem; }
+
+.moon {
+  position: absolute; top: 7%; right: 9%;
+  width: clamp(5rem, 15vw, 9.5rem); aspect-ratio: 1; border-radius: 50%;
+  background:
+    radial-gradient(circle at 62% 28%, rgba(150, 140, 110, 0.35) 0 7%, transparent 8%),
+    radial-gradient(circle at 34% 58%, rgba(150, 140, 110, 0.3) 0 11%, transparent 12%),
+    radial-gradient(circle at 68% 70%, rgba(150, 140, 110, 0.28) 0 6%, transparent 7%),
+    radial-gradient(circle at 36% 32%, #fffdf0 0, #f4eccb 48%, #cdc39b 100%);
+  box-shadow: 0 0 2.5rem 0.6rem rgba(255, 248, 210, 0.32),
+              0 0 9rem 3rem rgba(255, 248, 210, 0.12);
+  animation: moonglow 9s ease-in-out infinite alternate;
+}
+
+/* ---------------------------------------------------------------- the bats */
+.bat {
+  position: absolute; left: -12%; fill: #4b3f6e; opacity: 0.95;
+  width: clamp(2.2rem, 5vw, 3.6rem); height: auto;
+  animation: cross 17s linear infinite, flap 0.42s ease-in-out infinite alternate;
+}
+.bat-1 { top: 13%; }
+.bat-2 { top: 24%; width: clamp(1.6rem, 3.6vw, 2.6rem);
+         animation-duration: 23s, 0.34s; animation-delay: -9s, 0s; }
+.bat-3 { top: 8%; width: clamp(1.4rem, 3vw, 2.2rem);
+         animation-duration: 29s, 0.3s; animation-delay: -19s, 0s; }
+
+/* ---------------------------------------------------------------- the fog */
+.fog {
+  position: absolute; left: 0; width: 200%; pointer-events: none;
+  background-repeat: repeat-x; background-size: 50% 100%;
+}
+.fog-far {
+  bottom: 14%; height: 34%; opacity: 0.55;
+  background-image:
+    radial-gradient(ellipse 38% 48% at 25% 55%, rgba(196, 186, 226, 0.34), transparent 72%),
+    radial-gradient(ellipse 30% 36% at 75% 50%, rgba(196, 186, 226, 0.26), transparent 72%);
+  animation: drift 95s linear infinite;
+}
+.fog-near {
+  bottom: 0; height: 26%; opacity: 0.7;
+  background-image:
+    radial-gradient(ellipse 42% 60% at 30% 100%, rgba(176, 166, 210, 0.3), transparent 75%),
+    radial-gradient(ellipse 34% 45% at 80% 100%, rgba(176, 166, 210, 0.22), transparent 75%);
+  animation: drift 58s linear infinite reverse;
+}
+
+/* ------------------------------------------------------------ the crew, peeking */
+.crew { position: fixed; inset: 0; overflow: hidden; z-index: 1; pointer-events: none; }
+.peek {
+  position: absolute; width: clamp(3rem, 7vw, 4.5rem); height: auto;
+  opacity: 0.5; filter: brightness(0.72) saturate(0.8);
+  animation: bob 7s ease-in-out infinite alternate;
+}
+.peek-necromancer { bottom: -1.9rem; left: 7%;  rotate: -8deg; }
+.peek-vampire     { bottom: -1.9rem; right: 8%; rotate: 9deg;  animation-delay: -2s; }
+.peek-spider      { left: -1.6rem;  top: 46%;   rotate: 14deg; animation-delay: -4s; }
+.peek-zombie      { right: -1.6rem; top: 58%;   rotate: -12deg; animation-delay: -1s; }
+.peek-ghost       { left: 6%;  top: -1.8rem;    rotate: 170deg; animation-delay: -3s; }
+.peek-archivist   { left: -1.6rem; top: 22%;    rotate: 8deg;  animation-delay: -5s; }
+
+/* ---------------------------------------------------------------- the scene */
+.scene { position: relative; z-index: 2; width: min(26rem, 100%); margin-top: 2.5rem; }
+
+/* The gravestone: a rounded arch of stone, with cracks. */
+.stone {
+  position: relative; overflow: hidden; text-align: center;
+  padding: 4.75rem 2rem 2.5rem;
+  border-radius: 13rem 13rem 0.5rem 0.5rem;
+  border: 2px solid #55506a;
+  background:
+    radial-gradient(circle at 22% 12%, rgba(255, 255, 255, 0.08), transparent 42%),
+    radial-gradient(ellipse at 50% 112%, rgba(76, 112, 70, 0.34), transparent 55%),
+    radial-gradient(1.2px 1.2px at 14% 22%, rgba(255, 255, 255, 0.16), transparent),
+    radial-gradient(1px 1px at 71% 17%, rgba(255, 255, 255, 0.14), transparent),
+    radial-gradient(1.4px 1.4px at 38% 41%, rgba(0, 0, 0, 0.35), transparent),
+    radial-gradient(1px 1px at 84% 52%, rgba(255, 255, 255, 0.13), transparent),
+    radial-gradient(1.3px 1.3px at 22% 68%, rgba(0, 0, 0, 0.3), transparent),
+    radial-gradient(1px 1px at 61% 77%, rgba(255, 255, 255, 0.12), transparent),
+    radial-gradient(1.4px 1.4px at 90% 88%, rgba(0, 0, 0, 0.32), transparent),
+    radial-gradient(1px 1px at 8% 91%, rgba(255, 255, 255, 0.12), transparent),
+    repeating-linear-gradient(98deg, rgba(0, 0, 0, 0.07) 0 3px, transparent 3px 9px),
+    linear-gradient(165deg, var(--stone-hi), var(--stone) 58%, #211e2a);
+  box-shadow: inset 0 0 0 4px rgba(0, 0, 0, 0.28), inset 0 0 3rem rgba(0, 0, 0, 0.55),
+              0 1.4rem 3rem rgba(0, 0, 0, 0.65), 0 0 0 1px #100d17;
+}
+.cracks {
+  position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;
+  fill: none; stroke: #0d0a14; stroke-width: 2; stroke-linejoin: round; opacity: 0.6;
+}
+.stone > :not(.cracks) { position: relative; }
+
+.cross { width: 1.1rem; height: auto; fill: #6a6482; margin: 0 auto 0.4rem; display: block;
+         filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.12)); }
+h1 {
+  font-family: Georgia, "Times New Roman", serif; font-size: 1.55rem; line-height: 1.2;
+  color: var(--bone); margin: 0.2rem 0 0.25rem; letter-spacing: 0.02em;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.12),
+               0 0 14px rgba(255, 138, 31, 0.28);
+}
+.epitaph { font-family: Georgia, "Times New Roman", serif; font-style: italic; margin: 0 0 0.9rem;
+           color: var(--muted); }
+.muted { color: var(--muted); font-size: 0.88rem; line-height: 1.45; margin: 0; }
+
+form { text-align: left; margin-top: 1.3rem; }
+label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 0.25rem; }
 input {
-  width: 100%; background: var(--bg); color: var(--ink); border: 1px solid var(--line);
-  border-radius: 8px; padding: 0.6rem; font: inherit; margin-bottom: 0.8rem;
+  width: 100%; background: var(--field); color: var(--ink); font: inherit;
+  border: 1px solid var(--field-edge); border-radius: 6px; padding: 0.62rem; margin-bottom: 0.85rem;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.65);
 }
-input:focus-visible, button:focus-visible { outline: 2px solid var(--pumpkin); outline-offset: 2px; }
+input:focus-visible, button:focus-visible { outline: 3px solid var(--pumpkin); outline-offset: 2px; }
 button {
-  width: 100%; border: 0; border-radius: 8px; padding: 0.7rem; font-weight: 700; cursor: pointer;
-  background: var(--pumpkin); color: #2a1200;
+  width: 100%; border: 0; border-radius: 6px; padding: 0.75rem; font: inherit; font-weight: 700;
+  letter-spacing: 0.03em; cursor: pointer; color: var(--on-pumpkin);
+  background: linear-gradient(180deg, #ffa24a, var(--pumpkin));
+  box-shadow: 0 0 1.1rem rgba(255, 138, 31, 0.35);
 }
-button:disabled { opacity: 0.5; cursor: wait; }
-.error { color: var(--blood); min-height: 1.25rem; margin: 0.75rem 0 0; font-size: 0.9rem; }
+button:hover:not(:disabled) { filter: brightness(1.08); }
+button:disabled { opacity: 0.6; cursor: wait; }
+.error { color: var(--error); min-height: 1.3rem; margin: 0.8rem 0 0; font-size: 0.92rem; }
+
+/* ---------------------------------------------------------------- the candles */
+.candle { position: absolute; bottom: 0.4rem; width: 2.1rem; height: 6.2rem; }
+.candle-left { left: -3.4rem; }
+.candle-right { right: -3.4rem; height: 5rem; }
+.candle i { position: absolute; display: block; }
+.wax {
+  bottom: 0; left: 0; right: 0; height: calc(100% - 1.9rem); border-radius: 0.3rem 0.3rem 0.15rem 0.15rem;
+  background: linear-gradient(90deg, #b3a687, #f0e4c4 42%, #a89b7c);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+.wick { bottom: calc(100% - 1.9rem); left: calc(50% - 1px); width: 2px; height: 0.5rem; background: #1a1410; }
+.flame {
+  bottom: calc(100% - 2.3rem); left: calc(50% - 0.45rem); width: 0.9rem; height: 1.7rem;
+  border-radius: 50% 50% 50% 50% / 64% 64% 36% 36%; transform-origin: 50% 92%;
+  background: radial-gradient(ellipse at 50% 78%, #fff7cf 0, #ffc24d 42%, #ff7a1a 78%, transparent 100%);
+  box-shadow: 0 0 0.8rem 0.3rem rgba(255, 160, 40, 0.55), 0 0 3.2rem 1.2rem rgba(255, 140, 30, 0.22);
+  animation: flicker 1.5s ease-in-out infinite alternate;
+}
+.candle-right .flame { animation-duration: 1.25s; animation-delay: -0.5s; }
+
+/* ---------------------------------------------------------------- small screens */
+@media (max-width: 42rem) {
+  .candle { display: none; }
+  .stone { padding: 4.25rem 1.25rem 2rem; }
+  .moon { top: 4%; right: 5%; }
+}
+
+/* ---------------------------------------------------------------- the motion */
+@keyframes cross { to { translate: 135vw 2.2rem; } }
+@keyframes flap { from { scale: 1 1; } to { scale: 1 0.55; } }
+@keyframes drift { to { translate: -50% 0; } }
+@keyframes bob { to { translate: 0 -0.7rem; } }
+@keyframes twinkle { from { opacity: 0.55; } to { opacity: 0.9; } }
+@keyframes moonglow { to { box-shadow: 0 0 3rem 0.9rem rgba(255, 248, 210, 0.4),
+                                       0 0 10rem 3.5rem rgba(255, 248, 210, 0.16); } }
+@keyframes flicker {
+  0%   { scale: 1 1;       rotate: -2deg; opacity: 0.95; }
+  30%  { scale: 0.9 1.09;  rotate: 2deg; }
+  55%  { scale: 1.06 0.93; rotate: -1deg; opacity: 1; }
+  80%  { scale: 0.94 1.06; rotate: 3deg;  opacity: 0.9; }
+  100% { scale: 1 1;       rotate: -2deg; }
+}
+
+/* Nothing moves for a visitor who asks for less motion. The look stays: the bats rest where the
+   sky has room for them, the fog hangs, the flames burn steadily. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .bat-1 { left: 70%; }
+  .bat-2 { left: 24%; }
+  .bat-3 { left: 46%; }
+}

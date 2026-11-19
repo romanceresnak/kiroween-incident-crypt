@@ -69,8 +69,29 @@ test("the form has labelled fields for the right autofill and a visible error ar
     assert.equal(password.getAttribute("autocomplete"), "current-password");
     assert.equal(password.type, "password");
     assert.equal(ui.document.getElementById("message").getAttribute("role"), "alert");
-    assert.equal(ui.document.getElementById("submit").textContent, "Sign in");
+    assert.equal(ui.document.getElementById("submit").textContent, "Enter the crypt");
     assert.match(ui.document.body.textContent, /nothing is applied without a person/);
+  } finally { ui.close(); }
+});
+
+test("the scenery is hidden from assistive technology and the six crew are all there", () => {
+  const ui = openLogin();
+  try {
+    const doc = ui.document;
+    // Everything that is only decoration sits under aria-hidden; the content does not.
+    for (const selector of [".sky", ".crew", ".candle", ".cracks", ".cross", "svg.defs"]) {
+      for (const el of doc.querySelectorAll(selector)) {
+        assert.ok(el.closest('[aria-hidden="true"]'), `${selector} should be aria-hidden`);
+      }
+    }
+    assert.equal(doc.querySelector("main").closest('[aria-hidden="true"]'), null);
+    assert.equal(doc.querySelectorAll("h1").length, 1);
+    const crew = [...doc.querySelectorAll(".crew img")].map((i) => i.getAttribute("src"));
+    assert.deepEqual(crew.map((src) => src.split("/").pop()).sort(),
+      ["archivist.svg", "ghost.svg", "necromancer.svg", "spider.svg", "vampire.svg", "zombie.svg"]);
+    for (const img of doc.querySelectorAll(".crew img")) assert.equal(img.getAttribute("alt"), "");
+    assert.equal(doc.querySelectorAll(".bat").length, 3);
+    assert.equal(doc.querySelectorAll(".candle").length, 2);
   } finally { ui.close(); }
 });
 
@@ -80,7 +101,7 @@ test("empty fields are refused without sending anything", async () => {
     ui.fill("", "");
     ui.submit();
     await tick(30);
-    assert.equal(ui.message(), "Enter your user name and password.");
+    assert.equal(ui.message(), "Speak your user name and password to enter.");
     assert.equal(ui.calls.length, 0);
     ui.fill("judge", "");
     ui.submit();
@@ -111,7 +132,7 @@ test("a wrong password is explained, the password is cleared and the form can be
     ui.fill("judge", "wrong");
     ui.submit();
     await until(() => ui.message() !== "", "the message");
-    assert.equal(ui.message(), "Wrong user name or password.");
+    assert.equal(ui.message(), "The crypt does not recognise you.");
     assert.equal(ui.document.getElementById("password").value, "");
     assert.equal(ui.document.getElementById("username").value, "judge");
     assert.equal(ui.document.getElementById("submit").disabled, false);
@@ -125,18 +146,18 @@ test("a lockout tells the visitor how long to wait, in minutes", async () => {
     ui.fill("judge", "x");
     ui.submit();
     await until(() => ui.message() !== "", "the message");
-    assert.equal(ui.message(), "Too many attempts. Try again in 14 minute(s).");
+    assert.equal(ui.message(), "Too many knocks. The crypt stays sealed for 14 minute(s).");
   } finally { ui.close(); }
 });
 
 test("every other failure is a plain sentence", async () => {
   const cases = [
-    [{ status: 503, body: {} }, "Sign-in is not set up on this server yet."],
-    [{ status: 403, body: {} }, "The request was refused. Reload the page and try again."],
-    [{ status: 415, body: {} }, "The request was refused. Reload the page and try again."],
-    [{ status: 500, body: {} }, "Sign-in failed (500). Try again."],
-    [{ status: 429, body: {} }, "Too many attempts. Try again in a while."],
-    [new Error("offline"), "Could not reach the server. Check your connection and try again."],
+    [{ status: 503, body: {} }, "The crypt is not open yet. Sign-in is not set up on this server."],
+    [{ status: 403, body: {} }, "The gate refused the request. Reload the page and try again."],
+    [{ status: 415, body: {} }, "The gate refused the request. Reload the page and try again."],
+    [{ status: 500, body: {} }, "The gate jammed (500). Try again."],
+    [{ status: 429, body: {} }, "Too many knocks. The crypt stays sealed for a while."],
+    [new Error("offline"), "The crypt cannot be reached. Check your connection and try again."],
   ];
   for (const [answer, expected] of cases) {
     const ui = openLogin({ answer });

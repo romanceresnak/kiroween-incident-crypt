@@ -13,16 +13,16 @@ function safeNext(search) {
 }
 
 function explain(status, retryAfter) {
-  if (status === 401) return "Wrong user name or password.";
+  if (status === 401) return "The crypt does not recognise you.";
   if (status === 429) {
     const seconds = Number(retryAfter);
     const wait = Number.isFinite(seconds) && seconds > 0
       ? Math.max(1, Math.ceil(seconds / 60)) + " minute(s)" : "a while";
-    return "Too many attempts. Try again in " + wait + ".";
+    return "Too many knocks. The crypt stays sealed for " + wait + ".";
   }
-  if (status === 503) return "Sign-in is not set up on this server yet.";
-  if (status === 415 || status === 403) return "The request was refused. Reload the page and try again.";
-  return "Sign-in failed (" + status + "). Try again.";
+  if (status === 503) return "The crypt is not open yet. Sign-in is not set up on this server.";
+  if (status === 415 || status === 403) return "The gate refused the request. Reload the page and try again.";
+  return "The gate jammed (" + status + "). Try again.";
 }
 
 async function signIn(event) {
@@ -33,7 +33,7 @@ async function signIn(event) {
   const password = document.getElementById("password").value;
   message.textContent = "";
   if (!username || !password) {
-    message.textContent = "Enter your user name and password.";
+    message.textContent = "Speak your user name and password to enter.";
     return;
   }
   button.disabled = true;
@@ -50,7 +50,7 @@ async function signIn(event) {
     }
     message.textContent = explain(response.status, response.headers.get("Retry-After"));
   } catch (err) {
-    message.textContent = "Could not reach the server. Check your connection and try again.";
+    message.textContent = "The crypt cannot be reached. Check your connection and try again.";
   }
   document.getElementById("password").value = "";
   button.disabled = false;

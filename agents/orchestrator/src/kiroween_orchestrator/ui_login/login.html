@@ -3,26 +3,79 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sign in - Kiroween Incident Crypt</title>
+  <meta name="color-scheme" content="dark">
+  <title>Enter the crypt - Kiroween Incident Crypt</title>
   <link rel="stylesheet" href="/login-assets/login.css">
-  <link rel="icon" href="/ui/art/ghost.svg" type="image/svg+xml">
+  <link rel="icon" href="/login-assets/art/ghost.svg" type="image/svg+xml">
 </head>
 <body>
-  <main class="card">
-    <img src="/ui/art/necromancer.svg" alt="" width="96" height="96">
-    <h1>Kiroween Incident Crypt</h1>
-    <p class="muted">Sign in to investigate failures on a live Kubernetes cluster. The agents
-      read the cluster and propose fixes; nothing is applied without a person.</p>
-    <form id="login" autocomplete="on" novalidate>
-      <label for="username">User name</label>
-      <input id="username" name="username" autocomplete="username" maxlength="128" required>
-      <label for="password">Password</label>
-      <input id="password" name="password" type="password" autocomplete="current-password"
-             maxlength="256" required>
-      <button id="submit" type="submit">Sign in</button>
-      <p id="message" role="alert" class="error"></p>
-    </form>
-  </main>
+  <!-- One bat, reused three times. Everything decorative is aria-hidden and styled in login.css:
+       the page's content security policy allows no inline style. -->
+  <svg class="defs" width="0" height="0" aria-hidden="true" focusable="false">
+    <symbol id="bat" viewBox="0 0 64 28">
+      <path d="M32 7 L34 1.5 L35.6 8 C40 6 46 7 52 4 C58 1 62 4 63.5 9 C59.5 7.5 56.5 9 55 12.5
+               C52 10.5 49 11.5 47 14.5 C45 12.5 42 13.5 40.5 17.5 C39 21.5 36 25 32 27
+               C28 25 25 21.5 23.5 17.5 C22 13.5 19 12.5 17 14.5 C15 11.5 12 10.5 9 12.5
+               C7.5 9 4.5 7.5 0.5 9 C2 4 6 1 12 4 C18 7 24 6 28.4 8 L30 1.5 Z"/>
+    </symbol>
+  </svg>
+
+  <div class="sky" aria-hidden="true">
+    <div class="stars"></div>
+    <div class="moon"></div>
+    <svg class="bat bat-1" viewBox="0 0 64 28" focusable="false"><use href="#bat"/></svg>
+    <svg class="bat bat-2" viewBox="0 0 64 28" focusable="false"><use href="#bat"/></svg>
+    <svg class="bat bat-3" viewBox="0 0 64 28" focusable="false"><use href="#bat"/></svg>
+    <div class="fog fog-far"></div>
+    <div class="fog fog-near"></div>
+  </div>
+
+  <!-- The crew, small and dimmed, looking in from the edges. -->
+  <div class="crew" aria-hidden="true">
+    <img class="peek peek-ghost" src="/login-assets/art/ghost.svg" alt="" width="72" height="72">
+    <img class="peek peek-archivist" src="/login-assets/art/archivist.svg" alt="" width="72" height="72">
+    <img class="peek peek-spider" src="/login-assets/art/spider.svg" alt="" width="72" height="72">
+    <img class="peek peek-zombie" src="/login-assets/art/zombie.svg" alt="" width="72" height="72">
+    <img class="peek peek-necromancer" src="/login-assets/art/necromancer.svg" alt="" width="72" height="72">
+    <img class="peek peek-vampire" src="/login-assets/art/vampire.svg" alt="" width="72" height="72">
+  </div>
+
+  <div class="scene">
+    <div class="candle candle-left" aria-hidden="true">
+      <i class="flame"></i><i class="wick"></i><i class="wax"></i>
+    </div>
+    <div class="candle candle-right" aria-hidden="true">
+      <i class="flame"></i><i class="wick"></i><i class="wax"></i>
+    </div>
+
+    <main class="stone">
+      <svg class="cracks" viewBox="0 0 400 600" preserveAspectRatio="none" aria-hidden="true"
+           focusable="false">
+        <path d="M312 0 L298 58 L322 96 L296 150 L311 196 L288 244"/>
+        <path d="M298 58 L268 74 L262 108"/>
+        <path d="M0 402 L46 414 L70 450 L118 458 L132 498 L176 512"/>
+        <path d="M70 450 L58 486 L74 520"/>
+        <path d="M400 360 L352 372 L338 412"/>
+      </svg>
+      <svg class="cross" viewBox="0 0 24 32" aria-hidden="true" focusable="false">
+        <path d="M9 0 H15 V9 H24 V15 H15 V32 H9 V15 H0 V9 H9 Z"/>
+      </svg>
+      <h1>Kiroween Incident Crypt</h1>
+      <p class="epitaph">Here lie your failing pods.</p>
+      <p class="muted">Sign in to investigate failures on a live Kubernetes cluster. The agents
+        read the cluster and propose fixes; nothing is applied without a person.</p>
+      <form id="login" autocomplete="on" novalidate>
+        <label for="username">User name</label>
+        <input id="username" name="username" autocomplete="username" maxlength="128" required
+               aria-describedby="message">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password"
+               maxlength="256" required aria-describedby="message">
+        <button id="submit" type="submit">Enter the crypt</button>
+        <p id="message" role="alert" class="error"></p>
+      </form>
+    </main>
+  </div>
   <script src="/login-assets/login.js"></script>
 </body>
 </html>
