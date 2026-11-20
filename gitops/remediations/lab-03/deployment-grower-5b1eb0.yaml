@@ -1,0 +1,17 @@
+# Approved remediation for incident 7fdc45675994ee83 (OOMKilled).
+# Approved by Roman Ceresnak at 2026-11-20T13:31:33.494138+00:00.
+# Deployment/grower-5b1eb0 spec.template.spec.containers[name=app].resources.limits.memory: '48Mi' -> '128Mi'
+# Kustomize strategic merge patch.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grower-5b1eb0
+  namespace: lab-03
+spec:
+  template:
+    spec:
+      containers:
+      - name: app
+        resources:
+          limits:
+            memory: 128Mi
